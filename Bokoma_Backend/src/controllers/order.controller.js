@@ -9,15 +9,15 @@ const Coupon = require('../models/Coupon');
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
 const { decrementStock, restoreStock, checkAvailability } = require('../services/inventory.service');
-const { createPaymentIntent } = require('../services/payment.service');
+const { initializePayment, verifyPayment } = require('../services/payment.service');
 const { sendOrderConfirmation, sendOrderStatusUpdate } = require('../services/email.service');
 
+console.log('📦 [OrderController] Loaded');
+
 // ============================================================================
-// 🔹 HELPER: Extraire userId de req.user (compatible avec auth middleware)
+// 🔹 HELPER: Extraire userId de req.user
 // ============================================================================
-const getUserId = (req) => {
-  return req.user?.userId || req.user?._id?.toString();
-};
+const getUserId = (req) => req.user?.userId || req.user?._id?.toString();
 
 // ============================================================================
 // POST /api/v1/orders — Créer une commande (checkout)
@@ -25,17 +25,19 @@ const getUserId = (req) => {
 exports.createOrder = async (req, res, next) => {
   try {
     const userId = getUserId(req);
-    if (!userId) {
-      return next(new AppError('Utilisateur non authentifié', 401));
-    }
+    if (!userId) return next(new AppError('Utilisateur non authentifié', 401));
 
     const { shipping, payment, notes } = req.body;
 
     // ✅ 1. Récupérer et valider le panier
-    const cart = await Cart.findOne({ user: userId }).populate('coupon');
-    if (!cart || cart.items?.length === 0) {
-      return next(new AppError('Panier vide', 400));
+    let cart = await Cart.findOne({ user: userId }).populate('coupon');
+    
+    if ((!cart || !cart.items || cart.items.length === 0) && req.body.items?.length > 0) {
+      console.log('⚠️ [OrderController] Panier DB vide. Utilisation du payload frontend.');
+      cart = { items: req.body.items, coupon: req.body.coupon || null };
     }
+
+    if (!cart?.items?.length) return next(new AppError('Panier vide', 400));
 
     // ✅ 2. Vérifier les stocks
     const outOfStock = await checkAvailability(cart.items);
@@ -61,16 +63,121 @@ exports.createOrder = async (req, res, next) => {
 
     const total = Math.max(0, subtotal + shippingCost - discount);
 
-    // ✅ 4. PaymentIntent Stripe (si carte)
-    let paymentIntentId;
-    if (payment?.method === 'card' && total > 0) {
+        // ✅ 4. Initialisation CinetPay
+    // Mobile Money / Carte = 100% en ligne
+    // Cash on Delivery = 50% d'acompte en ligne
+    let paymentData = null;
+    const isOnlinePayment = payment?.method === 'mobile_money' || payment?.method === 'card';
+    const isCashOnDelivery = payment?.method === 'cash_on_delivery';
+    const needsPayment = total > 0 && (isOnlinePayment || isCashOnDelivery);
+    
+    if (needsPayment) {
       try {
-        const intent = await createPaymentIntent(Math.round(total * 100), 'xof', { userId, orderId: 'pending' });
-        paymentIntentId = intent.id;
+        console.log('\n' + '='.repeat(80));
+        console.log('💳 [OrderController] CINETPAY INITIALIZATION');
+        console.log('='.repeat(80));
+        
+        // ✅ Calcul du montant à payer
+        let paymentAmount = total;
+        let paymentDescription = `Commande Bokoma #${userId.slice(-6)}`;
+        
+        if (isCashOnDelivery) {
+          paymentAmount = Math.ceil(total * 0.5); // 50% d'acompte
+          paymentDescription = `Acompte 50% - Commande Bokoma #${userId.slice(-6)} (reste ${total - paymentAmount} FCFA à la livraison)`;
+          console.log(`💰 Cash on Delivery: Acompte de 50% = ${paymentAmount} FCFA`);
+          console.log(`💰 Reste à payer à la livraison: ${total - paymentAmount} FCFA`);
+        } else {
+          console.log(`💰 Paiement intégral: ${paymentAmount} FCFA`);
+        }
+        
+        // ✅ Mapper l'opérateur
+        let cinetpayMethod = 'OM_CI'; // Défaut : Orange Money
+        if (payment?.details?.operator) {
+          const operatorMap = { 
+            'OM': 'OM_CI', 
+            'MTN': 'MTN_CI', 
+            'WAVE': 'WAVE_CI', 
+            'MOOV': 'MOOV_CI' 
+          };
+          cinetpayMethod = operatorMap[payment.details.operator] || 'OM_CI';
+        } else if (payment?.method === 'card') {
+          cinetpayMethod = 'CARD';
+        }
+        
+        // ✅ Construire le numéro de téléphone (format Côte d'Ivoire : +225 + 10 chiffres)
+        let customerPhone = '+2250707070700'; // Défaut valide
+        const rawPhone = payment?.details?.phoneNumber || req.user.phone;
+        
+        if (rawPhone) {
+          // Nettoyer : enlever espaces, tirets, parenthèses
+          let phone = String(rawPhone).replace(/[\s\-\(\)]/g, '');
+          
+          // Normaliser en numéro national (10 chiffres)
+          let nationalNumber = phone;
+          
+          if (phone.startsWith('+225')) {
+            nationalNumber = phone.slice(4); // Enlever +225
+          } else if (phone.startsWith('00225')) {
+            nationalNumber = phone.slice(5); // Enlever 00225
+          } else if (phone.startsWith('225')) {
+            nationalNumber = phone.slice(3); // Enlever 225
+          } else if (phone.startsWith('0')) {
+            nationalNumber = phone; // Garder le 0 initial
+          }
+          
+          // Vérifier la longueur (doit être 10 chiffres)
+          if (nationalNumber.length === 10 && /^\d+$/.test(nationalNumber)) {
+            customerPhone = '+225' + nationalNumber;
+          } else {
+            console.warn('⚠️ Numéro invalide:', rawPhone, '→ national:', nationalNumber);
+            // Garder le numéro tel quel si on ne peut pas le formater
+            customerPhone = phone.startsWith('+') ? phone : '+225' + phone.replace(/^0+/, '');
+          }
+        }
+        
+        console.log('📞 Customer phone:', {
+          raw: rawPhone,
+          formatted: customerPhone,
+          length: customerPhone.length,
+        });
+        
+        console.log('💳 Payment method:', cinetpayMethod);
+        console.log('💰 Amount:', paymentAmount, 'XOF');
+        
+        paymentData = await initializePayment({
+          transactionId: `CMD-${Date.now()}-${userId.slice(-4)}`,
+          amount: paymentAmount,
+          description: paymentDescription,
+          customer: {
+            name: req.user.firstName || 'Client',
+            surname: req.user.lastName || 'Bokoma',
+            email: req.user.email || 'client@bokoma.ci',
+            phone: customerPhone,
+          },
+          return_url: `${process.env.CLIENT_URL}/payment/success`,
+          notify_url: `${process.env.API_URL}/api/v1/orders/webhook/cinetpay`,
+          payment_method: cinetpayMethod,
+        });
+        
+        console.log('\n' + '='.repeat(80));
+        console.log('✅ [OrderController] CINETPAY INIT SUCCESS');
+        console.log('='.repeat(80));
+        console.log('💳 Payment URL:', paymentData.paymentUrl);
+        console.log('🔑 Payment Token:', paymentData.paymentToken?.slice(0, 30) + '...');
+        console.log('🆔 Transaction ID:', paymentData.transactionId);
+        console.log('='.repeat(80) + '\n');
+        
       } catch (err) {
-        console.error('❌ PaymentIntent failed:', err);
+        console.error('\n' + '='.repeat(80));
+        console.error('❌ [OrderController] CINETPAY INIT FAILED');
+        console.error('='.repeat(80));
+        console.error('Error:', err.message);
+        console.error('Stack:', err.stack);
+        console.error('='.repeat(80) + '\n');
         return next(new AppError('Erreur de paiement, veuillez réessayer', 500));
       }
+    } else {
+      console.log('ℹ️ [OrderController] No online payment needed');
     }
 
     // ✅ 5. Construire les items (snapshot)
@@ -109,15 +216,17 @@ exports.createOrder = async (req, res, next) => {
       },
       payment: {
         method: payment?.method || 'cash_on_delivery',
-        status: payment?.method === 'cash_on_delivery' ? 'pending' : 'pending',
-        transactionId: paymentIntentId || payment?.transactionId,
-        provider: paymentIntentId ? 'stripe' : payment?.provider,
+        status: 'pending',
+        transactionId: paymentData?.transactionId || payment?.transactionId,
+        provider: paymentData ? 'cinetpay' : payment?.provider,
+        details: payment?.details || {},
+        paymentToken: paymentData?.paymentToken,
       },
       subtotal,
       shippingCost,
       discount,
       total,
-      currency: 'XAF',
+      currency: 'XOF',
       coupon: cart.coupon?._id,
       notes: notes?.trim(),
       status: 'pending',
@@ -137,11 +246,16 @@ exports.createOrder = async (req, res, next) => {
     }
 
     // ✅ 9. Vider le panier
-    cart.items = [];
-    cart.coupon = undefined;
-    cart.subtotal = 0;
-    cart.total = 0;
-    await cart.save();
+    if (cart && typeof cart.save === 'function') {
+      cart.items = [];
+      cart.coupon = undefined;
+      cart.subtotal = 0;
+      cart.total = 0;
+      await cart.save();
+      console.log('🗑️ [OrderController] Panier vidé en base de données');
+    } else {
+      console.log('ℹ️ [OrderController] Panier provenant du payload frontend');
+    }
 
     // ✅ 10. Email de confirmation (non bloquant)
     sendOrderConfirmation(req.user, order).catch(err => 
@@ -176,7 +290,12 @@ exports.createOrder = async (req, res, next) => {
           payment: order.payment,
           createdAt: order.createdAt,
         },
-        ...(paymentIntentId && { payment: { clientSecret: paymentIntentId } }),
+        ...(paymentData && { 
+          payment: { 
+            paymentToken: paymentData.paymentToken,
+            paymentUrl: paymentData.paymentUrl, 
+          } 
+        }),
       },
     });
 
@@ -222,6 +341,7 @@ exports.getMyOrders = async (req, res, next) => {
       if (req.query.endDate) filters.createdAt.$lte = new Date(req.query.endDate);
     }
 
+    // ✅ CORRECTION : Supprimé .populate('items.variant') qui cause l'erreur
     const [orders, total] = await Promise.all([
       Order.find(filters)
         .sort(sortBy)
@@ -230,9 +350,7 @@ exports.getMyOrders = async (req, res, next) => {
         .populate({
           path: 'items.product',
           select: 'name slug images basePrice soldCount',
-          populate: { path: 'images', select: 'url publicId', match: { isPrimary: true } },
-        })
-        .populate('items.variant', 'name price stock'),
+        }),
       Order.countDocuments(filters),
     ]);
 
@@ -241,7 +359,7 @@ exports.getMyOrders = async (req, res, next) => {
       orderNumber: order.orderNumber,
       status: order.status,
       total: order.total,
-      currency: order.currency || 'XAF',
+      currency: order.currency || 'XOF',
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       deliveredAt: order.shipping?.deliveredAt,
@@ -254,11 +372,7 @@ exports.getMyOrders = async (req, res, next) => {
           basePrice: item.product.basePrice,
           image: item.product.images?.[0]?.url || null,
         } : null,
-        variant: item.variant ? {
-          _id: item.variant._id?.toString(),
-          name: item.variant.name,
-          price: item.variant.price,
-        } : null,
+        variant: item.variant || null,
         quantity: item.quantity,
         price: item.price,
         size: item.size,
@@ -305,9 +419,9 @@ exports.getOrder = async (req, res, next) => {
 
     if (!userId) return next(new AppError('Utilisateur non authentifié', 401));
 
+    // ✅ CORRECTION : Supprimé .populate('items.variant') qui cause l'erreur
     const order = await Order.findById(id)
-      .populate({ path: 'items.product', select: 'name slug images basePrice soldCount' })
-      .populate('items.variant', 'name price stock');
+      .populate({ path: 'items.product', select: 'name slug images basePrice soldCount' });
 
     if (!order) return next(new AppError('Commande introuvable', 404));
 
@@ -338,12 +452,7 @@ exports.getOrder = async (req, res, next) => {
               basePrice: item.product.basePrice,
               images: item.product.images,
             } : null,
-            variant: item.variant ? {
-              _id: item.variant._id?.toString(),
-              name: item.variant.name,
-              price: item.variant.price,
-              stock: item.variant.stock,
-            } : null,
+            variant: item.variant || null,
             name: item.name,
             sku: item.sku,
             image: item.image,
@@ -536,7 +645,7 @@ exports.getAllOrders = async (req, res, next) => {
 };
 
 // ============================================================================
-// GET /api/v1/orders/stats — Statistiques [admin/manager]
+// GET /api/v1/orders/stats — Statistiques enrichies pour dashboard
 // ============================================================================
 exports.getOrderStats = async (req, res, next) => {
   try {
@@ -544,43 +653,59 @@ exports.getOrderStats = async (req, res, next) => {
       return next(new AppError('Accès réservé aux administrateurs', 403));
     }
 
-    const matchStage = { status: { $nin: ['cancelled'] } };
-    if (req.query.startDate || req.query.endDate) {
-      matchStage.createdAt = {};
-      if (req.query.startDate) matchStage.createdAt.$gte = new Date(req.query.startDate);
-      if (req.query.endDate) matchStage.createdAt.$lte = new Date(req.query.endDate);
-    }
+    const days = parseInt(req.query.days) || 7;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
 
-    const [stats, byStatus, byPayment] = await Promise.all([
+    const [stats, byStatus, byPayment, revenueTrend] = await Promise.all([
       Order.aggregate([
-        { $match: matchStage },
+        { $match: { createdAt: { $gte: startDate }, status: { $nin: ['cancelled'] } } },
         { $group: {
             _id: null,
             totalOrders: { $sum: 1 },
             totalRevenue: { $sum: '$total' },
             avgOrder: { $avg: '$total' },
-            maxOrder: { $max: '$total' },
-            minOrder: { $min: '$total' },
         }},
       ]),
       Order.aggregate([
-        { $match: matchStage },
-        { $group: { _id: '$status', count: { $sum: 1 }, revenue: { $sum: '$total' } }},
+        { $match: { createdAt: { $gte: startDate } } },
+        { $group: { _id: '$status', count: { $sum: 1 } }},
         { $sort: { count: -1 } },
       ]),
       Order.aggregate([
-        { $match: matchStage },
-        { $group: { _id: '$payment.method', count: { $sum: 1 }, revenue: { $sum: '$total' } }},
+        { $match: { createdAt: { $gte: startDate } } },
+        { $group: { _id: '$payment.method', count: { $sum: 1 } }},
+      ]),
+      Order.aggregate([
+        { $match: { 
+            createdAt: { $gte: startDate },
+            status: { $nin: ['cancelled'] }
+          } 
+        },
+        { $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            revenue: { $sum: '$total' },
+            orders: { $sum: 1 },
+        }},
+        { $sort: { _id: 1 } },
+        { $project: { _id: 0, date: '$_id', revenue: 1, orders: 1 } }
       ]),
     ]);
 
     res.json({
       success: true,
       data: {
-        stats: stats[0] || { totalOrders: 0, totalRevenue: 0, avgOrder: 0, maxOrder: 0, minOrder: 0 },
-        byStatus: byStatus.map(s => ({ status: s._id, count: s.count, revenue: s.revenue || 0 })),
-        byPayment: byPayment.map(p => ({ method: p._id || 'unknown', count: p.count, revenue: p.revenue || 0 })),
-        period: { start: req.query.startDate, end: req.query.endDate },
+        stats: {
+          ...(stats[0] || { totalOrders: 0, totalRevenue: 0, avgOrder: 0 }),
+          byStatus: byStatus.map(s => ({ status: s._id, count: s.count })),
+          byPayment: byPayment.map(p => ({ method: p._id || 'unknown', count: p.count })),
+          revenueTrend,
+        },
+        period: {
+          days,
+          start: startDate.toISOString(),
+          end: new Date().toISOString(),
+        },
       },
     });
 
@@ -667,79 +792,69 @@ exports.verifyOrderPublic = async (req, res, next) => {
   }
 };
 
-// bokoma_backend/src/controllers/order.controller.js
-
 // ============================================================================
-// GET /api/v1/orders/stats — Statistiques enrichies pour dashboard
+// POST /api/v1/orders/webhook/cinetpay — Webhook de confirmation CinetPay
 // ============================================================================
-exports.getOrderStats = async (req, res, next) => {
+exports.cinetpayWebhook = async (req, res, next) => {
   try {
-    if (!['admin', 'manager'].includes(req.user?.role)) {
-      return next(new AppError('Accès réservé aux administrateurs', 403));
+    const { merchant_transaction_id, status, amount } = req.body;
+
+    console.log('🔔 [CinetPay Webhook] Received:', { merchant_transaction_id, status });
+
+    if (!merchant_transaction_id) {
+      console.warn('⚠️ [CinetPay Webhook] Missing merchant_transaction_id');
+      return res.status(400).json({ message: 'Transaction ID manquant' });
     }
 
-    // Filtre de date optionnel (default: 7 derniers jours)
-    const days = parseInt(req.query.days) || 7;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+    const order = await Order.findOne({ 'payment.transactionId': merchant_transaction_id });
+    
+    if (!order) {
+      console.warn('⚠️ [CinetPay Webhook] Order not found for:', merchant_transaction_id);
+      return res.status(404).json({ message: 'Commande non trouvée' });
+    }
 
-    // ✅ Statistiques globales
-    const stats = await Order.aggregate([
-      { $match: { createdAt: { $gte: startDate }, status: { $nin: ['cancelled'] } } },
-      { $group: {
-          _id: null,
-          totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: '$total' },
-          avgOrder: { $avg: '$total' },
-        }},
-    ]);
+    const verification = await verifyPayment(merchant_transaction_id);
+    
+    console.log('🔍 [CinetPay Webhook] Verification result:', verification);
 
-    // ✅ Répartition par statut
-    const byStatus = await Order.aggregate([
-      { $match: { createdAt: { $gte: startDate } } },
-      { $group: { _id: '$status', count: { $sum: 1 } }},
-      { $sort: { count: -1 } },
-    ]);
+    if (verification.success && verification.status === 'SUCCESS') {
+      if (order.payment.status !== 'paid') {
+        order.payment.status = 'paid';
+        order.status = 'processing'; 
+        order.statusHistory.push({ 
+          status: 'processing', 
+          note: 'Paiement confirmé par CinetPay', 
+          timestamp: new Date(),
+          updatedBy: 'system',
+        });
+        await order.save();
 
-    // ✅ Tendance de revenu (par jour)
-    const revenueTrend = await Order.aggregate([
-      { $match: { 
-          createdAt: { $gte: startDate },
-          status: { $nin: ['cancelled'] }
-        } 
-      },
-      { $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-          revenue: { $sum: '$total' },
-          orders: { $sum: 1 },
-        }},
-      { $sort: { _id: 1 } },
-      { $project: {
-          _id: 0,
-          date: '$_id',
-          revenue: 1,
-          orders: 1,
-        }}
-    ]);
+        const user = await User.findById(order.user).select('email firstName lastName');
+        if (user) {
+          sendOrderConfirmation(user, order).catch(err => 
+            console.error('❌ Confirmation email failed:', err)
+          );
+        }
+      }
+    } else if (verification.status === 'FAILED' || verification.status === 'REFUSED') {
+      if (order.payment.status !== 'failed') {
+        order.payment.status = 'failed';
+        order.status = 'cancelled';
+        order.statusHistory.push({ 
+          status: 'cancelled', 
+          note: `Paiement échoué ou refusé (${verification.status})`, 
+          timestamp: new Date(),
+          updatedBy: 'system',
+        });
+        await order.save();
+        
+        await restoreStock(order.items);
+      }
+    }
 
-    res.json({
-      success: true,
-      data: {
-        stats: {
-          ...(stats[0] || { totalOrders: 0, totalRevenue: 0, avgOrder: 0 }),
-          byStatus: byStatus.map(s => ({ status: s._id, count: s.count })),
-          revenueTrend,
-        },
-        period: {
-          days,
-          start: startDate.toISOString(),
-          end: new Date().toISOString(),
-        },
-      },
-    });
-
-  } catch (err) {
-    console.error('❌ [OrderController] getOrderStats error:', err);
-    next(err);
+    res.status(200).json({ message: 'Webhook reçu avec succès' });
+  } catch (error) {
+    console.error('❌ Erreur Webhook CinetPay:', error);
+    res.status(500).json({ message: 'Erreur interne webhook' });
   }
 };

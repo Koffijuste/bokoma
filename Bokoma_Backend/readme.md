@@ -39,6 +39,7 @@ npm start
 - **SMTP_HOST**, **SMTP_PORT**, **SMTP_USER**, **SMTP_PASS**, **EMAIL_FROM** (envoi mails)
 - **CLOUDINARY_CLOUD_NAME**, **CLOUDINARY_API_KEY**, **CLOUDINARY_API_SECRET**
 - **STRIPE_SECRET_KEY**, **STRIPE_WEBHOOK_SECRET**
+- **CINETPAY_API_KEY**
 - **NODE_ENV**
 
 ## Structure du projet (résumé)

@@ -10,7 +10,7 @@ const validateObjectId = require('../middlewares/validateObjectId');
 // ✅ Routes publiques
 router.get('/', ctrl.getProducts);
 router.get('/featured', ctrl.getFeaturedProducts);
-router.get('/:slug', ctrl.getProduct); // ← :slug = string, pas de validation ObjectId
+router.get('/:slug', ctrl.getProduct);
 
 // ✅ Routes protégées admin/manager
 router.post('/', 
@@ -22,11 +22,21 @@ router.post('/',
   ctrl.createProduct
 );
 
+// ✅ Mise à jour d'un produit (PUT)
+router.put('/:id', 
+  protect, 
+  authorize('admin', 'manager'),
+  uploadMultiple,
+  validateObjectId('id'),
+  ctrl.updateProduct
+);
+
+// ✅ Mise à jour partielle (PATCH)
 router.patch('/:id', 
   protect, 
   authorize('admin', 'manager'), 
   uploadMultiple, 
-  validateObjectId('id'), // ← Validation ObjectId
+  validateObjectId('id'),
   ctrl.updateProduct
 );
 

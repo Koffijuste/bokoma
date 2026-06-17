@@ -237,11 +237,9 @@ export function Navbar() {
                 aria-label="Panier"
               >
                 <ShoppingCart className="w-5 h-5" />
-                {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                    {cartCount > 99 ? '99+' : cartCount}
-                  </span>
-                )}
+                <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  { (cartCount ?? 0) > 99 ? '99+' : (cartCount ?? 0) }
+                </span>
               </Link>
             </div>
 
@@ -371,7 +369,7 @@ export function Navbar() {
                 ))}
                 <Link href={ROUTES.CART} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted" onClick={closeMobileMenu}>
                   <span>Panier</span>
-                  {cartCount > 0 && <span className="bg-accent text-accent-foreground text-xs rounded-full px-2 py-0.5">{cartCount}</span>}
+                  <span className="bg-accent text-accent-foreground text-xs rounded-full px-2 py-0.5">{cartCount ?? 0}</span>
                 </Link>
                 {isAuthenticated && (
                   <Link href="/wishlist" className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted" onClick={closeMobileMenu}>

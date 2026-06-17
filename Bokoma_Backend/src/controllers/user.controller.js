@@ -614,3 +614,35 @@ exports.deleteUser = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * DELETE /api/v1/users/me/avatar — Supprimer l'avatar de l'utilisateur
+ */
+exports.deleteAvatar = async (req, res, next) => {
+  try {
+    const user = await findUserOrError(req.user.userId, next);
+    if (!user) return;
+
+    if (!user.avatar) {
+      return next(new AppError('Aucun avatar à supprimer', 400));
+    }
+
+    try {
+      await fs.unlink(user.avatar);
+    } catch (err) {
+      console.warn('⚠️ Failed to delete avatar file:', err.message);
+    }
+
+    user.avatar = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Avatar supprimé',
+      data: { avatar: user.avatar },
+    });
+  } catch (err) {
+    console.error('❌ [UserController] deleteAvatar error:', err);
+    next(err);
+  }
+};

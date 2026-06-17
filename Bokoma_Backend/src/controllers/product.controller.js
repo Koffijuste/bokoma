@@ -1,10 +1,11 @@
 // src/controllers/product.controller.js
 const Product = require('../models/Product');
-const Category = require('../models/Category'); // ← Import en haut pour éviter les require multiples
+const Category = require('../models/Category');
 const AppError = require('../utils/AppError');
 const ApiFeatures = require('../utils/apiFeatures');
 const { generateSlug } = require('../utils/slugify');
 const { deleteImages } = require('../services/upload.service');
+const { cleanupTempFiles } = require('../middlewares/upload');
 const { isValidObjectId } = require('mongoose');
 
 // ───────── Helpers ─────────
@@ -25,29 +26,40 @@ const mapUploadedFileToImage = (file, index, altText) => {
   };
 };
 
+const safeParseJSON = (value, fallback = null) => {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (err) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('⚠️ safeParseJSON failed:', err.message);
+    }
+    return fallback;
+  }
+};
+
 // ─────────────────────────────────────────────────────────────
 // GET /api/v1/products
 exports.getProducts = async (req, res) => {
   try {
-    // ───────── DEBUG LOGS (à retirer en prod si nécessaire) ─────────
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 [DEBUG] getProducts query:', req.query);
-    }
-
-    // ───────── BASE FILTER ─────────
     const filter = { isActive: true };
 
-    // ───────── CATEGORY FILTER (VERSION FLEXIBLE) ─────────
+    // ───────── CATEGORY FILTER ─────────
     if (req.query.category) {
       const input = String(req.query.category).toLowerCase().trim();
       let categoryDoc = null;
 
-      // 🎯 Essai 1 : Match exact du slug
-      if (!categoryDoc) {
-        categoryDoc = await Category.findOne({ slug: input, isActive: true }).select('_id');
-      }
+      // Essai 1 : Match exact du slug
+      categoryDoc = await Category.findOne({ slug: input, isActive: true }).select('_id');
 
-      // 🎯 Essai 2 : Regex pour gérer les suffixes (ex: "chaussures-xyz" match "chaussures")
+      // Essai 2 : Regex pour gérer les suffixes
       if (!categoryDoc) {
         categoryDoc = await Category.findOne({
           slug: { $regex: `^${input}(-|$)`, $options: 'i' },
@@ -55,28 +67,12 @@ exports.getProducts = async (req, res) => {
         }).select('_id');
       }
 
-      // 🎯 Essai 3 : Si c'est déjà un ObjectId
+      // Essai 3 : Si c'est déjà un ObjectId
       if (!categoryDoc && isValidObjectId(input)) {
         categoryDoc = await Category.findOne({ _id: input, isActive: true }).select('_id');
       }
 
-      // 🐛 Debug logs
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 Category lookup:', {
-          searched: input,
-          found: !!categoryDoc,
-          foundId: categoryDoc?._id,
-        });
-      }
-
       if (!categoryDoc) {
-        // Optionnel : lister les slugs disponibles pour le debug
-        const available = await Category.find({ isActive: true }).select('slug name').limit(5);
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('⚠️ Category not found. Available slugs:', available.map(c => c.slug));
-        }
-
         return res.json({
           success: true,
           total: 0,
@@ -85,17 +81,9 @@ exports.getProducts = async (req, res) => {
           page: 1,
           pages: 0,
           limit: Number(req.query.limit) || 24,
-          ...(process.env.NODE_ENV === 'development' && {
-            debug: {
-              searchedSlug: input,
-              categoryFound: false,
-              availableSlugs: available.map(c => ({ slug: c.slug, name: c.name }))
-            }
-          })
         });
       }
 
-      // Appliquer le filtre
       filter.category = categoryDoc._id;
     }
 
@@ -111,17 +99,18 @@ exports.getProducts = async (req, res) => {
       }
     }
 
-    // Debug final du filtre
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Final Product filter:', filter);
-    }
-
     // ───────── COUNT QUERY ─────────
     const countQuery = new ApiFeatures(Product.find(filter), req.query).search(['name', 'brand']);
     const total = await countQuery.query.clone().countDocuments();
 
     // ───────── MAIN QUERY ─────────
-    const features = new ApiFeatures(Product.find(filter), req.query)
+    const defaultFields = 'name,slug,images,brand,basePrice,totalStock,category';
+    const requestQuery = {
+      ...req.query,
+      fields: req.query.fields || defaultFields,
+    };
+
+    const features = new ApiFeatures(Product.find(filter), requestQuery)
       .search(['name', 'brand'])
       .sort()
       .limitFields()
@@ -131,16 +120,6 @@ exports.getProducts = async (req, res) => {
       .populate('category', 'name slug')
       .lean();
 
-    // Debug résultats
-    if (process.env.NODE_ENV === 'development' && products.length > 0) {
-      console.log('📦 First product sample:', {
-        id: products[0]._id,
-        name: products[0].name,
-        category: products[0].category,
-        isActive: products[0].isActive,
-      });
-    }
-
     return res.json({
       success: true,
       total,
@@ -149,17 +128,10 @@ exports.getProducts = async (req, res) => {
       pages: Math.ceil(total / (features._limit || 24)),
       limit: features._limit,
       products,
-      ...(process.env.NODE_ENV === 'development' && {
-        debug: {
-          filter,
-          categorySearched: req.query.category,
-          totalBeforePagination: total,
-        }
-      })
     });
 
   } catch (err) {
-    console.error('🔴 getProducts error:', err);
+    console.error('❌ getProducts error:', err);
     return res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'development' ? err.message : 'Erreur serveur',
@@ -173,7 +145,7 @@ exports.getProduct = async (req, res) => {
   try {
     const product = await Product.findOne({ slug: req.params.slug, isActive: true })
       .populate('category', 'name slug')
-      .populate('reviews');
+      .lean();
     
     if (!product) throw new AppError('Produit introuvable', 404);
     
@@ -199,58 +171,58 @@ exports.getFeaturedProducts = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────
 // POST /api/v1/products [admin/manager]
-exports.createProduct = async (req, res, next) => {
+exports.createProduct = async (req, res, _next) => {
+  const sendError = (err) => {
+    if (res.headersSent) return;
+    return res.status(err.statusCode || 500).json({
+      success: false,
+      message: err.message || 'Erreur lors de la création du produit',
+      ...(err.errors && { errors: err.errors }),
+    });
+  };
+
   let tempFiles = req.files || [];
 
   try {
-    // ✅ 1. LOGS STRUCTURÉS (dev only)
-    if (process.env.NODE_ENV === 'development') {
-      console.group('📦 [createProduct]');
-      console.log('Body:', Object.keys(req.body));
-      console.log('Files:', tempFiles.length);
-      console.log('User:', req.user?.userId, req.user?.role);
-      console.groupEnd();
-    }
-
-    // ✅ 2. VALIDATION DES CHAMPS REQUIS
+    // ✅ 1. VALIDATION DES CHAMPS REQUIS
     const { name, description, category, basePrice, type } = req.body;
 
     if (!name?.trim()) {
       await cleanupTempFiles(tempFiles);
-      return next(new AppError('Le nom du produit est requis', 400));
+      return sendError(new AppError('Le nom du produit est requis', 400));
     }
     if (!description?.trim()) {
       await cleanupTempFiles(tempFiles);
-      return next(new AppError('La description est requise', 400));
+      return sendError(new AppError('La description est requise', 400));
     }
     if (!category) {
       await cleanupTempFiles(tempFiles);
-      return next(new AppError('La catégorie est requise', 400));
+      return sendError(new AppError('La catégorie est requise', 400));
     }
     if (!basePrice || Number(basePrice) <= 0) {
       await cleanupTempFiles(tempFiles);
-      return next(new AppError('Le prix de base doit être supérieur à 0', 400));
+      return sendError(new AppError('Le prix de base doit être supérieur à 0', 400));
     }
 
-    // ✅ 3. VALIDATION DU TYPE (enum)
+    // ✅ 2. VALIDATION DU TYPE
     const validTypes = ['shoes', 'perfume', 'clothing', 'accessory'];
     if (type && !validTypes.includes(type)) {
       await cleanupTempFiles(tempFiles);
-      return next(new AppError(`Type invalide. Valeurs acceptées: ${validTypes.join(', ')}`, 400));
+      return sendError(new AppError(`Type invalide. Valeurs acceptées: ${validTypes.join(', ')}`, 400));
     }
 
-    // ✅ 4. VÉRIFIER QUE LA CATÉGORIE EXISTE
+    // ✅ 3. VÉRIFIER QUE LA CATÉGORIE EXISTE
     const categoryExists = await Category.findById(category);
     if (!categoryExists) {
       await cleanupTempFiles(tempFiles);
-      return next(new AppError('Catégorie introuvable', 404));
+      return sendError(new AppError('Catégorie introuvable', 404));
     }
 
-    // ✅ 5. PARSING DES VARIANTES (sécurisé)
+    // ✅ 4. PARSING DES VARIANTES
     let variants = safeParseJSON(req.body.variants, []);
     if (!Array.isArray(variants)) variants = [];
 
-    // ✅ 6. GÉNÉRATION DU SLUG (avec gestion race condition)
+    // ✅ 5. GÉNÉRATION DU SLUG
     let slug;
     let retryCount = 0;
     const MAX_RETRIES = 3;
@@ -268,10 +240,9 @@ exports.createProduct = async (req, res, next) => {
       }
     }
 
-    // ✅ 7. CONSTRUCTION DES IMAGES
+    // ✅ 6. CONSTRUCTION DES IMAGES
     const uploadedImages = tempFiles.map((f, i) => mapUploadedFileToImage(f, i, name.trim()));
 
-    // Images via URLs manuelles
     let manualImages = [];
     const imageUrls = safeParseJSON(req.body.imageUrls, []);
     if (Array.isArray(imageUrls)) {
@@ -284,7 +255,6 @@ exports.createProduct = async (req, res, next) => {
         }));
     }
 
-    // Fallback: req.body.images
     if (uploadedImages.length === 0 && manualImages.length === 0) {
       const imagesField = safeParseJSON(req.body.images, []);
       if (Array.isArray(imagesField)) {
@@ -298,21 +268,14 @@ exports.createProduct = async (req, res, next) => {
       }
     }
 
-    // ✅ 8. VALIDATION FINALE DES IMAGES
     const images = [...uploadedImages, ...manualImages];
 
     if (images.length === 0) {
       await cleanupTempFiles(tempFiles);
-      return next(new AppError('Au moins une image est requise', 400));
+      return sendError(new AppError('Au moins une image est requise', 400));
     }
 
-    const invalidImage = images.findIndex(img => !img?.url);
-    if (invalidImage !== -1) {
-      await cleanupTempFiles(tempFiles);
-      return next(new AppError(`Image ${invalidImage + 1} doit avoir une URL valide`, 400));
-    }
-
-    // ✅ 9. CRÉATION DU PRODUIT (avec normalisation)
+    // ✅ 7. CRÉATION DU PRODUIT
     const productData = {
       name: name.trim(),
       slug,
@@ -330,21 +293,12 @@ exports.createProduct = async (req, res, next) => {
     };
 
     const product = await Product.create(productData);
-
-    // ✅ 10. PEUPLER LA CATÉGORIE POUR LA RÉPONSE
     await product.populate('category', 'name slug');
 
-    // ✅ 11. LOG SUCCÈS
     if (process.env.NODE_ENV === 'development') {
-      console.log('✅ [createProduct] Product created:', {
-        id: product._id,
-        name: product.name,
-        slug: product.slug,
-        images: product.images.length,
-      });
+      console.log('✅ [createProduct] Product created:', product._id);
     }
 
-    // ✅ 12. RÉPONSE
     res.status(201).json({
       success: true,
       message: 'Produit créé avec succès',
@@ -352,86 +306,160 @@ exports.createProduct = async (req, res, next) => {
     });
 
   } catch (err) {
-    // ✅ NETTOYAGE DES FICHIERS TEMPORAIRES EN CAS D'ERREUR
     await cleanupTempFiles(tempFiles);
 
-    console.error('❌ [createProduct] Error:', {
-      message: err.message,
-      name: err.name,
-      code: err.code,
-    });
+    console.error('❌ [createProduct] Error:', err.message);
 
-    // ✅ GESTION DES ERREURS MONGODB
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(e => e.message);
-      return next(new AppError(messages.join(', '), 400));
+      return sendError(new AppError(messages.join(', '), 400));
     }
 
     if (err.code === 11000) {
       const field = Object.keys(err.keyPattern || {})[0];
-      return next(new AppError(`Un produit avec ce ${field} existe déjà`, 409));
+      return sendError(new AppError(`Un produit avec ce ${field} existe déjà`, 409));
     }
 
-    // ✅ ERREURS DÉJÀ FORMATÉES (AppError)
     if (err instanceof AppError) {
-      return next(err);
+      return sendError(err);
     }
 
-    // ✅ ERREUR GÉNÉRIQUE
-    next(new AppError(err.message || 'Erreur lors de la création du produit', 500));
+    return sendError(new AppError(err.message || 'Erreur lors de la création du produit', 500));
   }
 };
 
 // ─────────────────────────────────────────────────────────────
 // PATCH /api/v1/products/:id [admin/manager]
 exports.updateProduct = async (req, res) => {
+  
+  console.log('📝 [updateProduct] Received:', {
+    params: req.params,
+    body: req.body,
+    files: req.files?.length || 0,
+  });
+  let tempFiles = req.files || [];
+
   try {
-    if (!isValidObjectId(req.params.id)) throw new AppError('ID de produit invalide', 400);
+    if (!isValidObjectId(req.params.id)) {
+      await cleanupTempFiles(tempFiles);
+      throw new AppError('ID de produit invalide', 400);
+    }
 
     const product = await Product.findById(req.params.id);
-    if (!product) throw new AppError('Produit introuvable', 404);
+    if (!product) {
+      await cleanupTempFiles(tempFiles);
+      throw new AppError('Produit introuvable', 404);
+    }
 
+    // ✅ Générer un nouveau slug si le nom change
     if (req.body.name && req.body.name !== product.name) {
       req.body.slug = await generateSlug(req.body.name, Product);
     }
 
+    // ✅ Parser les variantes
     if (typeof req.body.variants === 'string') {
-      try { req.body.variants = JSON.parse(req.body.variants); } 
-      catch (err) { throw new AppError('Format des variantes invalide', 400); }
+      try { 
+        req.body.variants = JSON.parse(req.body.variants); 
+      } catch (err) { 
+        await cleanupTempFiles(tempFiles);
+        throw new AppError('Format des variantes invalide', 400); 
+      }
     }
 
-    // Gestion hybride des images
-    if (req.files?.length || req.body.imageUrls) {
+    // ✅ Gestion des images
+    if (req.files?.length || req.body.imageUrls || req.body.existingImages) {
       const existingImages = product.images || [];
-      const newUploadedImages = req.files?.map((f, i) => mapUploadedFileToImage(f, i, req.body.name || product.name)) || [];
       
-      let newManualImages = [];
-      if (req.body.imageUrls) {
-        try {
-          const parsed = JSON.parse(req.body.imageUrls);
-          if (Array.isArray(parsed)) {
-            newManualImages = parsed
-              .filter(img => img?.url?.trim())
-              .map((img, idx) => ({
-                url: img.url.trim(),
-                alt: img.alt || req.body.name || product.name,
-                isPrimary: existingImages.length + newUploadedImages.length === 0 && idx === 0,
-              }));
-          }
-        } catch (err) { console.warn('⚠️ Failed to parse imageUrls in update:', err); }
+      // Parser les images existantes conservées
+      let keptImages = [];
+      if (req.body.existingImages) {
+        const parsed = safeParseJSON(req.body.existingImages, []);
+        if (Array.isArray(parsed)) {
+          keptImages = parsed
+            .filter(img => img?.url)
+            .map(img => ({
+              url: img.url,
+              alt: img.alt || product.name,
+              publicId: img.publicId,
+              isPrimary: false,
+            }));
+        }
       }
       
-      req.body.images = [...existingImages, ...newUploadedImages, ...newManualImages];
+      // Nouvelles images uploadées
+      const newUploadedImages = req.files?.map((f, i) => 
+        mapUploadedFileToImage(f, keptImages.length + i, req.body.name || product.name)
+      ) || [];
+      
+      // Images manuelles via URLs
+      let newManualImages = [];
+      if (req.body.imageUrls) {
+        const parsed = safeParseJSON(req.body.imageUrls, []);
+        if (Array.isArray(parsed)) {
+          newManualImages = parsed
+            .filter(img => img?.url?.trim())
+            .map((img, idx) => ({
+              url: img.url.trim(),
+              alt: img.alt || req.body.name || product.name,
+              isPrimary: keptImages.length + newUploadedImages.length === 0 && idx === 0,
+            }));
+        }
+      }
+      
+      // Combiner toutes les images
+      req.body.images = [...keptImages, ...newUploadedImages, ...newManualImages];
+      
+      // Marquer la première image comme principale
+      if (req.body.images.length > 0) {
+        req.body.images[0].isPrimary = true;
+      }
+      
+      // ✅ Supprimer les anciennes images non conservées
+      const keptUrls = req.body.images.map(img => img.url);
+      const imagesToDelete = existingImages
+        .filter(img => !keptUrls.includes(img.url))
+        .map(img => img.url);
+      
+      if (imagesToDelete.length > 0) {
+        await deleteImages(imagesToDelete).catch(err => {
+          console.warn('⚠️ Failed to delete old images:', err.message);
+        });
+      }
     }
 
     const updated = await Product.findByIdAndUpdate(req.params.id, req.body, { 
-      returnDocument: 'after', runValidators: true 
+      returnDocument: 'after', 
+      runValidators: true,
+      new: true,
     });
     
-    res.json({ success: true, product: updated });
+    await updated.populate('category', 'name slug');
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ [updateProduct] Product updated:', updated._id);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Produit mis à jour avec succès',
+      product: updated 
+    });
 
   } catch (err) {
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    // ✅ Cleanup des fichiers en cas d'erreur
+    await cleanupTempFiles(tempFiles);
+
+    console.error('❌ [updateProduct] Error:', err.message);
+
+    if (err.name === 'ValidationError') {
+      const messages = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ success: false, message: messages.join(', ') });
+    }
+
+    res.status(err.statusCode || 500).json({ 
+      success: false, 
+      message: err.message 
+    });
   }
 };
 
@@ -439,17 +467,41 @@ exports.updateProduct = async (req, res) => {
 // DELETE /api/v1/products/:id [admin]
 exports.deleteProduct = async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) throw new AppError('ID de produit invalide', 400);
+    if (!isValidObjectId(req.params.id)) {
+      throw new AppError('ID de produit invalide', 400);
+    }
 
     const product = await Product.findById(req.params.id);
-    if (!product) throw new AppError('Produit introuvable', 404);
+    if (!product) {
+      throw new AppError('Produit introuvable', 404);
+    }
 
-    await deleteImages(product.images.map((i) => i.url)).catch(() => {});
-    await product.deleteOne();
+    // ✅ Supprimer les images de Cloudinary
+    if (product.images?.length > 0) {
+      const imageUrls = product.images.map(img => img.url);
+      await deleteImages(imageUrls).catch(err => {
+        console.warn('⚠️ Failed to delete images:', err.message);
+      });
+    }
+
+    // ✅ Supprimer le produit
+    await Product.findByIdAndDelete(req.params.id);
     
-    res.json({ success: true, message: 'Produit supprimé' });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🗑️ [deleteProduct] Product deleted:', req.params.id);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Produit supprimé avec succès' 
+    });
+
   } catch (err) {
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    console.error('❌ [deleteProduct] Error:', err.message);
+    res.status(err.statusCode || 500).json({ 
+      success: false, 
+      message: err.message 
+    });
   }
 };
 
@@ -457,10 +509,14 @@ exports.deleteProduct = async (req, res) => {
 // DELETE /api/v1/products/:id/images/:imageIndex [admin]
 exports.deleteProductImage = async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) throw new AppError('ID de produit invalide', 400);
+    if (!isValidObjectId(req.params.id)) {
+      throw new AppError('ID de produit invalide', 400);
+    }
 
     const product = await Product.findById(req.params.id);
-    if (!product) throw new AppError('Produit introuvable', 404);
+    if (!product) {
+      throw new AppError('Produit introuvable', 404);
+    }
 
     const idx = parseInt(req.params.imageIndex, 10);
     if (isNaN(idx) || idx < 0 || idx >= product.images.length) {
@@ -468,12 +524,33 @@ exports.deleteProductImage = async (req, res) => {
     }
 
     const [removed] = product.images.splice(idx, 1);
-    await deleteImages([removed.url]).catch(() => {});
+    
+    // ✅ Supprimer l'image de Cloudinary
+    if (removed.url) {
+      await deleteImages([removed.url]).catch(err => {
+        console.warn('⚠️ Failed to delete image:', err.message);
+      });
+    }
+    
+    // ✅ Réassigner isPrimary si nécessaire
+    if (removed.isPrimary && product.images.length > 0) {
+      product.images[0].isPrimary = true;
+    }
+    
     await product.save();
     
-    res.json({ success: true, images: product.images });
+    res.json({ 
+      success: true, 
+      message: 'Image supprimée avec succès',
+      images: product.images 
+    });
+
   } catch (err) {
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    console.error('❌ [deleteProductImage] Error:', err.message);
+    res.status(err.statusCode || 500).json({ 
+      success: false, 
+      message: err.message 
+    });
   }
 };
 
@@ -481,17 +558,30 @@ exports.deleteProductImage = async (req, res) => {
 // POST /api/v1/products/:id/variants [admin]
 exports.addVariant = async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) throw new AppError('ID de produit invalide', 400);
+    if (!isValidObjectId(req.params.id)) {
+      throw new AppError('ID de produit invalide', 400);
+    }
 
     const product = await Product.findById(req.params.id);
-    if (!product) throw new AppError('Produit introuvable', 404);
+    if (!product) {
+      throw new AppError('Produit introuvable', 404);
+    }
     
     product.variants.push(req.body);
     await product.save();
     
-    res.status(201).json({ success: true, variants: product.variants });
+    res.status(201).json({ 
+      success: true, 
+      message: 'Variante ajoutée avec succès',
+      variants: product.variants 
+    });
+
   } catch (err) {
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    console.error('❌ [addVariant] Error:', err.message);
+    res.status(err.statusCode || 500).json({ 
+      success: false, 
+      message: err.message 
+    });
   }
 };
 
@@ -499,21 +589,38 @@ exports.addVariant = async (req, res) => {
 // PATCH /api/v1/products/:id/variants/:variantId [admin]
 exports.updateVariant = async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) throw new AppError('ID de produit invalide', 400);
-    if (!isValidObjectId(req.params.variantId)) throw new AppError('ID de variante invalide', 400);
+    if (!isValidObjectId(req.params.id)) {
+      throw new AppError('ID de produit invalide', 400);
+    }
+    if (!isValidObjectId(req.params.variantId)) {
+      throw new AppError('ID de variante invalide', 400);
+    }
 
     const product = await Product.findById(req.params.id);
-    if (!product) throw new AppError('Produit introuvable', 404);
+    if (!product) {
+      throw new AppError('Produit introuvable', 404);
+    }
     
     const variant = product.variants.id(req.params.variantId);
-    if (!variant) throw new AppError('Variante introuvable', 404);
+    if (!variant) {
+      throw new AppError('Variante introuvable', 404);
+    }
     
     Object.assign(variant, req.body);
     await product.save();
     
-    res.json({ success: true, variant });
+    res.json({ 
+      success: true, 
+      message: 'Variante mise à jour avec succès',
+      variant 
+    });
+
   } catch (err) {
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    console.error('❌ [updateVariant] Error:', err.message);
+    res.status(err.statusCode || 500).json({ 
+      success: false, 
+      message: err.message 
+    });
   }
 };
 
@@ -521,17 +628,33 @@ exports.updateVariant = async (req, res) => {
 // DELETE /api/v1/products/:id/variants/:variantId [admin]
 exports.deleteVariant = async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) throw new AppError('ID de produit invalide', 400);
-    if (!isValidObjectId(req.params.variantId)) throw new AppError('ID de variante invalide', 400);
+    if (!isValidObjectId(req.params.id)) {
+      throw new AppError('ID de produit invalide', 400);
+    }
+    if (!isValidObjectId(req.params.variantId)) {
+      throw new AppError('ID de variante invalide', 400);
+    }
 
     const product = await Product.findById(req.params.id);
-    if (!product) throw new AppError('Produit introuvable', 404);
+    if (!product) {
+      throw new AppError('Produit introuvable', 404);
+    }
     
-    product.variants = product.variants.filter((v) => v._id.toString() !== req.params.variantId);
+    product.variants = product.variants.filter(
+      v => v._id.toString() !== req.params.variantId
+    );
     await product.save();
     
-    res.json({ success: true, message: 'Variante supprimée' });
+    res.json({ 
+      success: true, 
+      message: 'Variante supprimée avec succès' 
+    });
+
   } catch (err) {
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    console.error('❌ [deleteVariant] Error:', err.message);
+    res.status(err.statusCode || 500).json({ 
+      success: false, 
+      message: err.message 
+    });
   }
 };

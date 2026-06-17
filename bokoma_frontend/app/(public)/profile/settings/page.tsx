@@ -384,7 +384,8 @@ export default function ProfileSettingsPage() {
       const formData = new FormData();
       formData.append('avatar', avatarFile);
 
-      await apiClient.upload('/users/me/avatar', formData);
+      // Backend expects PATCH /users/me/avatar — use PATCH with FormData
+      await apiClient.patch('/users/me/avatar', formData);
       showSuccess('Avatar mis à jour');
       
       // Cleanup

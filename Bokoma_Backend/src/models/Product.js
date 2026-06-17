@@ -258,7 +258,7 @@ productSchema.statics.findFeatured = function (limit = 8) {
 // ─────────────────────────────
 
 // Avant sauvegarde : recalcul stock + normalisation
-productSchema.pre('save', function (next) {
+productSchema.pre('save', async function() {
   try {
     // 🔁 Recalcul du stock total depuis les variantes
     this.totalStock = (this.variants || []).reduce(
@@ -279,9 +279,9 @@ productSchema.pre('save', function (next) {
       this.comparePrice = Number(this.comparePrice) || undefined;
     }
 
-    next();
+    // next();
   } catch (err) {
-    next(err);
+    // next(err);
   }
 });
 

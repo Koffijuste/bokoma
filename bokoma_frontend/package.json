@@ -4,7 +4,7 @@
   "description": "Premium Next.js E-commerce Frontend for Bokoma Store",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -16,7 +16,7 @@
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-select": "^2.2.6",
-    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-separator": "^1.1.10",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-toast": "^1.2.15",
@@ -27,6 +27,7 @@
     "autoprefixer": "^10.5.0",
     "axios": "^1.16.1",
     "browser-image-compression": "^2.0.2",
+    "cinetpay-seamless": "^0.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cookie-parser": "^1.4.7",
@@ -62,5 +63,5 @@
     "eslint-config-next": "^15.1.0",
     "madge": "^8.0.0"
   },
-  "type": "commonjs"
+  "type": "module"
 }

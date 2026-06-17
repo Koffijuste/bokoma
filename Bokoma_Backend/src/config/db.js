@@ -40,9 +40,12 @@ async function connectDB() {
     mongoose.connection.on("connecting", () => {
       console.log("📡 Mongoose: connecting...");
     });
-
+    
+    console.time("mongo-connect");
+    
     mongoose.connection.on("connected", () => {
       console.log("✅ Mongoose: connected");
+      console.timeEnd("mongo-connect");
     });
 
     mongoose.connection.on("open", () => {
@@ -66,12 +69,38 @@ async function connectDB() {
       console.error(err);
     });
 
-    cached.promise = mongoose.connect(MONGO_URI, {
-      autoIndex: process.env.NODE_ENV !== "production",
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 45000,
-    });
+    // Retry logic with exponential backoff to handle transient network issues
+    const maxAttempts = 4;
+    const baseDelay = 2000; // 2s
+
+    const connectWithRetry = async () => {
+      let attempt = 0;
+      let lastError = null;
+
+      while (attempt < maxAttempts) {
+        try {
+          attempt++;
+          console.log(`🔁 MongoDB connect attempt ${attempt}/${maxAttempts}`);
+          const conn = await mongoose.connect(MONGO_URI, {
+            autoIndex: process.env.NODE_ENV !== "production",
+            maxPoolSize: 10,
+            serverSelectionTimeoutMS: 30000,
+            socketTimeoutMS: 45000,
+          });
+          return conn;
+        } catch (err) {
+          lastError = err;
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          console.warn(`⚠️ MongoDB connect failed (attempt ${attempt}): ${err.message}. Retrying in ${delay}ms...`);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+
+      // If all attempts failed, throw the last error
+      throw lastError;
+    };
+
+    cached.promise = connectWithRetry();
   }
 
   try {

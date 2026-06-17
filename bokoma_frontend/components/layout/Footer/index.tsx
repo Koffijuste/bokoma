@@ -65,7 +65,7 @@ export function Footer() {
               </div>
             </div>
             <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-              Découvrez notre sélection premium de produits de luxe et tendance. Qualité exceptionnelle, service irréprochable.
+              Découvrez notre sélection premium de produits de luxe et tendance.
             </p>
             <div className="flex gap-2">
               {[
@@ -80,7 +80,7 @@ export function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-9 h-9 rounded-lg bg-muted/50 hover:bg-accent/10 hover:text-accent flex items-center justify-center transition-all hover:scale-110"
-                  aria-label={social.icon.name}
+                  aria-label="Social link"
                 >
                   <social.icon className="w-4 h-4" />
                 </a>
@@ -169,10 +169,8 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Divider */}
         <div className="border-t border-border/50 my-8" />
 
-        {/* Bottom */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} Bokoma Store. Tous droits réservés.</p>
           <div className="flex flex-wrap gap-4">
@@ -191,5 +189,6 @@ export function Footer() {
     </footer>
   );
 }
+
 
 export default Footer;

@@ -1,19 +1,26 @@
+// src/middlewares/validate.js
 const { validationResult } = require('express-validator');
 
-/**
- * Middleware qui récupère les erreurs express-validator
- * et renvoie un 422 si des erreurs existent.
- */
-const validate = (req, res, next) => {
+// Ce middleware doit être placé APRÈS les règles de validation dans la route
+const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
+  
   if (!errors.isEmpty()) {
+    console.error('❌ [Validation] Erreurs détectées:', errors.array());
+    
     return res.status(422).json({
       success: false,
-      message: 'Données invalides',
-      errors:  errors.array().map((e) => ({ field: e.path, message: e.msg })),
+      message: 'Données de commande invalides',
+      errors: errors.array().map(err => ({
+        field: err.path,
+        message: err.msg,
+        value: err.value,
+      })),
     });
   }
+  
+  // Si tout est bon, on passe au contrôleur
   next();
 };
 
-module.exports = validate;
+module.exports = handleValidationErrors;

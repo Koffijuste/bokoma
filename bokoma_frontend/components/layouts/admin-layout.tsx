@@ -16,7 +16,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       
       {/* Contenu principal */}
       <main className="sm:ml-64 transition-all duration-300">
-        {children}
+        {React.Children.toArray(children)}
       </main>
     </div>
   );

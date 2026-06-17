@@ -1,16 +1,22 @@
+// app/(public)/checkout/page.tsx
 'use client';
 
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useFetch } from '@/hooks';
-import { cartApi } from '@/services';
+// ✅ 1. Ajout de l'import de orderApi
+import { cartApi, orderApi } from '@/services'; 
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
 
 export default function CheckoutPage() {
   const { data: cart, loading, error, refetch } = useFetch(() => cartApi.getCart(), []);
+  
+  // ✅ 2. Ajout d'un état pour gérer le chargement pendant le paiement
+  const [isProcessing, setIsProcessing] = useState(false);
+
   const [shippingDetails, setShippingDetails] = useState({
     fullName: '',
     address: '',
@@ -22,6 +28,44 @@ export default function CheckoutPage() {
 
   const handleChange = (field: string, value: string) => {
     setShippingDetails((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // ✅ 3. Création de la fonction de soumission (Checkout)
+  const handleCheckout = async () => {
+    // Petite validation basique avant d'envoyer
+    if (!shippingDetails.fullName || !shippingDetails.phone || !shippingDetails.address) {
+      alert('Veuillez remplir toutes les informations de livraison.');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Appel à votre backend pour créer la commande
+      const response = await orderApi.createOrder({
+        shipping: shippingDetails,
+        payment: { method: paymentMethod },
+      });
+
+      // ✅ 4. Vérification de la redirection CinetPay
+      if (response.data?.payment?.paymentUrl) {
+        // Redirection vers la page de paiement sécurisée de CinetPay
+        window.location.href = response.data.payment.paymentUrl;
+        return; // On arrête l'exécution ici, la page va changer
+      }
+
+      // ✅ 5. Fallback pour les autres méthodes (ex: paiement à la livraison)
+      if (response.success) {
+        // Redirection vers une page de succès interne
+        window.location.href = `/orders/success?orderId=${response.data.order._id}`;
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la commande:', error);
+      alert(error.response?.data?.message || 'Une erreur est survenue lors du paiement.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -111,8 +155,15 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <Button size="lg" variant="primary" className="mt-8 w-full">
-                Payer {formatPrice(cart.total)}
+              {/* ✅ 6. Mise à jour du bouton pour déclencher handleCheckout */}
+              <Button 
+                size="lg" 
+                variant="primary" 
+                className="mt-8 w-full"
+                onClick={handleCheckout}
+                disabled={isProcessing}
+              >
+                {isProcessing ? 'Traitement en cours...' : `Payer ${formatPrice(cart.total)}`}
               </Button>
             </div>
 

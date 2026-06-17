@@ -415,6 +415,20 @@ export const orderApi = {
   cancelOrder: (id: string, reason?: string) => apiClient.patch<ApiResponse<{ order: Order }>>(`/orders/${id}/cancel`, { reason }),
   updateOrderStatus: (id: string, status: OrderStatus, note?: string) =>
     apiClient.patch<ApiResponse<{ order: Order }>>(`/orders/${id}/status`, { status, note }),
+    // ✅ NOUVEAU : Vérification publique du paiement
+  verifyPaymentPublic: async (params: {
+    orderId?: string;
+    merchantTransactionId?: string;
+    transactionId?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params.orderId) queryParams.append('orderId', params.orderId);
+    if (params.merchantTransactionId) queryParams.append('merchantTransactionId', params.merchantTransactionId);
+    if (params.transactionId) queryParams.append('transactionId', params.transactionId);
+    
+    const response = await apiClient.get(`/orders/verify/payment?${queryParams.toString()}`);
+    return response.data;
+  },
 };
 
 export const reviewApi = {

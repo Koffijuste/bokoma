@@ -12,11 +12,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { apiClient } from '@/services/api';
+import { productApi } from '@/services';
 import { formatPrice } from '@/utils/helpers';
 import { useAuth } from '@/hooks/useAuth';
 import { useWishlist } from '@/hooks/useWishlist';
-import { useCartStore } from '@/store';
+import { useCart } from '@/hooks/useCart';
 import { cn } from '@/utils/helpers';
 import type { Product, Category } from '@/types';
 
@@ -55,10 +55,10 @@ const normalizeProducts = (data: any): Product[] => {
 
 const getProductImage = (product: Product): string => {
   const firstImage = product.images?.[0];
-  if (!firstImage) return '/placeholder-product.jpg';
+  if (!firstImage) return '/placeholder-product.svg';
   
   const url = typeof firstImage === 'string' ? firstImage : firstImage.url;
-  if (!url) return '/placeholder-product.jpg';
+  if (!url) return '/placeholder-product.svg';
   
   if (url.includes('res.cloudinary.com')) {
     return url.replace('/upload/', '/upload/f_auto,q_auto,w_400,c_fill,g_auto/');
@@ -82,13 +82,14 @@ const ProductCard = ({
   product: Product;
   index: number;
   isWishlisted: boolean;
-  onToggleWishlist: (productId: string) => void;
+  onToggleWishlist: (productId: string, product: Product) => void;
   onAddToCart: (product: Product) => void;
   addingToCart: boolean;
 }) => {
   const imageUrl = getProductImage(product);
   const inStock = (product.totalStock || 0) > 0;
   const productSlug = product.slug || product._id;
+  const router = useRouter();
 
   return (
     <motion.div
@@ -98,18 +99,20 @@ const ProductCard = ({
       whileHover={{ y: -4 }}
       className="group bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg transition-all"
     >
-      {/* Image */}
-      <Link href={`/products/${productSlug}`} className="block relative aspect-square bg-muted/30">
-        <img
-          src={imageUrl}
-          alt={product.name}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          loading="lazy"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = '/placeholder-product.jpg';
-          }}
-        />
-        
+      {/* Image (link only wraps the image to avoid nested anchors) */}
+      <div className="relative">
+        <Link href={`/products/${productSlug}`} className="block aspect-square bg-muted/30">
+          <img
+            src={imageUrl}
+            alt={product.name}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/placeholder-product.svg';
+            }}
+          />
+        </Link>
+
         {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           {!inStock && (
@@ -119,12 +122,12 @@ const ProductCard = ({
           )}
         </div>
 
-        {/* Wishlist button */}
+        {/* Wishlist button (moved outside the Link) */}
         <button
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            onToggleWishlist(product._id);
+            onToggleWishlist(product._id, product);
           }}
           className={cn(
             'absolute top-3 right-3 p-2 rounded-full transition-all shadow-sm hover:scale-110',
@@ -137,17 +140,20 @@ const ProductCard = ({
           <Heart className={cn('w-4 h-4', isWishlisted && 'fill-current')} />
         </button>
 
-        {/* Quick actions overlay */}
+        {/* Quick actions overlay (moved outside the Link, use router.push) */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
           <Button
             size="icon"
             variant="secondary"
             className="rounded-full bg-background/90 hover:bg-background hover:scale-110 transition-transform"
-            asChild
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              router.push(`/products/${productSlug}`);
+            }}
+            aria-label="Voir le produit"
           >
-            <Link href={`/products/${productSlug}`} aria-label="Voir le produit">
-              <Eye className="w-4 h-4" />
-            </Link>
+            <Eye className="w-4 h-4" />
           </Button>
           <Button
             size="icon"
@@ -168,7 +174,7 @@ const ProductCard = ({
             )}
           </Button>
         </div>
-      </Link>
+      </div>
       
       {/* Content */}
       <div className="p-4">
@@ -225,7 +231,7 @@ export default function ProductsPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { isInWishlist, toggleWishlist } = useWishlist();
-  const { addItem: addToCart } = useCartStore();
+  const { addItem: addToCart } = useCart();
   
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,7 +258,10 @@ export default function ProductsPage() {
       if (searchQuery) params.search = searchQuery;
       if (sortBy) params.sort = sortBy;
 
-      const response = await apiClient.get('/products', { params });
+      const response = await productApi.getProducts({
+        ...params,
+        fields: 'name,slug,images,brand,basePrice,totalStock,category',
+      });
       const normalized = normalizeProducts(response);
       
       setProducts(normalized);
@@ -278,14 +287,14 @@ export default function ProductsPage() {
   // 🔹 HANDLERS
   // ============================================================================
 
-  const handleToggleWishlist = useCallback(async (productId: string) => {
+  const handleToggleWishlist = useCallback(async (productId: string, product: Product) => {
     if (!isAuthenticated) {
       toast.error('Veuillez vous connecter pour ajouter aux favoris');
       router.push(`/auth/login?from=/products`);
       return;
     }
 
-    const success = await toggleWishlist(productId);
+    const success = await toggleWishlist(productId, product);
     if (success) {
       const isNowWishlisted = isInWishlist(productId);
       toast.success(isNowWishlisted ? 'Retiré des favoris' : 'Ajouté aux favoris');
@@ -307,16 +316,18 @@ export default function ProductsPage() {
     setAddingToCartIds(prev => new Set(prev).add(product._id));
 
     try {
-      await apiClient.post('/cart/items', {
-        product: product._id,
-        quantity: 1,
-      });
-      
-      addToCart(product._id, 1);
+      // Utiliser le hook useCart pour gérer l'API et la synchronisation du store
+      // handleAddItem vérifie si le produit existe déjà et incrémente la quantité
+      await addToCart({ product: product._id, quantity: 1 });
       toast.success(`${product.name} ajouté au panier`);
     } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || 'Erreur lors de l\'ajout au panier';
-      toast.error(message);
+      const message = err?.response?.data?.message || err?.message || "Erreur lors de l'ajout au panier";
+      // ✅ Vérifier si c'est une erreur "produit déjà existant"
+      if (message.includes('Produit déjà existant') || message.includes('déjà')) {
+        toast.info(`${product.name} - Quantité augmentée`);
+      } else {
+        toast.error(message);
+      }
     } finally {
       setAddingToCartIds(prev => {
         const next = new Set(prev);

@@ -1,4 +1,4 @@
-// app/(public)/cart/page.tsx — VERSION CORRIGÉE + DEBUG SÉCURISÉ
+// app/(public)/cart/page.tsx
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
@@ -18,14 +18,13 @@ import { Label } from '@/components/ui/label';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useMounted } from '@/hooks/useMounted';
-// ✅ CORRECTION: Ne PAS importer apiClient (non exporté)
 import { cartApi, orderApi } from '@/services';
 import { ROUTES, STORAGE_KEYS } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
 import type { Cart, Product } from '@/types';
 
 // ============================================================================
-// 🔹 DONNÉES GÉOGRAPHIQUES (inchangées)
+// 🔹 DONNÉES GÉOGRAPHIQUES
 // ============================================================================
 const COUNTRIES = [
   { code: 'CI', name: 'Côte d\'Ivoire', flag: '🇨🇮' },
@@ -46,16 +45,19 @@ const CITIES_BY_COUNTRY: Record<string, string[]> = {
 };
 
 const SHIPPING_RATES = { CI: { ABIDJAN: 1500, INTERIOR: 2000 }, INTERNATIONAL: 5000 };
+
 const getShippingCost = (countryCode: string, city: string): number => {
   if (countryCode !== 'CI') return SHIPPING_RATES.INTERNATIONAL;
   if (city === 'Abidjan') return SHIPPING_RATES.CI.ABIDJAN;
   return SHIPPING_RATES.CI.INTERIOR;
 };
+
 const getShippingLabel = (countryCode: string, city: string): string => {
   if (countryCode !== 'CI') return 'Livraison Internationale';
   if (city === 'Abidjan') return 'Livraison Abidjan';
   return 'Livraison Intérieur CIV';
 };
+
 const extractCart = (data: any): Cart | null => {
   if (!data) return null;
   if (data.cart) return data.cart;
@@ -65,7 +67,7 @@ const extractCart = (data: any): Cart | null => {
 };
 
 // ============================================================================
-// 🔹 COMPOSANTS UI (inchangés)
+// 🔹 COMPOSANTS UI
 // ============================================================================
 const SimpleSelect = ({ value, onChange, options, placeholder, disabled, className = '' }: {
   value: string; onChange: (value: string) => void;
@@ -92,7 +94,7 @@ const SimpleBadge = ({ children, variant = 'default' }: { children: React.ReactN
 };
 
 // ============================================================================
-// 🔹 COMPOSANT PRINCIPAL — VERSION CORRIGÉE
+// 🔹 COMPOSANT PRINCIPAL
 // ============================================================================
 export default function CartPage() {
   const { isAuthenticated, isLoading: authLoading, accessToken } = useAuth();
@@ -106,13 +108,16 @@ export default function CartPage() {
   const [shippingDetails, setShippingDetails] = useState({
     fullName: '', phone: '', address: '', country: '', city: '', postalCode: '',
   });
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money' | 'cash_on_delivery' | 'bank_transfer'>('card');
+  
+  // ✅ SIMPLIFIÉ : Seulement le choix du mode de paiement
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money' | 'cash_on_delivery' | 'bank_transfer'>('mobile_money');
+  
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // ============================================================================
-  // 🔹 LOGS D'AUTHENTIFICATION — SÉCURISÉS (sans apiClient)
+  // 🔹 LOGS D'AUTHENTIFICATION
   // ============================================================================
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development' || !mounted) return;
@@ -123,7 +128,6 @@ export default function CartPage() {
     console.log('  isAuthenticated:', isAuthenticated);
     console.log('  accessToken (useAuth):', accessToken ? `${accessToken.slice(0, 30)}...` : '❌ MISSING');
     
-    // ✅ Vérifier localStorage (sécurisé)
     try {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem(STORAGE_KEYS.AUTH);
@@ -134,14 +138,13 @@ export default function CartPage() {
             accessTokenPreview: parsed?.accessToken?.slice(0, 30) + '...',
           });
         } else {
-          console.warn('  localStorage[auth]: ❌ MISSING — Token may be in cookie only');
+          console.warn('  localStorage[auth]: ❌ MISSING');
         }
       }
     } catch (e) {
       console.error('  localStorage[auth]: Error reading:', e);
     }
     
-    // ✅ Vérifier cookies (sécurisé)
     if (typeof document !== 'undefined') {
       const cookieName = STORAGE_KEYS.AUTH_TOKEN || 'bokoma_access_token';
       const hasCookie = document.cookie.split(';').some(c => c.trim().startsWith(`${cookieName}=`));
@@ -162,7 +165,7 @@ export default function CartPage() {
   }, [mounted, authLoading, isAuthenticated, router]);
 
   // ============================================================================
-  // 🔹 FETCH CART — VERSION SÉCURISÉE
+  // 🔹 FETCH CART
   // ============================================================================
   const fetchCart = useCallback(async () => {
     if (!mounted || !isAuthenticated) return;
@@ -171,7 +174,6 @@ export default function CartPage() {
       setLoading(true);
       console.log('🛒 [CartPage] Fetching cart...');
       
-      // 🔍 DEBUG: Log token source (sans accéder à apiClient.getClient)
       if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         const stored = localStorage.getItem(STORAGE_KEYS.AUTH);
         const hasLocalStorageToken = stored && JSON.parse(stored)?.accessToken;
@@ -181,10 +183,6 @@ export default function CartPage() {
           localStorage: hasLocalStorageToken ? '✅ Present' : '❌ Missing',
           cookie: hasCookieToken ? '✅ Present' : '❌ Missing',
         });
-        
-        if (!hasLocalStorageToken && hasCookieToken) {
-          console.warn('  ⚠️ Token is in cookie but NOT localStorage — interceptor must handle cookie fallback');
-        }
       }
       
       const response = await cartApi.getCart();
@@ -201,17 +199,10 @@ export default function CartPage() {
       console.log('  Message:', err?.message);
       console.log('  Status code:', err?.statusCode);
       console.log('  Response data:', err?.response?.data);
-      if (err?.config) {
-        console.log('  Request:', {
-          url: err.config.url,
-          method: err.config.method,
-          headers: err.config.headers ? Object.keys(err.config.headers) : [],
-        });
-      }
       console.groupEnd();
       
       if (err?.statusCode === 401 || err?.message?.includes('authentification')) {
-        console.warn('⚠️ [CartPage] Auth error — token may be invalid/expired');
+        console.warn('⚠️ [CartPage] Auth error');
         toast.error('Session expirée, veuillez vous reconnecter');
         return;
       }
@@ -229,7 +220,7 @@ export default function CartPage() {
   }, [mounted, isAuthenticated, authLoading, fetchCart]);
 
   // ============================================================================
-  // 🔹 CALCULS DÉRIVÉS (inchangés)
+  // 🔹 CALCULS DÉRIVÉS
   // ============================================================================
   const availableCities = useMemo(() => 
     shippingDetails.country ? CITIES_BY_COUNTRY[shippingDetails.country] || [] : []
@@ -252,7 +243,7 @@ export default function CartPage() {
   , [total, paymentMethod]);
 
   // ============================================================================
-  // 🔹 GESTIONNAIRES (inchangés)
+  // 🔹 GESTIONNAIRES
   // ============================================================================
   const handleShippingChange = (field: string, value: string) => {
     setShippingDetails(prev => {
@@ -267,32 +258,80 @@ export default function CartPage() {
 
   const updateCartItemQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
+    
+    const item = cart?.items?.find(i => i._id === itemId);
+    if (!item) return;
+    
+    const maxStock = (item.product as any)?.totalStock || (item as any)?.totalStock || 999;
+    
+    if (newQuantity > maxStock) {
+      toast.error(`Stock insuffisant : ${maxStock} disponible${maxStock > 1 ? 's' : ''}`);
+      return;
+    }
+    
+    const previousCart = cart;
+    const updatedCart = {
+      ...cart,
+      items: cart?.items?.map(i =>
+        i._id === itemId ? { ...i, quantity: newQuantity } : i
+      ) || [],
+    };
+    setCart(updatedCart as Cart);
     setUpdatingItemId(itemId);
+
     try {
-      await cartApi.updateItem(itemId, newQuantity);
-      await fetchCart();
-      toast.success('Quantité mise à jour');
-    } catch (err) {
-      console.error('Failed to update quantity:', err);
-      toast.error('Erreur lors de la mise à jour');
+      const response = await cartApi.updateItem(itemId, newQuantity);
+      
+      if (response?.data?.cart || response?.cart) {
+        const updated = extractCart(response);
+        if (updated) {
+          setCart(updated);
+          toast.success('Quantité mise à jour');
+        }
+      } else {
+        toast.success('Quantité mise à jour');
+      }
+    } catch (err: any) {
+      console.error('❌ Failed to update quantity:', err);
+      setCart(previousCart);
+      
+      const errorMsg = err?.response?.data?.message || err?.message || 'Erreur lors de la mise à jour';
+      toast.error(errorMsg);
     } finally {
       setUpdatingItemId(null);
     }
   };
 
   const removeCartItem = async (itemId: string) => {
+    const previousCart = cart;
+    const updatedCart = {
+      ...cart,
+      items: cart?.items?.filter(item => item._id !== itemId) || [],
+    };
+    setCart(updatedCart as Cart);
+
     try {
-      await cartApi.removeItem(itemId);
-      await fetchCart();
+      const response = await cartApi.removeItem(itemId);
+      
+      if (response?.data?.cart || response?.cart) {
+        const updated = extractCart(response);
+        if (updated) {
+          setCart(updated);
+        }
+      }
       toast.success('Produit retiré du panier');
-    } catch (err) {
-      console.error('Failed to remove item:', err);
-      toast.error('Erreur lors de la suppression');
+    } catch (err: any) {
+      console.error('❌ Failed to remove item:', err);
+      setCart(previousCart);
+      toast.error(err?.response?.data?.message || 'Erreur lors de la suppression');
     }
   };
 
+  // ✅ SIMPLIFIÉ : Validation sans champs supplémentaires
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
+    
+    // Validation livraison
     if (!shippingDetails.fullName.trim()) errors.fullName = 'Nom complet requis';
     if (!shippingDetails.phone.trim()) errors.phone = 'Téléphone requis';
     if (!shippingDetails.address.trim()) errors.address = 'Adresse requise';
@@ -301,12 +340,13 @@ export default function CartPage() {
     if (shippingDetails.phone && !/^[\d\s\-\+\(\)]{8,}$/.test(shippingDetails.phone)) {
       errors.phone = 'Numéro de téléphone invalide';
     }
+    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   // ============================================================================
-  // 🔹 handleSubmitOrder — VERSION SÉCURISÉE (sans apiClient)
+  // 🔹 handleSubmitOrder — SIMPLIFIÉ
   // ============================================================================
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -326,6 +366,7 @@ export default function CartPage() {
     try {
       console.log('📦 [CartPage] Preparing order payload...');
       
+      // ✅ SIMPLIFIÉ : Utiliser le numéro de livraison pour tous les paiements
       const orderPayload = {
         shipping: {
           fullName: shippingDetails.fullName.trim(),
@@ -340,20 +381,35 @@ export default function CartPage() {
           method: paymentMethod,
           status: paymentMethod === 'cash_on_delivery' ? 'partial' : 'pending',
           amountPaid: paymentMethod === 'cash_on_delivery' ? amountDueNow : 0,
+          // ✅ Utiliser le numéro de livraison pour l'acompte
+          details: paymentMethod === 'cash_on_delivery' ? {
+            phoneNumber: shippingDetails.phone.trim(),
+          } : {},
         },
         notes: orderNotes.trim() || undefined,
         couponCode: cart.coupon?.code,
-        items: cart.items.map(item => ({
-          product: typeof item.product === 'object' ? (item.product as any)._id : item.product,
-          variant: typeof item.variant === 'object' ? (item.variant as any)._id : item.variant,
-          quantity: item.quantity,
-          price: item.price,
-          size: item.size,
-          color: item.color,
-        })),
+        items: cart.items.map(item => {
+          const product = typeof item.product === 'object' ? (item.product as any)._id : item.product;
+          const variant = typeof item.variant === 'object' ? (item.variant as any)._id : item.variant;
+          
+          const cleanItem: any = {
+            product,
+            quantity: item.quantity,
+            price: item.price,
+          };
+          
+          if (variant && typeof variant === 'string' && variant.length === 24) {
+            cleanItem.variant = variant;
+          }
+          
+          if (item.size) cleanItem.size = item.size;
+          if (item.color) cleanItem.color = item.color;
+          
+          return cleanItem;
+        }),
       };
 
-      // 🔍 DEBUG: Vérifier les sources de token AVANT l'appel (sans apiClient)
+      // DEBUG logs
       if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         console.group('🔐 [CartPage] BEFORE orderApi.createOrder');
         
@@ -370,16 +426,11 @@ export default function CartPage() {
           localStorageToken = 'error';
         }
         console.log('  localStorage token:', localStorageToken);
-        
         console.log('  useAuth accessToken:', accessToken ? `${accessToken.slice(0, 30)}...` : '❌ MISSING');
         
         const cookieName = STORAGE_KEYS.AUTH_TOKEN || 'bokoma_access_token';
         const hasCookie = document.cookie.split(';').some(c => c.trim().startsWith(`${cookieName}=`));
         console.log(`  document.cookie has ${cookieName}:`, hasCookie);
-        
-        if (localStorageToken === 'missing' && hasCookie) {
-          console.warn('  ⚠️ Token in cookie but NOT localStorage — ensure interceptor handles cookie fallback!');
-        }
         console.groupEnd();
       }
 
@@ -394,10 +445,89 @@ export default function CartPage() {
       const elapsed = Date.now() - startTime;
       console.log('✅ [CartPage] orderApi.createOrder succeeded in', elapsed, 'ms');
       
+      // ✅ Extraire correctement paymentUrl
+      const paymentUrl = (response as any).data?.payment?.paymentUrl || (response as any).paymentUrl;
+      const orderId = (response as any).data?.order?._id || (response as any).order?._id;
+      
+      console.log('🎯 [CartPage] Response:', { paymentUrl, orderId });
+      
+      // ✅ Si paiement en ligne (y compris acompte), ouvrir la popup
+      if (paymentUrl) {
+        console.log('💳 [CartPage] Opening CinetPay popup:', paymentUrl);
+        toast.success('Ouverture de la fenêtre de paiement...');
+        
+        if (orderId) {
+          localStorage.setItem('pending_order_id', orderId);
+        }
+        
+        const popupWidth = 500;
+        const popupHeight = 700;
+        const left = (window.innerWidth - popupWidth) / 2;
+        const top = (window.innerHeight - popupHeight) / 2;
+        
+        const popup = window.open(
+          paymentUrl,
+          'CinetPayCheckout',
+          `width=${popupWidth},height=${popupHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`
+        );
+        
+        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+          toast.error('Popup bloquée. Veuillez autoriser les popups pour ce site.');
+          window.location.href = paymentUrl;
+          return;
+        }
+        
+        const handleMessage = (event: MessageEvent) => {
+          if (!event.origin.includes('cinetpay')) return;
+          
+          console.log('📩 [CinetPay] Message received:', event.data);
+          
+          const data = event.data;
+          
+          if (data.status === 'ACCEPTED' || data.status === 'SUCCESS') {
+            console.log('✅ [CinetPay] Payment successful');
+            toast.success('Paiement réussi !');
+            setCart(null);
+            popup.close();
+            
+            if (orderId) {
+              router.push(`/orders/${orderId}/confirmation`);
+            }
+            
+            window.removeEventListener('message', handleMessage);
+          } else if (data.status === 'REFUSED' || data.status === 'FAILED') {
+            console.error('❌ [CinetPay] Payment failed');
+            toast.error('Paiement échoué. Veuillez réessayer.');
+            popup.close();
+            window.removeEventListener('message', handleMessage);
+          } else if (data.status === 'PENDING') {
+            console.log('⏳ [CinetPay] Payment pending');
+            toast.info('Paiement en cours de traitement...');
+          }
+        };
+        
+        window.addEventListener('message', handleMessage);
+        
+        const checkPopupClosed = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkPopupClosed);
+            window.removeEventListener('message', handleMessage);
+            console.log('🔒 [CinetPay] Popup closed');
+            
+            if (orderId) {
+              toast.info('Vérification du paiement...');
+              router.push(`/orders/${orderId}/confirmation`);
+            }
+          }
+        }, 500);
+        
+        return;
+      }
+
+      // ✅ Fallback : pas de paiement en ligne
       setCart(null);
       toast.success('Commande créée avec succès !');
       
-      const orderId = (response as any).data?.order?._id || (response as any).order?._id;
       console.log('🎯 [CartPage] Extracted orderId:', orderId);
       
       if (orderId) {
@@ -412,33 +542,33 @@ export default function CartPage() {
       console.group('❌ [CartPage] Order creation FAILED');
       console.log('  Timestamp:', new Date().toISOString());
       console.log('  Message:', err?.message);
-      console.log('  Status code:', err?.statusCode);
-      console.log('  Errors:', err?.errors);
-      console.log('  Response data:', err?.response?.data);
+      console.log('  Status code:', err?.response?.status || err?.statusCode);
       
-      if (err?.config) {
-        console.log('  Request config:', {
-          url: err.config.url,
-          method: err.config.method,
-          baseURL: err.config.baseURL,
-          headers: err.config.headers ? Object.keys(err.config.headers) : [],
-        });
+      const validationErrors = err?.response?.data?.errors;
+      if (validationErrors) {
+        console.log('  🔍 Validation errors:', validationErrors);
+        console.table(validationErrors);
       }
       
-      console.log('  Auth state after error:', {
-        isAuthenticated,
-        hasLocalStorage: typeof window !== 'undefined' ? !!localStorage.getItem(STORAGE_KEYS.AUTH) : false,
-        hasCookie: typeof document !== 'undefined' ? document.cookie.includes(STORAGE_KEYS.AUTH_TOKEN || 'bokoma_access_token') : false,
-      });
+      console.log('  Response data:', err?.response?.data);
       console.groupEnd();
       
-      if (err?.statusCode === 401 || err?.message?.includes('authentification') || err?.message?.includes('token')) {
-        console.error('🔐 [CartPage] AUTH ERROR — token likely expired/invalid or not sent');
+      if (err?.response?.status === 401 || err?.message?.includes('authentification') || err?.message?.includes('token')) {
+        console.error('🔐 [CartPage] AUTH ERROR');
         toast.error('Session expirée. Veuillez vous reconnecter.');
         return;
       }
       
-      const message = err?.errors?.map((e: any) => e.message).join(', ') || err?.message || 'Erreur lors de la création de la commande';
+      let message = 'Erreur lors de la création de la commande';
+      
+      if (validationErrors && Array.isArray(validationErrors)) {
+        message = validationErrors.map((e: any) => e.msg || e.message).join(', ');
+      } else if (err?.response?.data?.message) {
+        message = err.response.data.message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
       toast.error(message);
       setFormErrors(prev => ({ ...prev, submit: message }));
       
@@ -449,7 +579,7 @@ export default function CartPage() {
   };
 
   // ============================================================================
-  // 🔹 RENDER STATES (inchangés)
+  // 🔹 RENDER STATES
   // ============================================================================
   if (!mounted || authLoading || loading) {
     return (
@@ -496,7 +626,7 @@ export default function CartPage() {
   }
 
   // ============================================================================
-  // 🔹 MAIN RENDER (identique)
+  // 🔹 MAIN RENDER
   // ============================================================================
   return (
     <div className="min-h-screen bg-background">
@@ -525,7 +655,7 @@ export default function CartPage() {
           {/* FORMULAIRE */}
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
             <form onSubmit={handleSubmitOrder} className="space-y-6">
-              {/* 📦 Items du panier — Identique */}
+              {/* 📦 Items du panier */}
               <div className="rounded-3xl border border-border bg-card p-6">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Package className="w-5 h-5" /> Vos articles ({cart.items.length})</h2>
                 <div className="space-y-4">
@@ -538,7 +668,7 @@ export default function CartPage() {
                       return (
                         <motion.div key={item._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -100 }} transition={{ delay: index * 0.05 }} className="flex gap-4 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
                           <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-                            {productImage ? (<img src={productImage} alt={productName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.jpg'; }} />) : (<div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">Pas d'image</div>)}
+                            {productImage ? (<img src={productImage} alt={productName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.svg'; }} />) : (<div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">Pas d'image</div>)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="font-medium text-sm line-clamp-2">{productName}</h4>
@@ -547,7 +677,7 @@ export default function CartPage() {
                               <div className="flex items-center border border-border rounded-lg">
                                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => updateCartItemQuantity(item._id!, (item.quantity || 1) - 1)} disabled={(item.quantity || 1) <= 1 || updatingItemId === item._id}><Minus className="w-3 h-3" /></Button>
                                 <span className="w-8 text-center text-sm font-medium">{updatingItemId === item._id ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : item.quantity}</span>
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => updateCartItemQuantity(item._id!, (item.quantity || 1) + 1)} disabled={updatingItemId === item._id}><Plus className="w-3 h-3" /></Button>
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => updateCartItemQuantity(item._id!, (item.quantity || 1) + 1)} disabled={updatingItemId === item._id || (item.quantity || 1) >= ((item.product as any)?.totalStock || (item as any)?.totalStock || 999)}><Plus className="w-3 h-3" /></Button>
                               </div>
                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => removeCartItem(item._id!)} disabled={updatingItemId === item._id} title="Retirer du panier"><Trash2 className="w-4 h-4" /></Button>
                             </div>
@@ -560,7 +690,7 @@ export default function CartPage() {
                 </div>
               </div>
 
-              {/* 📍 Adresse de livraison — Identique */}
+              {/* 📍 Adresse de livraison */}
               <div className="rounded-3xl border border-border bg-card p-6">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><MapPin className="w-5 h-5" /> Adresse de livraison</h2>
                 <div className="space-y-4">
@@ -572,7 +702,7 @@ export default function CartPage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phone">Téléphone *</Label>
-                      <div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input id="phone" type="tel" value={shippingDetails.phone} onChange={(e) => handleShippingChange('phone', e.target.value)} placeholder="Ex: +225 07 07 07 07 07" className={`pl-10 ${formErrors.phone ? 'border-destructive' : ''}`} /></div>
+                      <div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input id="phone" type="tel" value={shippingDetails.phone} onChange={(e) => handleShippingChange('phone', e.target.value)} placeholder="Ex: 07 07 07 07 07" className={`pl-10 ${formErrors.phone ? 'border-destructive' : ''}`} /></div>
                       {formErrors.phone && <p className="text-xs text-destructive">{formErrors.phone}</p>}
                     </div>
                   </div>
@@ -594,54 +724,175 @@ export default function CartPage() {
                 </div>
               </div>
 
-              {/* 💳 Méthode de paiement — Identique */}
+              {/* 💳 Méthode de paiement — SIMPLIFIÉ */}
               <div className="rounded-3xl border border-border bg-card p-6">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5" /> Méthode de paiement</h2>
                 <div className="space-y-3">
-                  {[{ id: 'card' as const, label: 'Carte bancaire', icon: CreditCard, desc: 'Visa, Mastercard, etc.' }, { id: 'mobile_money' as const, label: 'Mobile Money', icon: Smartphone, desc: 'Orange Money, MTN, Wave' }, { id: 'cash_on_delivery' as const, label: 'Paiement à la livraison', icon: Banknote, desc: 'Payez 50% maintenant, le reste à la livraison' }, { id: 'bank_transfer' as const, label: 'Virement bancaire', icon: Banknote, desc: 'Transfert bancaire classique' }].map((method) => (
-                    <label key={method.id} className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === method.id ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'}`}>
-                      <input type="radio" name="paymentMethod" value={method.id} checked={paymentMethod === method.id} onChange={() => setPaymentMethod(method.id)} className="mt-1 h-4 w-4 accent-accent" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2"><method.icon className="w-4 h-4 text-muted-foreground" /><span className="font-medium">{method.label}</span></div>
-                        <p className="text-xs text-muted-foreground mt-1">{method.desc}</p>
-                        {method.id === 'cash_on_delivery' && paymentMethod === 'cash_on_delivery' && (<motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs"><AlertCircle className="w-3 h-3 inline mr-1" />Vous payerez <strong>{formatPrice(amountDueNow)}</strong> maintenant et <strong>{formatPrice(total - amountDueNow)}</strong> à la livraison.</motion.div>)}
-                      </div>
-                    </label>
+                  {[
+                    { id: 'mobile_money' as const, label: 'Mobile Money / Carte', icon: Smartphone, desc: 'Orange Money, MTN, Wave, Visa, Mastercard...' },
+                    { id: 'cash_on_delivery' as const, label: 'Paiement à la livraison', icon: Banknote, desc: 'Payez 50% maintenant via la popup, le reste à la livraison' },
+                    { id: 'bank_transfer' as const, label: 'Virement bancaire', icon: Banknote, desc: 'Transfert bancaire classique' }
+                  ].map((method) => (
+                    <div key={method.id}>
+                      <label className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === method.id ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'}`}>
+                        <input type="radio" name="paymentMethod" value={method.id} checked={paymentMethod === method.id} onChange={() => setPaymentMethod(method.id)} className="mt-1 h-4 w-4 accent-accent" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2"><method.icon className="w-4 h-4 text-muted-foreground" /><span className="font-medium">{method.label}</span></div>
+                          <p className="text-xs text-muted-foreground mt-1">{method.desc}</p>
+                        </div>
+                      </label>
+                      
+                      {/* ✅ Message informatif pour cash_on_delivery */}
+                      <AnimatePresence>
+                        {paymentMethod === method.id && method.id === 'cash_on_delivery' && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }} 
+                            animate={{ opacity: 1, height: 'auto' }} 
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mt-3 ml-7 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20"
+                          >
+                            <div className="flex items-start gap-2">
+                              <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                              <div className="text-sm">
+                                <p className="font-medium text-amber-900 mb-2">
+                                  Paiement en deux étapes
+                                </p>
+                                <ul className="space-y-1 text-amber-800 text-xs">
+                                  <li>• <strong>{formatPrice(amountDueNow)}</strong> à payer maintenant via la popup sécurisée</li>
+                                  <li>• <strong>{formatPrice(total - amountDueNow)}</strong> à payer en espèces à la livraison</li>
+                                  <li className="pt-1 text-amber-700">Le numéro de livraison ({shippingDetails.phone || 'non renseigné'}) sera utilisé pour l'acompte</li>
+                                </ul>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   ))}
                 </div>
               </div>
 
-              {/* 📝 Notes — Identique */}
-              <div className="rounded-3xl border border-border bg-card p-6"><h2 className="text-xl font-bold mb-4">Notes de commande (optionnel)</h2><textarea value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} placeholder="Instructions spéciales pour la livraison, cadeau, etc." rows={3} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none" /></div>
+              {/* 📝 Notes */}
+              <div className="rounded-3xl border border-border bg-card p-6">
+                <h2 className="text-xl font-bold mb-4">Notes de commande (optionnel)</h2>
+                <textarea 
+                  value={orderNotes} 
+                  onChange={(e) => setOrderNotes(e.target.value)} 
+                  placeholder="Instructions spéciales pour la livraison, cadeau, etc." 
+                  rows={3} 
+                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none" 
+                />
+              </div>
 
-              {formErrors.submit && (<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-3"><AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" /><span>{formErrors.submit}</span></motion.div>)}
+              {formErrors.submit && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <span>{formErrors.submit}</span>
+                </motion.div>
+              )}
 
               {/* Submit Button */}
-              <Button type="submit" size="lg" variant="primary" className="w-full h-14 text-lg font-semibold" disabled={isSubmitting || !shippingDetails.fullName || !shippingDetails.phone || !shippingDetails.address || !shippingDetails.country || !shippingDetails.city}>
-                {isSubmitting ? (<><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Traitement en cours...</>) : paymentMethod === 'cash_on_delivery' ? (<><Banknote className="w-5 h-5 mr-2" /> Payer {formatPrice(amountDueNow)} maintenant • Solde à la livraison</>) : (<><CheckCircle className="w-5 h-5 mr-2" /> Payer {formatPrice(amountDueNow)} et commander</>)}
+              <Button 
+                type="submit" 
+                size="lg" 
+                variant="primary" 
+                className="w-full h-14 text-lg font-semibold" 
+                disabled={isSubmitting || !shippingDetails.fullName || !shippingDetails.phone || !shippingDetails.address || !shippingDetails.country || !shippingDetails.city}
+              >
+                {isSubmitting ? (
+                  <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Traitement en cours...</>
+                ) : paymentMethod === 'cash_on_delivery' ? (
+                  <><Banknote className="w-5 h-5 mr-2" /> Payer {formatPrice(amountDueNow)} maintenant • Solde à la livraison</>
+                ) : (
+                  <><CheckCircle className="w-5 h-5 mr-2" /> Payer {formatPrice(amountDueNow)} et commander</>
+                )}
               </Button>
               
-              <p className="text-xs text-center text-muted-foreground">En cliquant sur "Commander", vous acceptez nos <Link href="/terms" className="text-accent hover:underline">Conditions générales</Link> et <Link href="/privacy" className="text-accent hover:underline">Politique de confidentialité</Link>.</p>
+              <p className="text-xs text-center text-muted-foreground">
+                En cliquant sur "Commander", vous acceptez nos <Link href="/terms" className="text-accent hover:underline">Conditions générales</Link> et <Link href="/privacy" className="text-accent hover:underline">Politique de confidentialité</Link>.
+              </p>
             </form>
           </motion.div>
 
           {/* ───────── RÉCAPITULATIF ───────── */}
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="lg:sticky lg:top-24 h-fit">
             <div className="rounded-3xl border-2 border-border/50 bg-card p-6">
-              <h2 className="text-xl font-bold mb-4 flex items-center justify-between"><span>Récapitulatif</span><SimpleBadge>{cart.items.length} article{cart.items.length > 1 ? 's' : ''}</SimpleBadge></h2>
-              <div className="space-y-3 max-h-60 overflow-y-auto pr-2">{cart.items.map((item) => { const product = item.product as any; const productName = typeof product === 'object' ? product.name : item.name || 'Produit'; return (<div key={item._id} className="flex justify-between text-sm"><span className="text-muted-foreground line-clamp-1">{productName} × {item.quantity}</span><span className="font-medium">{formatPrice((item.price || 0) * (item.quantity || 1))}</span></div>); })}</div>
-              <div className="my-4 h-px bg-border" />
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Sous-total</span><span>{formatPrice(subtotal)}</span></div>
-                {discount > 0 && (<div className="flex justify-between text-emerald-600"><span className="flex items-center gap-1"><SimpleBadge variant="promo">PROMO</SimpleBadge> Code {cart.coupon?.code}</span><span>−{formatPrice(discount)}</span></div>)}
-                <div className="flex justify-between"><span className="text-muted-foreground">Livraison</span><span className={shippingCost > 0 ? 'text-accent' : 'text-emerald-600'}>{shippingCost > 0 ? formatPrice(shippingCost) : 'Gratuite'}</span></div>
+              <h2 className="text-xl font-bold mb-4 flex items-center justify-between">
+                <span>Récapitulatif</span>
+                <SimpleBadge>{cart.items.length} article{cart.items.length > 1 ? 's' : ''}</SimpleBadge>
+              </h2>
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                {cart.items.map((item) => { 
+                  const product = item.product as any; 
+                  const productName = typeof product === 'object' ? product.name : item.name || 'Produit'; 
+                  return (
+                    <div key={item._id} className="flex justify-between text-sm">
+                      <span className="text-muted-foreground line-clamp-1">{productName} × {item.quantity}</span>
+                      <span className="font-medium">{formatPrice((item.price || 0) * (item.quantity || 1))}</span>
+                    </div>
+                  ); 
+                })}
               </div>
               <div className="my-4 h-px bg-border" />
-              <div className="flex justify-between items-center pt-2"><span className="font-bold text-lg">Total</span><span className="text-2xl font-bold text-accent">{formatPrice(total)}</span></div>
-              {paymentMethod === 'cash_on_delivery' && (<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20"><div className="flex items-center gap-2 text-amber-700 text-sm mb-2"><AlertCircle className="w-4 h-4" /><span className="font-medium">Paiement partiel</span></div><div className="space-y-1 text-xs"><div className="flex justify-between"><span>À payer maintenant</span><span className="font-semibold">{formatPrice(amountDueNow)}</span></div><div className="flex justify-between text-muted-foreground"><span>Solde à la livraison</span><span>{formatPrice(total - amountDueNow)}</span></div></div></motion.div>)}
-              <div className="flex items-center justify-center gap-4 pt-4 text-muted-foreground"><div className="flex items-center gap-1 text-xs"><Shield className="w-4 h-4 text-emerald-500" /><span>Paiement sécurisé</span></div><div className="flex items-center gap-1 text-xs"><Truck className="w-4 h-4 text-blue-500" /><span>Livraison suivie</span></div></div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Sous-total</span>
+                  <span>{formatPrice(subtotal)}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-emerald-600">
+                    <span className="flex items-center gap-1">
+                      <SimpleBadge variant="promo">PROMO</SimpleBadge> Code {cart.coupon?.code}
+                    </span>
+                    <span>−{formatPrice(discount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Livraison</span>
+                  <span className={shippingCost > 0 ? 'text-accent' : 'text-emerald-600'}>
+                    {shippingCost > 0 ? formatPrice(shippingCost) : 'Gratuite'}
+                  </span>
+                </div>
+              </div>
+              <div className="my-4 h-px bg-border" />
+              <div className="flex justify-between items-center pt-2">
+                <span className="font-bold text-lg">Total</span>
+                <span className="text-2xl font-bold text-accent">{formatPrice(total)}</span>
+              </div>
+              {paymentMethod === 'cash_on_delivery' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <div className="flex items-center gap-2 text-amber-700 text-sm mb-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="font-medium">Paiement partiel</span>
+                  </div>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span>À payer maintenant</span>
+                      <span className="font-semibold">{formatPrice(amountDueNow)}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Solde à la livraison</span>
+                      <span>{formatPrice(total - amountDueNow)}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+              <div className="flex items-center justify-center gap-4 pt-4 text-muted-foreground">
+                <div className="flex items-center gap-1 text-xs">
+                  <Shield className="w-4 h-4 text-emerald-500" />
+                  <span>Paiement sécurisé</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs">
+                  <Truck className="w-4 h-4 text-blue-500" />
+                  <span>Livraison suivie</span>
+                </div>
+              </div>
             </div>
-            <div className="mt-4 text-center"><Link href="/help" className="text-sm text-muted-foreground hover:text-accent transition-colors">Besoin d'aide pour votre commande ?</Link></div>
+            <div className="mt-4 text-center">
+              <Link href="/help" className="text-sm text-muted-foreground hover:text-accent transition-colors">
+                Besoin d'aide pour votre commande ?
+              </Link>
+            </div>
           </motion.div>
         </div>
       </div>

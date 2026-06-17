@@ -1,7 +1,24 @@
 // src/server.js
 require('dotenv').config();
 
+// ─── 🔍 ENV CHECK (temporaire — retirer après validation) ──────────────
+if (process.env.NODE_ENV !== 'production') {
+  const apiKey = process.env.CINETPAY_API_KEY;
+  const apiPassword = process.env.CINETPAY_API_PASSWORD_CI;
+  const apiUrl = process.env.CINETPAY_API_URL;
+  console.log('🔑 [ENV] CinetPay config:', {
+    apiKey: apiKey
+      ? `${apiKey.slice(0, 8)}... (${apiKey.length} chars)`
+      : '❌ MISSING',
+    apiPassword: apiPassword
+      ? `******* (${apiPassword.length} chars)`
+      : '❌ MISSING',
+    apiUrl: apiUrl || '❌ MISSING',
+  });
+}
+
 const express = require('express');
+const path = require('path');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,6 +26,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const dns = require("dns");
+const connectDB = require('./config/db');
 // const hpp = require('hpp'); // Optionnel
 
 const app = express();
@@ -63,6 +81,10 @@ app.use(morgan('dev'));
 // ─── ✅ HEALTH CHECK - PLACÉ AVANT LE RATE LIMITER ─────────────────────
 
 app.use('/api/v1/health', require('./routes/health.routes'));
+
+
+// ✅ Servir les fichiers statiques du dossier uploads
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ─── Rate Limiters ─────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
@@ -124,15 +146,14 @@ const PORT = process.env.PORT || 5000;
 
 
 // Forcer des DNS publics fonctionnels
-dns.setServers([
-  "8.8.8.8",
-  "1.1.1.1"
-]);
+// dns.setServers([
+//   "8.8.8.8",
+//   "1.1.1.1"
+// ]);
 
-console.log("DNS utilisés :", dns.getServers());
+// console.log("DNS utilisés :", dns.getServers());
 
-mongoose
-  .connect(process.env.MONGO_URI)
+connectDB()
   .then(() => {
     console.log('✅ MongoDB connecté');
     app.listen(PORT, () => {

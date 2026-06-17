@@ -3,6 +3,7 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Heart, ShoppingCart, Star, Loader2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
@@ -88,6 +89,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const categoryName = typeof category === 'object' ? category?.name : category;
   
   const isWishlisted = isInWishlist(productId);
+  const router = useRouter();
 
   // ============================================================================
   // 🔹 HANDLERS
@@ -99,7 +101,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
     if (!productId) return;
 
-    const success = await toggleWishlist(productId);
+    const success = await toggleWishlist(productId, product);
     if (success) {
       toast.success(
         isWishlisted 
@@ -117,9 +119,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
     if (!productId || !inStock) return;
 
-    // ✅ Callback custom si fourni
+    // ✅ Callback custom si fourni (passer l'objet produit pour cohérence)
     if (onAddToCart) {
-      onAddToCart(productId);
+      onAddToCart(product);
       return;
     }
 
@@ -170,24 +172,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       )}
     >
       {/* ───────── IMAGE ───────── */}
-      <Link 
-        href={`/products/${productSlug}`} 
-        className="block relative aspect-square overflow-hidden bg-muted"
-      >
-        <img
-          src={imageUrl}
-          alt={product.name || 'Produit'}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          loading="lazy"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            if (target.src !== '/placeholder-product.jpg') {
-              target.src = '/placeholder-product.jpg';
-            }
-          }}
-        />
-        
-        {/* Badges */}
+      <div className="relative">
+        <Link
+          href={`/products/${productSlug}`}
+          className="block aspect-square overflow-hidden bg-muted"
+        >
+          <img
+            src={imageUrl}
+            alt={product.name || 'Produit'}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              if (target.src !== '/placeholder-product.jpg') {
+                target.src = '/placeholder-product.jpg';
+              }
+            }}
+          />
+        </Link>
+
+        {/* Badges (positioned relative to the image wrapper) */}
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           {(product as any).isNewProduct && (
             <span className="px-2 py-1 text-xs font-medium bg-accent text-accent-foreground rounded-full shadow-sm">
@@ -206,7 +210,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
-        {/* ✅ Bouton cœur (wishlist) - toujours visible */}
+        {/* ✅ Bouton cœur (wishlist) - toujours visible (moved outside the link) */}
         {showQuickActions && (
           <button
             onClick={handleToggleWishlist}
@@ -222,18 +226,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </button>
         )}
 
-        {/* Actions rapides au hover */}
+        {/* Actions rapides au hover (moved outside the link, use router.push) */}
         {showQuickActions && (
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
             <Button
               size="icon"
               variant="secondary"
               className="rounded-full bg-background/90 hover:bg-background hover:scale-110 transition-transform"
-              asChild
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push(`/products/${productSlug}`);
+              }}
+              aria-label="Voir le produit"
             >
-              <Link href={`/products/${productSlug}`} aria-label="Voir le produit">
-                <Eye className="w-4 h-4" />
-              </Link>
+              <Eye className="w-4 h-4" />
             </Button>
             <Button
               size="icon"
@@ -251,7 +258,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </Button>
           </div>
         )}
-      </Link>
+      </div>
 
       {/* ───────── CONTENT ───────── */}
       <div className="p-4 space-y-3">
@@ -325,4 +332,4 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   );
 };
 
-export default ProductCard;
+export default React.memo(ProductCard);

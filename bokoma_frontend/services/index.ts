@@ -357,7 +357,8 @@ export const userApi = {
   uploadAvatar: (file: File) => {
     const formData = new FormData();
     formData.append('avatar', file);
-    return apiClient.upload<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.UPLOAD_AVATAR, formData);
+    // Backend expects PATCH /users/me/avatar (see user.routes)
+    return apiClient.patch<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.UPLOAD_AVATAR, formData);
   },
 
   deleteAvatar: () =>

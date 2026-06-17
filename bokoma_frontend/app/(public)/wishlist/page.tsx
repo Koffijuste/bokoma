@@ -28,12 +28,12 @@ import type { Product } from '@/types';
  */
 const getProductImage = (product: Product): string => {
   const firstImage = product.images?.[0];
-  if (!firstImage) return '/placeholder-product.jpg';
+  if (!firstImage) return '/placeholder-product.svg';
   
   if (typeof firstImage === 'string') return firstImage;
   if (firstImage.url) return firstImage.url;
   
-  return '/placeholder-product.jpg';
+  return '/placeholder-product.svg';
 };
 
 // ============================================================================
@@ -299,7 +299,7 @@ export default function WishlistPage() {
                           alt={product.name}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/placeholder-product.jpg';
+                            (e.target as HTMLImageElement).src = '/placeholder-product.svg';
                           }}
                         />
                       </Link>

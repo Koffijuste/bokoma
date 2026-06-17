@@ -159,21 +159,18 @@ exports.login = async (req, res, next) => {
 // ============================================================================
 exports.refreshToken = async (req, res, next) => {
   try {
-    // ✅ 1. Chercher le refresh token dans PLUSIEURS endroits
+    // ✅ 1. Chercher le refresh token
     let refreshToken = 
-      req.cookies?.bokoma_refresh_token ||      // Cookie principal
-      req.cookies?.refresh_token ||             // Fallback nom alternatif
-      req.body?.refreshToken ||                 // Body (moins sécurisé)
+      req.cookies?.bokoma_refresh_token ||
+      req.cookies?.refresh_token ||
+      req.body?.refreshToken ||
       null;
 
-    // 🔍 Debug en dev
     if (process.env.NODE_ENV === 'development') {
       console.log('🔄 [refreshToken] Debug:', {
         hasCookies: !!req.cookies,
         cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
         hasBokomaRefreshToken: !!req.cookies?.bokoma_refresh_token,
-        hasRefreshToken: !!req.cookies?.refresh_token,
-        hasBodyRefreshToken: !!req.body?.refreshToken,
       });
     }
 
@@ -181,7 +178,7 @@ exports.refreshToken = async (req, res, next) => {
       return next(new AppError('Refresh token requis. Veuillez vous reconnecter.', 401));
     }
 
-    // ✅ 2. Vérifier avec config centralisée
+    // ✅ 2. Vérifier le token
     let decoded;
     try {
       decoded = jwt.verify(refreshToken, jwtConfig.refresh.secret, {
@@ -190,7 +187,6 @@ exports.refreshToken = async (req, res, next) => {
         ...jwtConfig.options,
       });
     } catch (err) {
-      // Nettoyer les cookies
       res.clearCookie('bokoma_refresh_token', { 
         httpOnly: true, 
         secure: process.env.NODE_ENV === 'production',
@@ -202,10 +198,7 @@ exports.refreshToken = async (req, res, next) => {
       if (err.name === 'TokenExpiredError') {
         return next(new AppError('Refresh token expiré, veuillez vous reconnecter', 401));
       }
-      if (err.name === 'JsonWebTokenError' || err.name === 'NotBeforeError') {
-        return next(new AppError('Refresh token invalide', 401));
-      }
-      throw err;
+      return next(new AppError('Refresh token invalide', 401));
     }
 
     // ✅ 3. Trouver l'utilisateur
@@ -215,14 +208,22 @@ exports.refreshToken = async (req, res, next) => {
       return next(new AppError('Utilisateur introuvable ou inactif', 401));
     }
 
-    // ✅ 4. Vérifier que le token correspond à celui stocké
-    if (user.refreshToken && user.refreshToken !== refreshToken) {
+    // ✅ 4. VÉRIFICATION CORRIGÉE : Rejeter si déconnecté OU token révoqué
+    if (!user.refreshToken || user.refreshToken !== refreshToken) {
+      console.log('⚠️ [refreshToken] Session invalide:', {
+        userId: user._id,
+        hasStoredToken: !!user.refreshToken,
+        tokenMatch: user.refreshToken === refreshToken,
+      });
+      
       res.clearCookie('bokoma_refresh_token', { 
         httpOnly: true, 
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
         path: '/' 
       });
+      res.clearCookie('bokoma_access_token', { path: '/' });
+      
       return next(new AppError('Session invalide, veuillez vous reconnecter', 401));
     }
 
@@ -230,29 +231,31 @@ exports.refreshToken = async (req, res, next) => {
     const newAccessToken = user.generateAccessToken();
     const newRefreshToken = user.generateRefreshToken();
 
-    // ✅ 6. Mettre à jour le refresh token en base
+    // ✅ 6. Mettre à jour le refresh token
     user.refreshToken = newRefreshToken;
     await user.save();
 
-    // ✅ 7. Définir cookies sécurisés
+    // ✅ 7. Définir cookies
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // ✅ lax en dev
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       path: '/',
     };
 
     res.cookie('bokoma_access_token', newAccessToken, {
       ...cookieOptions,
-      maxAge: 60 * 60 * 1000, // 1h
+      maxAge: 60 * 60 * 1000,
     });
     
     res.cookie('bokoma_refresh_token', newRefreshToken, {
       ...cookieOptions,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7j
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // ✅ 8. Réponse avec accessToken (pour le frontend qui lit le body)
+    console.log('✅ [refreshToken] Token refreshed for user:', user._id);
+
+    // ✅ 8. Réponse
     res.json({
       success: true,
       message: 'Token rafraîchi avec succès',

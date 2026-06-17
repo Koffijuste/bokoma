@@ -73,27 +73,69 @@ export function useCart() {
         console.log('🛒 Adding to cart:', { productId, variantId, size, quantity });
       }
 
-      const response = await addItemMutation.mutate({ product: productId, variantId, size, color, quantity });
-      
-      // ✅ Synchroniser le store avec la réponse du backend
-      if (response?.cart?.itemCount !== undefined) {
-        setCartCount(response.cart.itemCount);
-      } else {
-        incrementCart(); // Fallback
+      try {
+        // ✅ ÉTAPE 1: Récupérer le panier actuel pour vérifier les doublons
+        const cartResponse = await cartApi.getCart();
+        const currentCart = cartResponse?.data?.cart || cartResponse?.cart;
+        
+        // ✅ ÉTAPE 2: Chercher si le produit existe DÉJÀ avec la même configuration
+        const existingItem = currentCart?.items?.find(item => 
+          item.product?._id === productId && 
+          (item.variantId === variantId) &&
+          (item.size === size) &&
+          (item.color === color)
+        );
+
+        let response;
+        if (existingItem) {
+          // ✅ ÉTAPE 3A: Si existe, incrémenter la quantité
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📦 Produit déjà dans le panier, augmentation de la quantité');
+          }
+          const newQuantity = (existingItem.quantity || 1) + quantity;
+          response = await updateItemMutation.mutate({ itemId: existingItem._id, quantity: newQuantity });
+        } else {
+          // ✅ ÉTAPE 3B: Si n'existe pas, ajouter comme nouvel item
+          if (process.env.NODE_ENV === 'development') {
+            console.log('✨ Nouveau produit ajouté au panier');
+          }
+          response = await addItemMutation.mutate({ product: productId, variantId, size, color, quantity });
+        }
+        
+        // ✅ ÉTAPE 4: Synchroniser le store avec la réponse du backend
+        // Le backend peut retourner `itemCount` (somme des quantités) —
+        // nous préférons compter les items distincts via `cart.items.length`.
+        const respCart = response?.cart || response?.data?.cart;
+        if (respCart) {
+          const distinctCount = Array.isArray(respCart.items) ? respCart.items.length : respCart.itemCount ?? currentCart?.items?.length ?? cartCount;
+          setCartCount(distinctCount);
+        } else {
+          // Si l'item existait déjà, on n'ajoute pas un nouvel item distinct
+          if (existingItem) {
+            setCartCount(currentCart?.items?.length ?? cartCount);
+          } else {
+            incrementCart(); // Fallback pour nouvel item
+          }
+        }
+        
+        return response;
+      } catch (error) {
+        console.error('❌ Error in handleAddItem:', error);
+        throw error;
       }
-      
-      return response;
     },
-    [addItemMutation, setCartCount, incrementCart]
+    [addItemMutation, updateItemMutation, setCartCount, incrementCart]
   );
 
   const handleRemoveItem = useCallback(
     async (itemId: string) => {
       const response = await removeItemMutation.mutate(itemId);
       
-      // ✅ Synchroniser avec le backend
-      if (response?.cart?.itemCount !== undefined) {
-        setCartCount(response.cart.itemCount);
+      // ✅ Synchroniser avec le backend (préférer nombre d'items distincts)
+      const respCart = response?.cart || response?.data?.cart;
+      if (respCart) {
+        const distinctCount = Array.isArray(respCart.items) ? respCart.items.length : respCart.itemCount ?? Math.max(0, (cartCount - 1));
+        setCartCount(distinctCount);
       } else {
         decrementCart(); // Fallback
       }

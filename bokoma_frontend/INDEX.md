@@ -1,245 +1,73 @@
-# 📑 Bokoma Frontend - Index Complet
+# 📑 Bokoma Frontend — Arborescence et guide rapide
 
-## 🚀 Démarrage Rapide
+Ce fichier donne une vue synthétique et à jour de l'arborescence du frontend. Il est conçu pour aider un nouveau contributeur à se repérer rapidement.
 
-**Temps estimé: 5 minutes**
+## Démarrage rapide
 
 ```bash
-cd Bokoma_Frontend
+cd bokoma_frontend
 npm install
-cp .env.example .env.local
+cp .env.example .env.local   # adapter si nécessaire
 npm run dev
 ```
 
-Puis ouvrir: **http://localhost:3000**
+Ouvrir: http://localhost:3000
 
 ---
 
-## 📚 Documentation (Lire dans cet ordre)
+## Documentation principale
 
-| Fichier | Contenu | Temps |
-|---------|---------|-------|
-| **[QUICKSTART.md](./QUICKSTART.md)** | ⚡ Démarrage en 5 min | 5 min |
-| **[README.md](./README.md)** | 📖 Vue complète du projet | 10 min |
-| **[SETUP.md](./SETUP.md)** | 🔧 Configuration détaillée | 10 min |
-| **[PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md)** | 🎉 Résumé de ce qui a été livré | 5 min |
-| **[COMMANDS.md](./COMMANDS.md)** | 📦 Commandes utiles (npm, git, etc) | À consulter |
-| **[CONTRIBUTING.md](./CONTRIBUTING.md)** | 🤝 Guide pour contribuer | 10 min |
-| **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** | ✅ Checklist avant déploiement | À utiliser |
+- [README.md](README.md)
+- [QUICKSTART.md](QUICKSTART.md)
+- [SETUP.md](SETUP.md)
+- [COMMANDS.md](COMMANDS.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)
 
 ---
 
-## 📁 Structure du Projet
+## Arborescence principale (extraits importants)
 
 ```
-Bokoma_Frontend/
+bokoma_frontend/
+├─ app/                         # App router (Next.js app/)
+│  ├─ (public)/                 # Pages publiques (home, products, auth...)
+│  │  ├─ products/              # Listing + detail (page.tsx, [slug]/page.tsx)
+│  │  ├─ search/                # Recherche
+│  │  ├─ cart/                  # Panier
+│  │  └─ auth/                  # login, register, forgot
+│  └─ (admin)/                  # Espace admin (dashboard, gestion)
 │
-├── 📋 FILES DE CONFIGURATION
-│   ├── package.json                 # Dépendances et scripts npm
-│   ├── tsconfig.json                # Configuration TypeScript
-│   ├── tailwind.config.ts           # Configuration TailwindCSS
-│   ├── postcss.config.js            # Configuration PostCSS
-│   ├── next.config.js               # Configuration Next.js
-│   ├── .env.example                 # Template variables d'env
-│   ├── .env.local                   # Variables d'env locales (gitignore)
-│   ├── .gitignore                   # Git ignore patterns
-│   └── .eslintrc.json               # Configuration ESLint
-│
-├── 📖 DOCUMENTATION (À LIRE!)
-│   ├── README.md                    # 📖 Vue générale & features
-│   ├── QUICKSTART.md                # ⚡ Démarrage rapide
-│   ├── SETUP.md                     # 🔧 Configuration & troubleshooting
-│   ├── PROJECT_SUMMARY.md           # 🎉 Ce qui a été livré
-│   ├── COMMANDS.md                  # 📦 Commandes utiles
-│   ├── CONTRIBUTING.md              # 🤝 Guide contribution
-│   ├── DEPLOYMENT_CHECKLIST.md      # ✅ Checklist déploiement
-│   └── setup.sh                     # 🚀 Script d'initialisation
-│
-├── 🎨 APP (Routing & Pages)
-│   ├── layout.tsx                   # Layout racine
-│   ├── page.tsx                     # Redirect → home
-│   ├── globals.css                  # Styles globaux + animations
-│   ├── providers.tsx                # ThemeProvider + Sonner
-│   │
-│   ├── 📱 (public)/ [PUBLIC PAGES]
-│   │   ├── layout.tsx               # Navbar + Footer
-│   │   ├── home/page.tsx            # Page d'accueil (hero, stats)
-│   │   ├── products/page.tsx        # Listing produits (filtres, pagination)
-│   │   ├── products/[slug]/page.tsx # Détail produit (avis, variants)
-│   │   ├── categories/page.tsx      # Navigation catégories
-│   │   ├── cart/page.tsx            # Panier d'achat
-│   │   ├── cart/layout.tsx          # Metadata cart
-│   │   ├── checkout/page.tsx        # Page paiement
-│   │   ├── search/page.tsx          # Recherche avancée
-│   │   ├── wishlist/page.tsx        # Favoris
-│   │   ├── orders/page.tsx          # Historique commandes
-│   │   ├── profile/page.tsx         # Profil utilisateur
-│   │   └── auth/
-│   │       ├── login/page.tsx       # Connexion
-│   │       ├── register/page.tsx    # Inscription
-│   │       └── forgot/page.tsx      # Mot de passe oublié
-│   │
-│   └── 👨‍💼 (admin)/ [ADMIN PAGES]
-│       ├── layout.tsx               # AdminSidebar + Protection rôle
-│       ├── dashboard/page.tsx       # Overview (stats, charts)
-│       ├── products/page.tsx        # Gestion produits
-│       ├── categories/page.tsx      # Gestion catégories
-│       ├── users/page.tsx           # Gestion utilisateurs
-│       ├── orders/page.tsx          # Gestion commandes
-│       ├── coupons/page.tsx         # Gestion coupons
-│       ├── reviews/page.tsx         # Modération avis
-│       ├── analytics/page.tsx       # Statistiques & rapports
-│       └── settings/page.tsx        # Paramètres admin
-│
-├── 🧩 COMPONENTS/
-│   ├── 📦 shared/ [COMPOSANTS RÉUTILISABLES]
-│   │   ├── navbar.tsx               # Navigation sticky responsive
-│   │   ├── footer.tsx               # Pied de page complet
-│   │   ├── product-card.tsx         # Carte produit
-│   │   ├── admin-sidebar.tsx        # Navigation admin collapsible
-│   │   ├── loading-spinner.tsx      # Spinner animation
-│   │   ├── empty-state.tsx          # État vide
-│   │   └── error-boundary.tsx       # Gestion d'erreurs
-│   │
-│   └── 🎨 ui/ [COMPOSANTS UI BASIQUES]
-│       ├── button.tsx               # Button (5 variants, 3 sizes)
-│       ├── input.tsx                # Input avec icônes
-│       ├── select.tsx               # Select dropdown
-│       ├── modal.tsx                # Modal/Dialog
-│       ├── badge.tsx                # Badge coloré
-│       ├── skeleton.tsx             # Skeleton loaders
-│       ├── alert.tsx                # Alert notification
-│       └── tooltip.tsx              # Tooltip
-│
-├── 🪝 HOOKS/ [CUSTOM REACT HOOKS]
-│   ├── useApi.ts                    # useAsync + useFetch + useMutation
-│   ├── useAuth.ts                   # useAuth + useRequireAuth + useRequireAdmin
-│   ├── useCart.ts                   # Opérations panier
-│   ├── useLocalStorage.ts           # Local storage hook
-│   ├── useMediaQuery.ts             # Responsive design helper
-│   └── index.ts                     # Exports
-│
-├── 🔗 SERVICES/ [API SERVICES]
-│   ├── api.ts                       # Axios client + intercepteurs JWT
-│   └── index.ts                     # Services pour tous les endpoints
-│       ├── authApi                  # Login, Register, Refresh
-│       ├── productApi               # CRUD produits
-│       ├── categoryApi              # CRUD catégories
-│       ├── cartApi                  # Opérations panier
-│       ├── orderApi                 # CRUD commandes
-│       ├── userApi                  # Profil utilisateur
-│       ├── reviewApi                # Avis produits
-│       └── couponApi                # Gestion coupons
-│
-├── 🏪 STORE/ [ZUSTAND STATE MANAGEMENT]
-│   └── index.ts
-│       ├── useAuthStore             # User, token, login/logout
-│       ├── useCartStore             # Cart count avec persistence
-│       └── useUiStore               # Dark mode, sidebar toggle
-│
-├── 📝 TYPES/ [TYPESCRIPT INTERFACES]
-│   └── index.ts
-│       ├── User                     # Utilisateur
-│       ├── Product                  # Produit
-│       ├── Category                 # Catégorie
-│       ├── Cart                     # Panier
-│       ├── Order                    # Commande
-│       ├── Review                   # Avis
-│       ├── Coupon                   # Coupon
-│       ├── API Response types       # Réponses API
-│       └── Et 15+ autres interfaces
-│
-├── 🔧 UTILS/ [UTILITAIRES]
-│   └── helpers.ts
-│       ├── Validation               # validEmail, validPassword, etc
-│       ├── String helpers           # slugify, truncate, capitalize
-│       ├── Number helpers           # formatPrice, percentage
-│       ├── Date helpers             # formatDate, getDaysFromNow
-│       ├── Array helpers            # chunk, shuffle, unique
-│       ├── Object helpers           # pick, omit
-│       ├── Storage helpers          # getFromStorage, setToStorage
-│       ├── DOM helpers              # scrollToElement, copyToClipboard
-│       └── Et 40+ autres fonctions
-│
-├── 🛡️ MIDDLEWARE
-│   └── middleware.ts                # Route protection, JWT check
-│
-├── 📦 PUBLIC/ [ASSETS STATIQUES]
-│   ├── images/                      # Images du site
-│   ├── icons/                       # Icons custom
-│   └── fonts/                       # Fonts locales (si nécessaire)
-│
-├── ⚙️ CONFIGURATION
-│   ├── constants/
-│   │   └── index.ts                 # ROUTES, API_ENDPOINTS, etc
-│   └── config/
-│       ├── cloudinary.ts            # Cloudinary config
-│       └── stripe.ts                # Stripe config
-│
-└── 📄 AUTRES FICHIERS
-    ├── node_modules/                # Dépendances npm
-    └── .next/                       # Build output
+├─ components/                  # Composants réutilisables
+│  ├─ layout/                    # Navbar, Footer, headers
+│  ├─ features/                  # ProductCard, ProductList, etc.
+│  └─ ui/                        # Button, Input, Select, Modal, etc.
+
+├─ constants/                   # Constantes (routes, configs)
+├─ hooks/                       # Hooks personnalisés (useAuth, useCart...)
+├─ lib/                         # Petits helpers partagés (api wrappers)
+├─ services/                    # services/api, auth.service, upload.service
+├─ store/                       # Zustand stores (cart, auth, ui)
+├─ types/                       # Types TypeScript
+├─ utils/                       # helpers, formatters, slugify
+├─ public/                      # images, icons, fonts
+├─ styles/ or globals.css       # styles globaux (tailwind)
+├─ package.json                 # scripts & dépendances
+├─ tsconfig.json
+└─ tailwind.config.js
 ```
 
 ---
 
-## 🚀 Commandes Rapides
+## Fichiers et dossiers clés (liens rapides)
 
-```bash
-# Développement
-npm run dev                 # Démarrer dev server
-
-# Production
-npm run build              # Builder l'app
-npm start                  # Démarrer production
-
-# Qualité code
-npm run type-check         # Vérifier TypeScript
-npm run lint               # Linting
-
-# Nettoyage
-rm -rf node_modules        # Supprimer dépendances
-npm install                # Réinstaller
-
-# Git
-git status                 # Status git
-git add .                  # Ajouter tous
-git commit -m "message"    # Commiter
-git push                   # Pousser
-```
-
-👉 Voir [COMMANDS.md](./COMMANDS.md) pour plus de commandes!
-
----
-
-## 📊 Résumé Statistiques
-
-| Métrique | Nombre |
-|----------|--------|
-| Pages publiques | 13 |
-| Pages admin | 7+ |
-| Composants UI | 8 |
-| Composants partagés | 6+ |
-| Custom hooks | 6 |
-| Services API | 8 domaines |
-| Stores Zustand | 3 |
-| TypeScript types | 20+ |
-| Utilitaires | 40+ |
-| Animations | 15+ |
-| Lignes de code | 5000+ |
-
----
-
-## 🎯 Checklist Premiers Pas
-
-- [ ] Lire [QUICKSTART.md](./QUICKSTART.md) (5 min)
-- [ ] Exécuter `npm install` (2 min)
-- [ ] Créer `.env.local` (1 min)
-- [ ] Démarrer `npm run dev` (1 min)
-- [ ] Visiter http://localhost:3000 ✅
-- [ ] Explorer les pages et composants
-- [ ] Lire [README.md](./README.md) pour les détails
-- [ ] Consulter [SETUP.md](./SETUP.md) pour configuration
+- Pages principales: [app/(public)/products/page.tsx](app/(public)/products/page.tsx), [app/(public)/products/[slug]/page.tsx](app/(public)/products/[slug]/page.tsx)
+- Composant carte produit: [components/features/ProductCard/index.tsx](components/features/ProductCard/index.tsx)
+- UI primitives: [components/ui/button.tsx](components/ui/button.tsx), [components/ui/input.tsx](components/ui/input.tsx), [components/ui/select.tsx](components/ui/select.tsx)
+- API client: [services/api.ts](services/api.ts)
+- Hooks: [hooks/useAuth.ts](hooks/useAuth.ts), [hooks/useWishlist.ts](hooks/useWishlist.ts), [hooks/useCart.ts](hooks/useCart.ts)
+- Store: [store/index.ts](store/index.ts), [store/cart.ts](store/cart.ts)
+- Configs: [constants/index.ts](constants/index.ts), [tailwind.config.js](tailwind.config.js)
 
 ---
 

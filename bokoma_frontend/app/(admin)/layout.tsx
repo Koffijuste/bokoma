@@ -1,4 +1,4 @@
-// app/(admin)/layout.tsx - VERSION CORRIGÉE
+// app/(admin)/layout.tsx 
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -9,8 +9,6 @@ import { Button } from '@/components/ui/button';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useUiStore } from '@/store';
 
-// ⚠️ On NE fait PAS de vérification auth ici
-// Laisser useRequireAdmin gérer dans les PAGES, pas dans le layout
 
 export default function AdminLayout({
   children,
@@ -89,7 +87,7 @@ const DebugBar = () => {
         </div>
         
         {/* ⚠️ TOUJOURS rendre les enfants - pas de condition ici */}
-        {children}
+        {React.Children.toArray(children)}
       </main>
     </div>
   );

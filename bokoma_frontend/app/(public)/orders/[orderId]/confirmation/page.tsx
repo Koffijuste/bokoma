@@ -87,6 +87,18 @@ export default function OrderConfirmationPage() {
     
     const fetchOrder = async () => {
       try {
+
+        if (orderData.payment?.status === 'failed' || orderData.payment?.status === 'cancelled') {
+            // Rediriger vers la page d'échec
+          router.replace(`/payment/echec?orderId=${orderId}`);
+        return;
+        }
+
+        if (orderData.payment?.status === 'pending') {
+            // Afficher un message d'attente
+            setPending(true);
+        }
+
         setLoading(true);
         const response = await orderApi.getOrder(orderId);
         const orderData = response.data?.order || response.order;

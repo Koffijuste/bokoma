@@ -1,7 +1,7 @@
 // bokoma_backend/src/routes/user.routes.js
 const router = require('express').Router();
 const ctrl = require('../controllers/user.controller');
-const { protect, authorize } = require('../middlewares/auth');
+const { protect, requireAuth, authorize } = require('../middlewares/auth');
 const { uploadSingle } = require('../middlewares/upload');
 const validateObjectId = require('../middlewares/validateObjectId');
 
@@ -24,6 +24,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // ✅ Protection globale
 router.use(protect);
+router.use(requireAuth);
 
 // ============================================================================
 // 🔹 ROUTES PERSONNELLES
@@ -33,6 +34,7 @@ router.get('/me', ctrl.getProfile);
 router.patch('/me', ctrl.updateProfile);
 router.patch('/me/password', ctrl.updatePassword);  // ✅ updatePassword (pas changePassword)
 router.patch('/me/avatar', uploadSingle, ctrl.updateAvatar);  // ✅ updateAvatar
+router.delete('/me/avatar', ctrl.deleteAvatar); // delete avatar
 
 // Stats
 router.get('/me/stats', ctrl.getUserStats);

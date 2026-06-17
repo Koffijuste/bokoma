@@ -36,7 +36,7 @@ const nextConfig = {
   },
   
   // 📦 Output standalone pour déploiement Docker/VM optimisé
-  output: 'standalone',
+  //output: 'standalone',
   
   // 🗜️ Compression activée
   compress: true,
@@ -46,11 +46,11 @@ const nextConfig = {
   
   // ⚡ Expérimental : optimisation des imports lucide-react
   experimental: {
-    optimizePackageImports: ['lucide-react', 'framer-motion'],
+    //optimizePackageImports: ['lucide-react', 'framer-motion'],
   },
   
   // 🛣️ Typed routes (désactivé pour flexibilité)
   typedRoutes: false,
 };
 
-module.exports = nextConfig;
+export default nextConfig;
