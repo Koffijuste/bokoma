@@ -49,7 +49,7 @@ export function Navbar() {
   
   const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const { wishlist } = useWishlist();
-  const { cartCount } = useCartStore();
+  const cartCount = useCartStore((state) => state.cartCount);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -69,6 +69,10 @@ export function Navbar() {
 
   const wishlistCount = wishlist.length;
 
+  // ✅ DEBUG : Logger le cartCount du store
+useEffect(() => {
+  console.log('🛒 [NAVBAR] cartCount depuis store:', cartCount);
+}, [cartCount]);
   // ============================================================================
   // 🔹 EFFECTS
   // ============================================================================

@@ -60,16 +60,12 @@ const COMPRESSION_OPTIONS = {
 
 const MIN_COMPRESSION_SIZE = 500 * 1024;
 
-// ✅ Timeout API (30s comme dans .env)
 const API_TIMEOUT = 30000;
 
 // ============================================================================
 // 🔹 HELPERS - GESTION DES URLs D'IMAGES
 // ============================================================================
 
-/**
- * ✅ Normalise une URL d'image - filtre les URLs invalides (file://, etc.)
- */
 const normalizeImageUrl = (img: any): string | null => {
   if (!img) return null;
   
@@ -77,13 +73,11 @@ const normalizeImageUrl = (img: any): string | null => {
   
   if (!url || typeof url !== 'string') return null;
   
-  // ❌ Filtrer les URLs invalides
   if (url.startsWith('file://')) {
     console.warn('⚠️ Invalid file:// URL detected:', url);
     return null;
   }
   
-  // ✅ URLs valides : http(s), Cloudinary, ou chemins relatifs /uploads/
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/uploads/')) {
     return url;
   }
@@ -91,9 +85,6 @@ const normalizeImageUrl = (img: any): string | null => {
   return null;
 };
 
-/**
- * ✅ Extrait la première image valide d'un produit
- */
 const getFirstValidImage = (product: Product): string | null => {
   if (!product.images || product.images.length === 0) return null;
   
@@ -106,7 +97,7 @@ const getFirstValidImage = (product: Product): string | null => {
 };
 
 // ============================================================================
-// 🔹 COMPOSANT : ProductImage (avec gestion d'erreur robuste)
+// 🔹 COMPOSANT : ProductImage
 // ============================================================================
 
 const ProductImage = ({ 
@@ -123,7 +114,6 @@ const ProductImage = ({
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
-  // ✅ Vérifier si l'URL est valide
   const isValidUrl = src && typeof src === 'string' && 
     (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/uploads/'));
   
@@ -382,7 +372,7 @@ export default function ProductsAdminPage() {
       
       const response = await apiClient.get('/products', {
         params: { page: 1, limit: 50 },
-        timeout: API_TIMEOUT, // ✅ 30 secondes
+        timeout: API_TIMEOUT,
       });
       
       const elapsed = Date.now() - startTime;
@@ -390,25 +380,17 @@ export default function ProductsAdminPage() {
       
       console.log(`✅ [Products] Loaded ${productsData.length} products in ${elapsed}ms`);
       
-      // ✅ DEBUG : Log les URLs des images pour diagnostiquer
-      if (productsData.length > 0 && process.env.NODE_ENV === 'development') {
-        console.log('🖼️ [Products] Image URLs sample:');
-        productsData.slice(0, 3).forEach(p => {
-          console.log(`   ${p.name}:`, p.images?.map((img: any) => 
-            typeof img === 'string' ? img : img?.url
-          ));
+      // ✅ DEBUG : Log le stock de chaque produit
+      if (productsData.length > 0) {
+        console.group('📊 [Products] Stock par produit:');
+        productsData.forEach(p => {
+          console.log(`  ${p.name}:`, {
+            totalStock: p.totalStock,
+            stockType: typeof p.totalStock,
+            inStock: p.inStock,
+          });
         });
-        
-        // ✅ Détecter les URLs invalides
-        const invalidUrls = productsData.flatMap(p => 
-          (p.images || [])
-            .map((img: any) => typeof img === 'string' ? img : img?.url)
-            .filter((url: string) => url && url.startsWith('file://'))
-        );
-        
-        if (invalidUrls.length > 0) {
-          console.warn(`⚠️ [Products] Found ${invalidUrls.length} invalid file:// URLs:`, invalidUrls);
-        }
+        console.groupEnd();
       }
       
       setProducts(productsData);
@@ -550,73 +532,104 @@ export default function ProductsAdminPage() {
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!validateForm()) return;
+  event.preventDefault();
+  if (!validateForm()) return;
 
-    setMessage(null);
-    setError(null);
+  setMessage(null);
+  setError(null);
 
-    try {
-      setSaving(true);
+  try {
+    setSaving(true);
 
-      const formDataToSend = new FormData();
-      formDataToSend.append('name', formData.name.trim());
-      formDataToSend.append('description', formData.description.trim());
-      formDataToSend.append('basePrice', (parseFloat(formData.basePrice) || 0).toString());
-      formDataToSend.append('category', formData.category);
-      formDataToSend.append('type', formData.type);
-      formDataToSend.append('brand', formData.brand.trim());
-      formDataToSend.append('totalStock', (parseInt(formData.totalStock) || 0).toString());
+    console.group('📤 [Create] Préparation du produit');
+    console.log('📝 formData.totalStock:', formData.totalStock);
+    console.log('📝 parseInt:', parseInt(formData.totalStock));
+    
+    const formDataToSend = new FormData();
+    formDataToSend.append('name', formData.name.trim());
+    formDataToSend.append('description', formData.description.trim());
+    formDataToSend.append('basePrice', (parseFloat(formData.basePrice) || 0).toString());
+    formDataToSend.append('category', formData.category);
+    formDataToSend.append('type', formData.type);
+    formDataToSend.append('brand', formData.brand.trim());
+    formDataToSend.append('totalStock', (parseInt(formData.totalStock) || 0).toString());
+    
+    // ✅ Générer un SKU unique pour éviter les conflits
+    const uniqueSku = `${formData.type.toUpperCase()}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    formDataToSend.append('sku', uniqueSku);
+    console.log('🏷️ SKU généré:', uniqueSku);
 
-      compressedImages.forEach((img) => {
-        formDataToSend.append('images', img.file);
-      });
+    compressedImages.forEach((img) => {
+      formDataToSend.append('images', img.file);
+    });
 
-      existingImages.forEach((img) => {
-        formDataToSend.append('existingImages', JSON.stringify(img));
-      });
+    existingImages.forEach((img) => {
+      formDataToSend.append('existingImages', JSON.stringify(img));
+    });
 
-      console.log('📤 [Create] Sending product:', {
-        name: formData.name,
-        imagesCount: compressedImages.length,
-        totalSize: `${(compressionStats.totalCompressed / 1024 / 1024).toFixed(2)}MB`,
-      });
-
-      const response = await apiClient.upload('/products', formDataToSend);
-      
-      console.log('✅ [Create] Product created:', response?.data?.product?._id);
-      
-      toast.success('Produit ajouté avec succès');
-      setModalOpen(false);
-      resetForm();
-      await loadProducts();
-      
-    } catch (err: any) {
-      console.error('❌ Error creating product:', err);
-
-      let errorMessage = 'Impossible de créer le produit';
-      
-      if (err?.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err?.response?.data?.error) {
-        errorMessage = err.response.data.error;
-      } else if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
-        errorMessage = err.response.data.errors.map((e: any) => e.message || e.msg).join(', ');
-      } else if (err?.message) {
-        errorMessage = err.message;
+    console.log('📦 Contenu du FormData:');
+    const formDataEntries: Record<string, any> = {};
+    formDataToSend.forEach((value, key) => {
+      if (value instanceof File) {
+        formDataEntries[key] = `File: ${value.name}`;
+      } else {
+        formDataEntries[key] = value;
       }
+    });
+    console.log(formDataEntries);
+    console.groupEnd();
 
-      toast.error(errorMessage);
-      setError(errorMessage);
-    } finally {
-      setSaving(false);
+    const response = await apiClient.upload('/products', formDataToSend);
+    
+    console.log('✅ [Create] Product created:', response?.data?.product?._id);
+    console.log('✅ [Create] Stock sauvegardé:', response?.data?.product?.totalStock);
+    
+    toast.success('Produit ajouté avec succès');
+    setModalOpen(false);
+    resetForm();
+    await loadProducts();
+    
+  } catch (err: any) {
+    console.error('❌ Error creating product:', err);
+    console.error('   Status:', err?.response?.status);
+    console.error('   Message:', err?.response?.data?.message);
+
+    let errorMessage = 'Impossible de créer le produit';
+    
+    // ✅ Gestion spécifique du 409 Conflict
+    if (err?.response?.status === 409) {
+      errorMessage = 'Un produit avec ce SKU existe déjà. Veuillez réessayer.';
+      console.warn('⚠️ Conflit SKU détecté');
+    } else if (err?.response?.data?.message) {
+      errorMessage = err.response.data.message;
+    } else if (err?.response?.data?.error) {
+      errorMessage = err.response.data.error;
+    } else if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+      errorMessage = err.response.data.errors.map((e: any) => e.message || e.msg).join(', ');
+    } else if (err?.message) {
+      errorMessage = err.message;
     }
-  };
+
+    toast.error(errorMessage);
+    setError(errorMessage);
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleEdit = useCallback((product: Product) => {
-    console.log('📝 [Edit] Opening product:', product._id, product.name);
+    console.group('📝 [Edit] Ouverture du produit');
+    console.log('🆔 ID:', product._id);
+    console.log('📝 Nom:', product.name);
+    console.log('📦 totalStock:', product.totalStock);
+    console.log('📦 Type:', typeof product.totalStock);
+    console.log('📦 toString():', product.totalStock?.toString());
+    console.groupEnd();
     
     setEditingProduct(product);
+    
+    const stockValue = product.totalStock?.toString() || '0';
+    console.log('📝 [Edit] Valeur stock définie dans formData:', stockValue);
     
     setFormData({
       name: product.name || '',
@@ -627,10 +640,9 @@ export default function ProductsAdminPage() {
         : product.category || '',
       type: (product.type as ProductType) || 'shoes',
       brand: product.brand || '',
-      totalStock: product.totalStock?.toString() || '0',
+      totalStock: stockValue,
     });
 
-    // ✅ Charger uniquement les images valides
     const images = (product.images || [])
       .map(img => {
         const url = normalizeImageUrl(img);
@@ -651,73 +663,92 @@ export default function ProductsAdminPage() {
   }, []);
 
   const handleUpdate = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!validateForm() || !editingProduct) return;
+  event.preventDefault();
+  if (!validateForm() || !editingProduct) return;
 
-    try {
-      setSaving(true);
+  try {
+    setSaving(true);
 
-      const formDataToSend = new FormData();
-      formDataToSend.append('name', formData.name.trim());
-      formDataToSend.append('description', formData.description.trim());
-      formDataToSend.append('basePrice', (parseFloat(formData.basePrice) || 0).toString());
-      formDataToSend.append('category', formData.category);
-      formDataToSend.append('type', formData.type);
-      formDataToSend.append('brand', formData.brand.trim());
-      formDataToSend.append('totalStock', (parseInt(formData.totalStock) || 0).toString());
+    console.group('📝 [Update] Préparation de la mise à jour');
+    console.log('🆔 Product ID:', editingProduct._id);
+    console.log('📝 formData.totalStock:', formData.totalStock);
+    console.log('📝 parseInt:', parseInt(formData.totalStock));
+    console.log('🖼️ existingImages:', existingImages.length);
+    console.log('🖼️ compressedImages:', compressedImages.length);
+    
+    const formDataToSend = new FormData();
+    formDataToSend.append('name', formData.name.trim());
+    formDataToSend.append('description', formData.description.trim());
+    formDataToSend.append('basePrice', (parseFloat(formData.basePrice) || 0).toString());
+    formDataToSend.append('category', formData.category);
+    formDataToSend.append('type', formData.type);
+    formDataToSend.append('brand', formData.brand.trim());
+    formDataToSend.append('totalStock', (parseInt(formData.totalStock) || 0).toString());
 
-      compressedImages.forEach((img) => {
-        formDataToSend.append('images', img.file);
-      });
+    // ✅ CORRECTION : Envoyer les nouvelles images
+    compressedImages.forEach((img) => {
+      formDataToSend.append('images', img.file);
+    });
 
-      existingImages.forEach((img) => {
-        formDataToSend.append('existingImages', JSON.stringify(img));
-      });
+    // ✅ CORRECTION : Envoyer les URLs des images existantes (pas en JSON)
+    existingImages.forEach((img, index) => {
+      formDataToSend.append(`existingImages[${index}]`, img.url);
+    });
 
-      console.log('📝 [Update] Sending data:', {
-        productId: editingProduct._id,
-        name: formData.name,
-        newImages: compressedImages.length,
-        existingImages: existingImages.length,
-      });
-
-      const response = await apiClient.put(`/products/${editingProduct._id}`, formDataToSend, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: API_TIMEOUT,
-      });
-      
-      console.log('✅ [Update] Response:', response);
-      
-      toast.success('Produit mis à jour avec succès');
-      setEditModalOpen(false);
-      resetForm();
-      await loadProducts();
-      
-    } catch (err: any) {
-      console.error('❌ Error updating product:', err);
-      console.error('   Error details:', {
-        message: err?.message,
-        response: err?.response?.data,
-        status: err?.response?.status,
-      });
-      
-      let errorMessage = 'Impossible de mettre à jour le produit';
-      
-      if (err?.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err?.response?.data?.error) {
-        errorMessage = err.response.data.error;
-      } else if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
-        errorMessage = err.response.data.errors.map((e: any) => e.message || e.msg).join(', ');
-      } else if (err?.message) {
-        errorMessage = err.message;
+    // ✅ DEBUG : Log le contenu du FormData
+    console.log('📦 Contenu du FormData:');
+    const formDataEntries: Record<string, any> = {};
+    formDataToSend.forEach((value, key) => {
+      if (value instanceof File) {
+        formDataEntries[key] = `File: ${value.name} (${(value.size / 1024).toFixed(1)}KB)`;
+      } else {
+        formDataEntries[key] = value;
       }
-      
-      toast.error(errorMessage);
-    } finally {
-      setSaving(false);
+    });
+    console.log(formDataEntries);
+    console.groupEnd();
+
+    const response = await apiClient.put(`/products/${editingProduct._id}`, formDataToSend, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: API_TIMEOUT,
+    });
+    
+    // ✅ CORRECTION : Parser correctement la réponse
+    console.log('✅ [Update] Response complète:', response);
+    console.log('✅ [Update] Response.data:', response?.data);
+    
+    const updatedProduct = response?.data?.product || response?.product || response?.data;
+    console.log('✅ [Update] Produit mis à jour:', updatedProduct);
+    console.log('✅ [Update] Stock après update:', updatedProduct?.totalStock);
+    console.log('✅ [Update] Images après update:', updatedProduct?.images?.length);
+    
+    toast.success('Produit mis à jour avec succès');
+    setEditModalOpen(false);
+    resetForm();
+    await loadProducts();
+    
+  } catch (err: any) {
+    console.error('❌ Error updating product:', err);
+    console.error('   Response:', err?.response?.data);
+    console.error('   Status:', err?.response?.status);
+    
+    let errorMessage = 'Impossible de mettre à jour le produit';
+    
+    if (err?.response?.data?.message) {
+      errorMessage = err.response.data.message;
+    } else if (err?.response?.data?.error) {
+      errorMessage = err.response.data.error;
+    } else if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+      errorMessage = err.response.data.errors.map((e: any) => e.message || e.msg).join(', ');
+    } else if (err?.message) {
+      errorMessage = err.message;
     }
-  };
+    
+    toast.error(errorMessage);
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleDelete = async () => {
     if (!deletingProduct) return;
@@ -863,7 +894,6 @@ export default function ProductsAdminPage() {
                 </tr>
               ) : (
                 products.map((product) => {
-                  // ✅ Extraire la première image valide
                   const firstImage = getFirstValidImage(product);
                   
                   return (
@@ -1328,7 +1358,6 @@ export default function ProductsAdminPage() {
             </div>
           </div>
 
-          {/* ✅ Section: Images existantes avec ProductImage */}
           {existingImages.length > 0 && (
             <div className="space-y-4 pt-4 border-t">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">

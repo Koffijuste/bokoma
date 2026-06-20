@@ -18,7 +18,8 @@ import { Label } from '@/components/ui/label';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useMounted } from '@/hooks/useMounted';
-import { cartApi, orderApi } from '@/services';
+import { useCart } from '@/hooks/useCart';
+import { orderApi } from '@/services';
 import { ROUTES, STORAGE_KEYS } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
 import type { Cart, Product } from '@/types';
@@ -58,14 +59,6 @@ const getShippingLabel = (countryCode: string, city: string): string => {
   return 'Livraison Intérieur CIV';
 };
 
-const extractCart = (data: any): Cart | null => {
-  if (!data) return null;
-  if (data.cart) return data.cart;
-  if (data.data?.cart) return data.data.cart;
-  if (Array.isArray(data.items)) return data;
-  return null;
-};
-
 // ============================================================================
 // 🔹 COMPOSANTS UI
 // ============================================================================
@@ -101,15 +94,15 @@ export default function CartPage() {
   const mounted = useMounted();
   const router = useRouter();
   
-  const [cart, setCart] = useState<Cart | null>(null);
-  const [loading, setLoading] = useState(true);
+  // ✅ CORRECTION CRITIQUE : Utiliser le hook useCart au lieu d'un state local
+  const { cart, cartCount, updateItem, removeItem, fetchCart } = useCart();
+  
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   
   const [shippingDetails, setShippingDetails] = useState({
     fullName: '', phone: '', address: '', country: '', city: '', postalCode: '',
   });
   
-  // ✅ SIMPLIFIÉ : Seulement le choix du mode de paiement
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money' | 'cash_on_delivery' | 'bank_transfer'>('mobile_money');
   
   const [orderNotes, setOrderNotes] = useState('');
@@ -117,41 +110,18 @@ export default function CartPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // ============================================================================
-  // 🔹 LOGS D'AUTHENTIFICATION
+  // 🔹 LOGS DE DEBUG
   // ============================================================================
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development' || !mounted) return;
+    if (!mounted) return;
     
-    console.group('🔐 [CartPage] Auth state update');
-    console.log('  mounted:', mounted);
-    console.log('  authLoading:', authLoading);
-    console.log('  isAuthenticated:', isAuthenticated);
-    console.log('  accessToken (useAuth):', accessToken ? `${accessToken.slice(0, 30)}...` : '❌ MISSING');
-    
-    try {
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem(STORAGE_KEYS.AUTH);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          console.log('  localStorage[auth]:', {
-            hasAccessToken: !!parsed?.accessToken,
-            accessTokenPreview: parsed?.accessToken?.slice(0, 30) + '...',
-          });
-        } else {
-          console.warn('  localStorage[auth]: ❌ MISSING');
-        }
-      }
-    } catch (e) {
-      console.error('  localStorage[auth]: Error reading:', e);
-    }
-    
-    if (typeof document !== 'undefined') {
-      const cookieName = STORAGE_KEYS.AUTH_TOKEN || 'bokoma_access_token';
-      const hasCookie = document.cookie.split(';').some(c => c.trim().startsWith(`${cookieName}=`));
-      console.log(`  document.cookie has ${cookieName}:`, hasCookie);
-    }
+    console.group('🛒 [CartPage] État du panier');
+    console.log('📦 cart:', cart);
+    console.log('🔢 cartCount:', cartCount);
+    console.log('📦 items:', cart?.items?.length || 0);
+    console.log('👤 isAuthenticated:', isAuthenticated);
     console.groupEnd();
-  }, [mounted, authLoading, isAuthenticated, accessToken]);
+  }, [mounted, cart, cartCount, isAuthenticated]);
 
   // ============================================================================
   // 🔹 REDIRECTION SI NON AUTHENTIFIÉ
@@ -163,61 +133,6 @@ export default function CartPage() {
       router.replace(redirect);
     }
   }, [mounted, authLoading, isAuthenticated, router]);
-
-  // ============================================================================
-  // 🔹 FETCH CART
-  // ============================================================================
-  const fetchCart = useCallback(async () => {
-    if (!mounted || !isAuthenticated) return;
-    
-    try {
-      setLoading(true);
-      console.log('🛒 [CartPage] Fetching cart...');
-      
-      if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-        const stored = localStorage.getItem(STORAGE_KEYS.AUTH);
-        const hasLocalStorageToken = stored && JSON.parse(stored)?.accessToken;
-        const hasCookieToken = document.cookie.includes(STORAGE_KEYS.AUTH_TOKEN || 'bokoma_access_token');
-        
-        console.log('  Token sources:', {
-          localStorage: hasLocalStorageToken ? '✅ Present' : '❌ Missing',
-          cookie: hasCookieToken ? '✅ Present' : '❌ Missing',
-        });
-      }
-      
-      const response = await cartApi.getCart();
-      console.log('🛒 [CartPage] Cart response:', response);
-      
-      const extractedCart = extractCart(response);
-      setCart(extractedCart);
-      
-      if (!extractedCart) {
-        console.warn('⚠️ [CartPage] No cart data extracted from:', response);
-      }
-    } catch (err: any) {
-      console.group('❌ [CartPage] Failed to fetch cart');
-      console.log('  Message:', err?.message);
-      console.log('  Status code:', err?.statusCode);
-      console.log('  Response data:', err?.response?.data);
-      console.groupEnd();
-      
-      if (err?.statusCode === 401 || err?.message?.includes('authentification')) {
-        console.warn('⚠️ [CartPage] Auth error');
-        toast.error('Session expirée, veuillez vous reconnecter');
-        return;
-      }
-      
-      toast.error('Impossible de charger votre panier');
-    } finally {
-      setLoading(false);
-    }
-  }, [mounted, isAuthenticated]);
-
-  useEffect(() => {
-    if (mounted && isAuthenticated && !authLoading) {
-      fetchCart();
-    }
-  }, [mounted, isAuthenticated, authLoading, fetchCart]);
 
   // ============================================================================
   // 🔹 CALCULS DÉRIVÉS
@@ -256,7 +171,7 @@ export default function CartPage() {
     }
   };
 
-  const updateCartItemQuantity = async (itemId: string, newQuantity: number) => {
+  const handleUpdateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
     
     const item = cart?.items?.find(i => i._id === itemId);
@@ -269,32 +184,14 @@ export default function CartPage() {
       return;
     }
     
-    const previousCart = cart;
-    const updatedCart = {
-      ...cart,
-      items: cart?.items?.map(i =>
-        i._id === itemId ? { ...i, quantity: newQuantity } : i
-      ) || [],
-    };
-    setCart(updatedCart as Cart);
     setUpdatingItemId(itemId);
 
     try {
-      const response = await cartApi.updateItem(itemId, newQuantity);
-      
-      if (response?.data?.cart || response?.cart) {
-        const updated = extractCart(response);
-        if (updated) {
-          setCart(updated);
-          toast.success('Quantité mise à jour');
-        }
-      } else {
-        toast.success('Quantité mise à jour');
-      }
+      console.log('🔄 [CartPage] Mise à jour quantité:', itemId, '->', newQuantity);
+      await updateItem({ itemId, quantity: newQuantity });
+      toast.success('Quantité mise à jour');
     } catch (err: any) {
       console.error('❌ Failed to update quantity:', err);
-      setCart(previousCart);
-      
       const errorMsg = err?.response?.data?.message || err?.message || 'Erreur lors de la mise à jour';
       toast.error(errorMsg);
     } finally {
@@ -302,36 +199,20 @@ export default function CartPage() {
     }
   };
 
-  const removeCartItem = async (itemId: string) => {
-    const previousCart = cart;
-    const updatedCart = {
-      ...cart,
-      items: cart?.items?.filter(item => item._id !== itemId) || [],
-    };
-    setCart(updatedCart as Cart);
-
+  const handleRemoveItem = async (itemId: string) => {
     try {
-      const response = await cartApi.removeItem(itemId);
-      
-      if (response?.data?.cart || response?.cart) {
-        const updated = extractCart(response);
-        if (updated) {
-          setCart(updated);
-        }
-      }
+      console.log('🗑️ [CartPage] Suppression item:', itemId);
+      await removeItem(itemId);
       toast.success('Produit retiré du panier');
     } catch (err: any) {
       console.error('❌ Failed to remove item:', err);
-      setCart(previousCart);
       toast.error(err?.response?.data?.message || 'Erreur lors de la suppression');
     }
   };
 
-  // ✅ SIMPLIFIÉ : Validation sans champs supplémentaires
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
     
-    // Validation livraison
     if (!shippingDetails.fullName.trim()) errors.fullName = 'Nom complet requis';
     if (!shippingDetails.phone.trim()) errors.phone = 'Téléphone requis';
     if (!shippingDetails.address.trim()) errors.address = 'Adresse requise';
@@ -346,7 +227,7 @@ export default function CartPage() {
   };
 
   // ============================================================================
-  // 🔹 handleSubmitOrder — SIMPLIFIÉ
+  // 🔹 handleSubmitOrder
   // ============================================================================
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -366,7 +247,6 @@ export default function CartPage() {
     try {
       console.log('📦 [CartPage] Preparing order payload...');
       
-      // ✅ SIMPLIFIÉ : Utiliser le numéro de livraison pour tous les paiements
       const orderPayload = {
         shipping: {
           fullName: shippingDetails.fullName.trim(),
@@ -381,7 +261,6 @@ export default function CartPage() {
           method: paymentMethod,
           status: paymentMethod === 'cash_on_delivery' ? 'partial' : 'pending',
           amountPaid: paymentMethod === 'cash_on_delivery' ? amountDueNow : 0,
-          // ✅ Utiliser le numéro de livraison pour l'acompte
           details: paymentMethod === 'cash_on_delivery' ? {
             phoneNumber: shippingDetails.phone.trim(),
           } : {},
@@ -409,31 +288,6 @@ export default function CartPage() {
         }),
       };
 
-      // DEBUG logs
-      if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-        console.group('🔐 [CartPage] BEFORE orderApi.createOrder');
-        
-        let localStorageToken = 'unknown';
-        try {
-          const stored = localStorage.getItem(STORAGE_KEYS.AUTH);
-          if (stored) {
-            const { accessToken: storedToken } = JSON.parse(stored);
-            localStorageToken = storedToken ? `present (${storedToken.slice(0, 30)}...)` : 'empty';
-          } else {
-            localStorageToken = 'missing';
-          }
-        } catch {
-          localStorageToken = 'error';
-        }
-        console.log('  localStorage token:', localStorageToken);
-        console.log('  useAuth accessToken:', accessToken ? `${accessToken.slice(0, 30)}...` : '❌ MISSING');
-        
-        const cookieName = STORAGE_KEYS.AUTH_TOKEN || 'bokoma_access_token';
-        const hasCookie = document.cookie.split(';').some(c => c.trim().startsWith(`${cookieName}=`));
-        console.log(`  document.cookie has ${cookieName}:`, hasCookie);
-        console.groupEnd();
-      }
-
       console.log('📡 [CartPage] Calling orderApi.createOrder...');
       const startTime = Date.now();
       
@@ -445,13 +299,11 @@ export default function CartPage() {
       const elapsed = Date.now() - startTime;
       console.log('✅ [CartPage] orderApi.createOrder succeeded in', elapsed, 'ms');
       
-      // ✅ Extraire correctement paymentUrl
       const paymentUrl = (response as any).data?.payment?.paymentUrl || (response as any).paymentUrl;
       const orderId = (response as any).data?.order?._id || (response as any).order?._id;
       
       console.log('🎯 [CartPage] Response:', { paymentUrl, orderId });
       
-      // ✅ Si paiement en ligne (y compris acompte), ouvrir la popup
       if (paymentUrl) {
         console.log('💳 [CartPage] Opening CinetPay popup:', paymentUrl);
         toast.success('Ouverture de la fenêtre de paiement...');
@@ -487,7 +339,6 @@ export default function CartPage() {
           if (data.status === 'ACCEPTED' || data.status === 'SUCCESS') {
             console.log('✅ [CinetPay] Payment successful');
             toast.success('Paiement réussi !');
-            setCart(null);
             popup.close();
             
             if (orderId) {
@@ -524,8 +375,6 @@ export default function CartPage() {
         return;
       }
 
-      // ✅ Fallback : pas de paiement en ligne
-      setCart(null);
       toast.success('Commande créée avec succès !');
       
       console.log('🎯 [CartPage] Extracted orderId:', orderId);
@@ -581,12 +430,12 @@ export default function CartPage() {
   // ============================================================================
   // 🔹 RENDER STATES
   // ============================================================================
-  if (!mounted || authLoading || loading) {
+  if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-accent" />
-          <p className="text-muted-foreground">Chargement de votre panier...</p>
+          <p className="text-muted-foreground">Chargement...</p>
         </div>
       </div>
     );
@@ -675,11 +524,11 @@ export default function CartPage() {
                             {(item.size || item.color) && (<div className="flex gap-2 mt-1">{item.size && <SimpleBadge variant="outline">{item.size}</SimpleBadge>}{item.color && <SimpleBadge variant="outline">{item.color}</SimpleBadge>}</div>)}
                             <div className="flex items-center gap-3 mt-3">
                               <div className="flex items-center border border-border rounded-lg">
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => updateCartItemQuantity(item._id!, (item.quantity || 1) - 1)} disabled={(item.quantity || 1) <= 1 || updatingItemId === item._id}><Minus className="w-3 h-3" /></Button>
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) - 1)} disabled={(item.quantity || 1) <= 1 || updatingItemId === item._id}><Minus className="w-3 h-3" /></Button>
                                 <span className="w-8 text-center text-sm font-medium">{updatingItemId === item._id ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : item.quantity}</span>
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => updateCartItemQuantity(item._id!, (item.quantity || 1) + 1)} disabled={updatingItemId === item._id || (item.quantity || 1) >= ((item.product as any)?.totalStock || (item as any)?.totalStock || 999)}><Plus className="w-3 h-3" /></Button>
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) + 1)} disabled={updatingItemId === item._id || (item.quantity || 1) >= ((item.product as any)?.totalStock || (item as any)?.totalStock || 999)}><Plus className="w-3 h-3" /></Button>
                               </div>
-                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => removeCartItem(item._id!)} disabled={updatingItemId === item._id} title="Retirer du panier"><Trash2 className="w-4 h-4" /></Button>
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleRemoveItem(item._id!)} disabled={updatingItemId === item._id} title="Retirer du panier"><Trash2 className="w-4 h-4" /></Button>
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0"><p className="font-semibold text-accent">{formatPrice(itemTotal)}</p>{item.price && <p className="text-xs text-muted-foreground">{formatPrice(item.price)}/unité</p>}</div>
@@ -724,7 +573,7 @@ export default function CartPage() {
                 </div>
               </div>
 
-              {/* 💳 Méthode de paiement — SIMPLIFIÉ */}
+              {/* 💳 Méthode de paiement */}
               <div className="rounded-3xl border border-border bg-card p-6">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5" /> Méthode de paiement</h2>
                 <div className="space-y-3">
@@ -742,7 +591,6 @@ export default function CartPage() {
                         </div>
                       </label>
                       
-                      {/* ✅ Message informatif pour cash_on_delivery */}
                       <AnimatePresence>
                         {paymentMethod === method.id && method.id === 'cash_on_delivery' && (
                           <motion.div 

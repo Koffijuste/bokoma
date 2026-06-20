@@ -46,7 +46,7 @@ const imageFilter = (req, file, cb) => {
 const avatarUpload = multer({
   storage: avatarStorage,
   fileFilter: imageFilter,
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
 const productUpload = multer({
@@ -138,10 +138,28 @@ const createSafeNext = (res, next) => {
       };
 };
 
+// const uploadSingle = (req, res, next) => {
+//   const safeNext = createSafeNext(res, next);
+//   avatarUpload.single('avatar')(req, res, (err) => {
+//     if (err) return handleMulterError(err, req, res, safeNext);
+//     if (req.file) console.log('✅ [Upload] Avatar uploaded:', req.file.path);
+//     safeNext();
+//   });
+// };
+
 const uploadSingle = (req, res, next) => {
+  console.log('📥 [uploadSingle] Requête reçue');
+  console.log('📋 Content-Type:', req.headers['content-type']);
+  console.log('📋 Headers:', Object.keys(req.headers));
+  
   const safeNext = createSafeNext(res, next);
   avatarUpload.single('avatar')(req, res, (err) => {
-    if (err) return handleMulterError(err, req, res, safeNext);
+    if (err) {
+      console.log('❌ [uploadSingle] Erreur multer:', err.message, err.code);
+      return handleMulterError(err, req, res, safeNext);
+    }
+    console.log('📎 [uploadSingle] req.file:', req.file);
+    console.log('📎 [uploadSingle] req.body:', req.body);
     if (req.file) console.log('✅ [Upload] Avatar uploaded:', req.file.path);
     safeNext();
   });

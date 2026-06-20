@@ -407,27 +407,72 @@ export const cartApi = {
 };
 
 export const orderApi = {
-  getOrders: (filters?: OrderFilters) => apiClient.get<ApiResponse<{ orders: Order[]; total: number }>>('/orders', { params: filters }),
-  getOrder: (id: string) => apiClient.get<ApiResponse<{ order: Order }>>(`/orders/${id}`),
-  getMyOrders: (filters?: any) => apiClient.get<ApiResponse<{ orders: Order[]; total: number }>>('/orders/my', { params: filters }),
-  getOrderStats: () => apiClient.get<ApiResponse<{ stats: Record<OrderStatus, number> }>>('/orders/stats'),
-  createOrder: (payload: any) => apiClient.post<ApiResponse<{ order: Order }>>('/orders', payload),
-  cancelOrder: (id: string, reason?: string) => apiClient.patch<ApiResponse<{ order: Order }>>(`/orders/${id}/cancel`, { reason }),
-  updateOrderStatus: (id: string, status: OrderStatus, note?: string) =>
-    apiClient.patch<ApiResponse<{ order: Order }>>(`/orders/${id}/status`, { status, note }),
-    // ✅ NOUVEAU : Vérification publique du paiement
+  // ─────────────────────────────────────────────────────────────
+  // 🔹 CRUD Commandes
+  // ─────────────────────────────────────────────────────────────
+
+  getOrders: (filters?: OrderFilters) => 
+    apiClient.get<ApiResponse<{ orders: Order[]; total: number }>>('/orders', { params: filters }),
+  
+  getOrder: (id: string) => 
+    apiClient.get<ApiResponse<{ order: Order }>>(`/orders/${id}`),
+  
+  getMyOrders: (filters?: any) => 
+    apiClient.get<ApiResponse<{ orders: Order[]; total: number }>>('/orders/my', { params: filters }),
+  
+  getOrderStats: (params?: { days?: number }) => 
+    apiClient.get<ApiResponse<{ stats: any }>>('/orders/stats', { params }),
+  
+  createOrder: (payload: any) => 
+    apiClient.post<ApiResponse<{ order: Order; payment?: any }>>('/orders', payload),
+  
+  cancelOrder: (id: string, reason?: string) => 
+    apiClient.patch<ApiResponse<{ order: Order }>>(`/orders/${id}/cancel`, { reason }),
+  
+  updateOrderStatus: (id: string, status: OrderStatus, note?: string, trackingNumber?: string) =>
+    apiClient.patch<ApiResponse<{ order: Order }>>(`/orders/${id}/status`, { status, note, trackingNumber }),
+  
+  deleteOrder: (id: string) => 
+    apiClient.delete<ApiResponse>(`/orders/${id}`),
+
+  // ─────────────────────────────────────────────────────────────
+  // 🔹 Vérification publique (SANS AUTH)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * ✅ Vérifie une commande publiquement (après paiement)
+   * Utilisé sur la page /payment/success
+   */
   verifyPaymentPublic: async (params: {
-    orderId?: string;
-    merchantTransactionId?: string;
-    transactionId?: string;
+    orderId?: string | null;
+    merchantTransactionId?: string | null;
+    transactionId?: string | null;
   }) => {
-    const queryParams = new URLSearchParams();
-    if (params.orderId) queryParams.append('orderId', params.orderId);
-    if (params.merchantTransactionId) queryParams.append('merchantTransactionId', params.merchantTransactionId);
-    if (params.transactionId) queryParams.append('transactionId', params.transactionId);
+    const { orderId, merchantTransactionId, transactionId } = params;
     
-    const response = await apiClient.get(`/orders/verify/payment?${queryParams.toString()}`);
-    return response.data;
+    // ✅ L'API backend attend l'orderId dans l'URL : /orders/verify/:orderId
+    if (orderId) {
+      const response = await apiClient.get(`/orders/verify/${orderId}`);
+      return response;
+    }
+    
+    // Fallback : utiliser merchantTransactionId ou transactionId
+    const txId = merchantTransactionId || transactionId;
+    if (txId) {
+      const response = await apiClient.get(`/orders/verify/${txId}`);
+      return response;
+    }
+    
+    throw new Error('Identifiant de commande manquant');
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // 🔹 Méthodes admin
+  // ─────────────────────────────────────────────────────────────
+
+  getOrderById: async (orderId: string) => {
+    const response = await apiClient.get<ApiResponse<{ order: Order }>>(`/orders/${orderId}`);
+    return response;
   },
 };
 

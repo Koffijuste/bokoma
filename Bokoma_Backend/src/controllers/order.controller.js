@@ -48,9 +48,21 @@ exports.createOrder = async (req, res, next) => {
       ));
     }
 
-    // ✅ 3. Calculer les totaux
+    // ✅ 3. Calculer les totaux (incluant frais de livraison)
     const subtotal = cart.items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0);
-    const shippingCost = shipping?.method === 'express' ? 5000 : 0;
+    
+    // ✅ CORRECTION : Calculer les frais de livraison
+    let shippingCost = 0;
+    if (shipping?.method === 'express') {
+      shippingCost = 5000;
+    } else if (shipping?.method === 'standard') {
+      shippingCost = 2500;
+    } else if (shipping?.method === 'pickup') {
+      shippingCost = 0;
+    } else {
+      // Frais par défaut si non spécifié
+      shippingCost = 2500;
+    }
     
     let discount = 0;
     if (cart.coupon?.isActive && typeof cart.coupon.isValid === 'function' && cart.coupon.isValid()) {
@@ -61,15 +73,19 @@ exports.createOrder = async (req, res, next) => {
       if (cart.coupon.minPurchase && subtotal < cart.coupon.minPurchase) discount = 0;
     }
 
+    // ✅ CORRECTION : Total inclut les frais de livraison
     const total = Math.max(0, subtotal + shippingCost - discount);
 
-        // ✅ 4. Initialisation CinetPay
-    // Mobile Money / Carte = 100% en ligne
-    // Cash on Delivery = 50% d'acompte en ligne
+    // ✅ 4. Initialisation CinetPay
     let paymentData = null;
     const isOnlinePayment = payment?.method === 'mobile_money' || payment?.method === 'card';
     const isCashOnDelivery = payment?.method === 'cash_on_delivery';
     const needsPayment = total > 0 && (isOnlinePayment || isCashOnDelivery);
+    
+    // ✅ Variables pour paiement partiel
+    let paymentAmount = total;
+    let remainingAmount = 0;
+    let isPartialPayment = false;
     
     if (needsPayment) {
       try {
@@ -77,21 +93,33 @@ exports.createOrder = async (req, res, next) => {
         console.log('💳 [OrderController] CINETPAY INITIALIZATION');
         console.log('='.repeat(80));
         
-        // ✅ Calcul du montant à payer
-        let paymentAmount = total;
-        let paymentDescription = `Commande Bokoma #${userId.slice(-6)}`;
-        
+        // ✅ CORRECTION : Calcul du montant à payer
         if (isCashOnDelivery) {
-          paymentAmount = Math.ceil(total * 0.5); // 50% d'acompte
-          paymentDescription = `Acompte 50% - Commande Bokoma #${userId.slice(-6)} (reste ${total - paymentAmount} FCFA à la livraison)`;
-          console.log(`💰 Cash on Delivery: Acompte de 50% = ${paymentAmount} FCFA`);
-          console.log(`💰 Reste à payer à la livraison: ${total - paymentAmount} FCFA`);
+          // Paiement partiel : 50% en ligne + 50% à la livraison
+          paymentAmount = Math.ceil(total * 0.5);
+          remainingAmount = total - paymentAmount;
+          isPartialPayment = true;
+          
+          console.log('💰 Cash on Delivery - Paiement partiel:');
+          console.log(`  - Total commande: ${total} FCFA`);
+          console.log(`  - Frais de livraison: ${shippingCost} FCFA`);
+          console.log(`  - Acompte en ligne (50%): ${paymentAmount} FCFA`);
+          console.log(`  - Reste à payer à la livraison: ${remainingAmount} FCFA`);
         } else {
+          // Paiement intégral en ligne
+          paymentAmount = total;
+          remainingAmount = 0;
+          isPartialPayment = false;
           console.log(`💰 Paiement intégral: ${paymentAmount} FCFA`);
         }
         
+        let paymentDescription = `Commande Bokoma #${userId.slice(-6)}`;
+        if (isPartialPayment) {
+          paymentDescription = `Acompte 50% - Commande Bokoma #${userId.slice(-6)} (reste ${remainingAmount} FCFA à la livraison)`;
+        }
+        
         // ✅ Mapper l'opérateur
-        let cinetpayMethod = 'OM_CI'; // Défaut : Orange Money
+        let cinetpayMethod = 'OM_CI';
         if (payment?.details?.operator) {
           const operatorMap = { 
             'OM': 'OM_CI', 
@@ -104,33 +132,28 @@ exports.createOrder = async (req, res, next) => {
           cinetpayMethod = 'CARD';
         }
         
-        // ✅ Construire le numéro de téléphone (format Côte d'Ivoire : +225 + 10 chiffres)
-        let customerPhone = '+2250707070700'; // Défaut valide
+        // ✅ Construire le numéro de téléphone
+        let customerPhone = '+2250707070700';
         const rawPhone = payment?.details?.phoneNumber || req.user.phone;
         
         if (rawPhone) {
-          // Nettoyer : enlever espaces, tirets, parenthèses
           let phone = String(rawPhone).replace(/[\s\-\(\)]/g, '');
-          
-          // Normaliser en numéro national (10 chiffres)
           let nationalNumber = phone;
           
           if (phone.startsWith('+225')) {
-            nationalNumber = phone.slice(4); // Enlever +225
+            nationalNumber = phone.slice(4);
           } else if (phone.startsWith('00225')) {
-            nationalNumber = phone.slice(5); // Enlever 00225
+            nationalNumber = phone.slice(5);
           } else if (phone.startsWith('225')) {
-            nationalNumber = phone.slice(3); // Enlever 225
+            nationalNumber = phone.slice(3);
           } else if (phone.startsWith('0')) {
-            nationalNumber = phone; // Garder le 0 initial
+            nationalNumber = phone;
           }
           
-          // Vérifier la longueur (doit être 10 chiffres)
           if (nationalNumber.length === 10 && /^\d+$/.test(nationalNumber)) {
             customerPhone = '+225' + nationalNumber;
           } else {
             console.warn('⚠️ Numéro invalide:', rawPhone, '→ national:', nationalNumber);
-            // Garder le numéro tel quel si on ne peut pas le formater
             customerPhone = phone.startsWith('+') ? phone : '+225' + phone.replace(/^0+/, '');
           }
         }
@@ -221,6 +244,8 @@ exports.createOrder = async (req, res, next) => {
         provider: paymentData ? 'cinetpay' : payment?.provider,
         details: payment?.details || {},
         paymentToken: paymentData?.paymentToken,
+        amountPaid: paymentAmount,
+        remainingAmount: remainingAmount,
       },
       subtotal,
       shippingCost,
@@ -262,7 +287,7 @@ exports.createOrder = async (req, res, next) => {
       console.error('❌ Confirmation email failed:', err)
     );
 
-    // ✅ Réponse
+    // ✅ CORRECTION : Réponse avec toutes les informations de paiement
     res.status(201).json({
       success: true,
       message: 'Commande créée avec succès',
@@ -271,6 +296,9 @@ exports.createOrder = async (req, res, next) => {
           _id: order._id.toString(),
           orderNumber: order.orderNumber,
           status: order.status,
+          subtotal: order.subtotal,
+          shippingCost: order.shippingCost,
+          discount: order.discount,
           total: order.total,
           currency: order.currency,
           items: order.items.map(item => ({
@@ -287,13 +315,21 @@ exports.createOrder = async (req, res, next) => {
             } : null,
           })),
           shipping: order.shipping,
-          payment: order.payment,
+          payment: {
+            ...order.payment,
+            amountPaid: order.payment.amountPaid,
+            remainingAmount: order.payment.remainingAmount,
+            isPartialPayment: order.payment.remainingAmount > 0,
+          },
           createdAt: order.createdAt,
         },
         ...(paymentData && { 
           payment: { 
             paymentToken: paymentData.paymentToken,
             paymentUrl: paymentData.paymentUrl, 
+            amount: paymentAmount,
+            isPartialPayment,
+            remainingAmount,
           } 
         }),
       },
@@ -355,39 +391,68 @@ exports.getMyOrders = async (req, res, next) => {
     ]);
 
     const formattedOrders = orders.map(order => ({
-      _id: order._id.toString(),
-      orderNumber: order.orderNumber,
-      status: order.status,
-      total: order.total,
-      currency: order.currency || 'XOF',
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-      deliveredAt: order.shipping?.deliveredAt,
-      items: order.items?.map(item => ({
-        _id: item._id?.toString(),
-        product: item.product ? {
-          _id: item.product._id?.toString(),
-          name: item.product.name,
-          slug: item.product.slug,
-          basePrice: item.product.basePrice,
-          image: item.product.images?.[0]?.url || null,
-        } : null,
-        variant: item.variant || null,
-        quantity: item.quantity,
-        price: item.price,
-        size: item.size,
-        color: item.color,
-        subtotal: item.subtotal,
-      })) || [],
-      shipping: {
-        fullName: order.shipping?.fullName,
-        city: order.shipping?.city,
-        country: order.shipping?.country,
-        trackingNumber: order.shipping?.trackingNumber,
-      },
-      paymentMethod: order.payment?.method,
-      paymentStatus: order.payment?.status,
-    }));
+  _id: order._id.toString(),
+  orderNumber: order.orderNumber,
+  status: order.status,
+  total: order.total,
+  subtotal: order.subtotal,
+  shippingCost: order.shippingCost,
+  discount: order.discount,
+  currency: order.currency,
+  notes: order.notes,
+  // ✅ CORRECTION : Retourner toutes les infos user
+  user: order.user ? {
+    _id: order.user._id?.toString(),
+    firstName: order.user.firstName,
+    lastName: order.user.lastName,
+    name: `${order.user.firstName} ${order.user.lastName}`,
+    email: order.user.email,
+    phone: order.user.phone,
+    avatar: order.user.avatar,
+  } : null,
+  // ✅ CORRECTION : Retourner tous les items avec détails
+  items: order.items?.map(item => ({
+    _id: item._id?.toString(),
+    product: item.product ? {
+      _id: item.product._id?.toString(),
+      name: item.product.name,
+      slug: item.product.slug,
+      basePrice: item.product.basePrice,
+      images: item.product.images,
+    } : null,
+    variant: item.variant || null,
+    name: item.name,
+    sku: item.sku,
+    image: item.image,
+    size: item.size,
+    color: item.color,
+    quantity: item.quantity,
+    price: item.price,
+    subtotal: item.subtotal,
+  })) || [],
+  // ✅ CORRECTION : Retourner toutes les infos shipping
+  shipping: {
+    fullName: order.shipping?.fullName,
+    phone: order.shipping?.phone,
+    street: order.shipping?.street,
+    city: order.shipping?.city,
+    postalCode: order.shipping?.postalCode,
+    country: order.shipping?.country,
+    cost: order.shipping?.cost,
+    trackingNumber: order.shipping?.trackingNumber,
+  },
+  // ✅ CORRECTION : Retourner toutes les infos payment
+  payment: {
+    method: order.payment?.method,
+    status: order.payment?.status,
+    transactionId: order.payment?.transactionId,
+    amountPaid: order.payment?.amountPaid,
+    provider: order.payment?.provider,
+  },
+  itemsCount: order.items?.length || 0,
+  createdAt: order.createdAt,
+  updatedAt: order.updatedAt,
+}));
 
     res.json({
       success: true,
@@ -419,13 +484,18 @@ exports.getOrder = async (req, res, next) => {
 
     if (!userId) return next(new AppError('Utilisateur non authentifié', 401));
 
-    // ✅ CORRECTION : Supprimé .populate('items.variant') qui cause l'erreur
+    // ✅ Populer user ET items.product
     const order = await Order.findById(id)
-      .populate({ path: 'items.product', select: 'name slug images basePrice soldCount' });
+      .populate('user', 'firstName lastName email phone avatar')
+      .populate({ 
+        path: 'items.product', 
+        select: 'name slug images basePrice soldCount description' 
+      });
 
     if (!order) return next(new AppError('Commande introuvable', 404));
 
-    const orderUserId = order.user?.toString?.() || order.user;
+    // ✅ Vérifier les permissions (admin/manager peuvent tout voir)
+    const orderUserId = order.user?._id?.toString?.() || order.user?.toString?.() || order.user;
     if (orderUserId !== userId && !['admin', 'manager'].includes(userRole)) {
       return next(new AppError('Accès refusé', 403));
     }
@@ -443,6 +513,19 @@ exports.getOrder = async (req, res, next) => {
           shippingCost: order.shippingCost,
           discount: order.discount,
           currency: order.currency,
+          notes: order.notes,
+          
+          // ✅ User complet
+          user: order.user ? {
+            _id: order.user._id?.toString(),
+            firstName: order.user.firstName,
+            lastName: order.user.lastName,
+            email: order.user.email,
+            phone: order.user.phone,
+            avatar: order.user.avatar,
+          } : null,
+          
+          // ✅ Items complets
           items: order.items?.map(item => ({
             _id: item._id?.toString(),
             product: item.product ? {
@@ -451,6 +534,7 @@ exports.getOrder = async (req, res, next) => {
               slug: item.product.slug,
               basePrice: item.product.basePrice,
               images: item.product.images,
+              description: item.product.description,
             } : null,
             variant: item.variant || null,
             name: item.name,
@@ -461,15 +545,23 @@ exports.getOrder = async (req, res, next) => {
             quantity: item.quantity,
             price: item.price,
             subtotal: item.subtotal,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
           })),
+          
+          // ✅ Shipping complet
           shipping: order.shipping,
+          
+          // ✅ Payment complet
           payment: order.payment,
+          
+          // ✅ Coupon
           coupon: order.coupon ? {
             _id: order.coupon._id?.toString(),
             code: order.coupon.code,
             discount: order.coupon.type === 'percentage' ? `${order.coupon.value}%` : `${order.coupon.value} FCFA`,
           } : null,
-          notes: order.notes,
+          
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
         },
@@ -593,32 +685,88 @@ exports.getAllOrders = async (req, res, next) => {
       ];
     }
 
+    // ✅ CORRECTION CRITIQUE : Populer user ET items.product
     const [orders, total] = await Promise.all([
       Order.find(filters)
-        .populate('user', 'firstName lastName email phone')
-        .populate({ path: 'items.product', select: 'name slug images basePrice' })
+        .populate('user', 'firstName lastName email phone avatar') // ✅ Populer user
+        .populate({ 
+          path: 'items.product', 
+          select: 'name slug images basePrice' 
+        }) // ✅ Populer items.product
         .sort(sortBy)
         .skip(skip)
         .limit(limit),
       Order.countDocuments(filters),
     ]);
 
+    // ✅ CORRECTION : Retourner TOUTES les informations
     const formattedOrders = orders.map(order => ({
       _id: order._id.toString(),
       orderNumber: order.orderNumber,
       status: order.status,
       total: order.total,
+      subtotal: order.subtotal,
+      shippingCost: order.shippingCost,
+      discount: order.discount,
       currency: order.currency,
+      notes: order.notes,
+      
+      // ✅ User complet
       user: order.user ? {
         _id: order.user._id?.toString(),
+        firstName: order.user.firstName,
+        lastName: order.user.lastName,
         name: `${order.user.firstName} ${order.user.lastName}`,
         email: order.user.email,
+        phone: order.user.phone,
+        avatar: order.user.avatar,
       } : null,
+      
+      // ✅ Items complets avec produits populés
+      items: order.items?.map(item => ({
+        _id: item._id?.toString(),
+        product: item.product ? {
+          _id: item.product._id?.toString(),
+          name: item.product.name,
+          slug: item.product.slug,
+          basePrice: item.product.basePrice,
+          images: item.product.images,
+        } : null,
+        variant: item.variant || null,
+        name: item.name,
+        sku: item.sku,
+        image: item.image,
+        size: item.size,
+        color: item.color,
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.subtotal,
+      })) || [],
+      
+      // ✅ Shipping complet
+      shipping: {
+        fullName: order.shipping?.fullName,
+        phone: order.shipping?.phone,
+        street: order.shipping?.street,
+        city: order.shipping?.city,
+        postalCode: order.shipping?.postalCode,
+        country: order.shipping?.country,
+        cost: order.shipping?.cost,
+        trackingNumber: order.shipping?.trackingNumber,
+      },
+      
+      // ✅ Payment complet
+      payment: {
+        method: order.payment?.method,
+        status: order.payment?.status,
+        transactionId: order.payment?.transactionId,
+        amountPaid: order.payment?.amountPaid,
+        provider: order.payment?.provider,
+      },
+      
       itemsCount: order.items?.length || 0,
-      paymentMethod: order.payment?.method,
-      paymentStatus: order.payment?.status,
       createdAt: order.createdAt,
-      shipping: { city: order.shipping?.city, country: order.shipping?.country },
+      updatedAt: order.updatedAt,
     }));
 
     res.json({
@@ -759,28 +907,60 @@ exports.verifyOrderPublic = async (req, res, next) => {
     const { orderId } = req.params;
     
     const order = await Order.findById(orderId)
-      .select('orderNumber status createdAt total currency items shipping payment')
-      .populate('items.product', 'name')
+      .select('orderNumber status createdAt total subtotal shippingCost discount currency items shipping payment notes')
+      .populate({
+        path: 'items.product',
+        select: 'name slug images basePrice'
+      })
       .lean();
     
     if (!order) {
       return res.status(404).json({ success: false, message: 'Commande introuvable' });
     }
     
+    // ✅ CORRECTION : Inclure les informations de paiement partiel
     const publicOrder = {
       _id: order._id,
       orderNumber: order.orderNumber,
       status: order.status,
       createdAt: order.createdAt,
+      subtotal: order.subtotal,
+      shippingCost: order.shippingCost,
+      discount: order.discount,
       total: order.total,
       currency: order.currency,
       itemCount: order.items?.length || 0,
-      shipping: { city: order.shipping?.city, country: order.shipping?.country },
-      payment: { method: order.payment?.method },
+      shipping: {
+        fullName: order.shipping?.fullName,
+        phone: order.shipping?.phone,
+        street: order.shipping?.street,
+        city: order.shipping?.city,
+        postalCode: order.shipping?.postalCode,
+        country: order.shipping?.country,
+      },
+      payment: {
+        method: order.payment?.method,
+        status: order.payment?.status,
+        amountPaid: order.payment?.amountPaid || 0,
+        remainingAmount: order.payment?.remainingAmount || 0,
+        isPartialPayment: (order.payment?.remainingAmount || 0) > 0,
+      },
+      notes: order.notes,
       items: (order.items || []).map(item => ({
+        _id: item._id?.toString(),
         name: item.name || item.product?.name || 'Produit',
         quantity: item.quantity,
         price: item.price,
+        subtotal: (item.price || 0) * (item.quantity || 1),
+        size: item.size,
+        color: item.color,
+        image: item.image || item.product?.images?.[0]?.url || null,
+        product: item.product ? {
+          _id: item.product._id?.toString(),
+          name: item.product.name,
+          slug: item.product.slug,
+          image: item.product.images?.[0]?.url || null,
+        } : null,
       })),
     };
     

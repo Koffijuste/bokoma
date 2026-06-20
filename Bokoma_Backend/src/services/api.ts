@@ -1,30 +1,45 @@
-// Backend - services/api.ts
+// services/api.ts
 import axios from 'axios';
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
-  withCredentials: true, // Pour envoyer les cookies (refreshToken)
+  withCredentials: true,
   timeout: 10000,
-  headers: { 'Content-Type': 'application/json' },
+  // ❌ NE PAS définir Content-Type par défaut
+  // headers: { 'Content-Type': 'application/json' },
 });
 
 // 🔐 Intercepteur pour ajouter automatiquement le token d'accès
 apiClient.interceptors.request.use((config) => {
-  // Récupérer le token depuis le store Zustand ou localStorage
+  // ✅ Définir Content-Type UNIQUEMENT pour les données non-FormData
+  if (config.data instanceof FormData) {
+    // Forcer undefined pour laisser le navigateur gérer
+    config.headers['Content-Type'] = undefined;
+  } else if (config.data && typeof config.data === 'object') {
+    config.headers['Content-Type'] = 'application/json';
+  }
+  
+  // Récupérer le token depuis localStorage
   let token: string | null = null;
   
-  // Option A: Si vous utilisez un store Zustand pour l'auth
   if (typeof window !== 'undefined') {
     try {
-      const authState = JSON.parse(localStorage.getItem('auth') || '{}');
-      token = authState?.accessToken || null;
+      const stored = localStorage.getItem('bokoma-auth-storage');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        token = parsed?.state?.accessToken || null;
+      }
+      if (!token) {
+        const auth = localStorage.getItem('auth');
+        if (auth) {
+          const authState = JSON.parse(auth);
+          token = authState?.accessToken || null;
+        }
+      }
     } catch {
       token = null;
     }
   }
-  
-  // Option B: Si vous avez une fonction pour récupérer le token
-  // token = getAuthToken(); 
   
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -41,9 +56,7 @@ apiClient.interceptors.response.use(
       return Promise.reject(new Error('⏱️ Délai de réponse dépassé'));
     }
     if (error.response?.status === 401) {
-      // Optionnel: Déconnecter l'utilisateur ou rafraîchir le token
       console.warn('⚠️ Token invalide ou expiré');
-      // logout(); // Si vous avez une fonction de déconnexion
     }
     return Promise.reject(error);
   }

@@ -1,133 +1,145 @@
 // hooks/useWishlist.ts
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '@/services/api';
 import { useAuth } from './useAuth';
 import type { Product } from '@/types';
 import { useWishlistStore } from '@/store/wishlist';
 
-// ✅ Types pour les réponses API
-interface WishlistResponse {
-  success: boolean;
-  data?: {
-    wishlist: Product[];
-    count: number;
-  };
-  wishlist?: Product[];
-  count?: number;
-}
-
-interface ToggleWishlistResponse {
-  success: boolean;
-  data?: {
-    wishlist: Product[];
-    action: 'added' | 'removed';
-    count: number;
-  };
-  wishlist?: Product[];
-  action?: 'added' | 'removed';
-  count?: number;
-}
-
 export function useWishlist() {
   const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
-  const { wishlist, setWishlist, addItem, removeItem } = useWishlistStore();
+  const [error, setError] = useState<string | null>(null);
+  
+  // ✅ Écouter le store Zustand directement
+  const wishlist = useWishlistStore((state) => state.wishlist);
+  const setWishlist = useWishlistStore((state) => state.setWishlist);
+  
+  // ✅ Ref pour éviter les toggles concurrents (pas pour les fetchs)
+  const isTogglingRef = useRef(false);
+  const prevAuthRef = useRef<boolean | null>(null);
 
-  // ✅ Fetch wishlist avec typage correct
+  // ✅ Fetch wishlist
   const fetchWishlist = useCallback(async () => {
     if (!isAuthenticated) {
+      console.log('⚠️ [useWishlist] Non authentifié, reset');
       setWishlist([]);
       return;
     }
 
     try {
       setLoading(true);
+      setError(null);
       
-      // ✅ Typage explicite de la réponse
-      const response = await apiClient.get<WishlistResponse>('/users/me/wishlist');
+      console.log('🌐 [useWishlist] Fetch wishlist...');
       
-      // ✅ Parsing défensif avec type narrowing
-      const items =
-        response?.data?.wishlist ||
-        response?.wishlist ||
-        (Array.isArray(response) ? response : []);
-
-      setWishlist(Array.isArray(items) ? items : []);
+      const response = await apiClient.get('/users/me/wishlist');
+      
+      // ✅ Extraire et filtrer
+      const items = response?.data?.wishlist || response?.wishlist || [];
+      const validItems = Array.isArray(items) 
+        ? items.filter((item: any) => typeof item === 'object' && item !== null && (item._id || item.id))
+        : [];
+      
+      console.log('✅ [useWishlist] Wishlist récupérée:', validItems.length, 'produits');
+      setWishlist(validItems);
     } catch (err: any) {
       console.error('❌ [useWishlist] Failed to fetch:', err);
+      setError(err?.message || 'Erreur lors du chargement');
       setWishlist([]);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, setWishlist]);
 
-  // ✅ Toggle wishlist avec typage correct
-  const toggleWishlist = useCallback(async (productId: string, product?: Product): Promise<boolean> => {
+  // ✅ Toggle wishlist - CORRECTION CRITIQUE
+  const toggleWishlist = useCallback(async (
+    productId: string, 
+    product?: Product
+  ): Promise<boolean> => {
     if (!isAuthenticated) {
-      console.warn('⚠️ [useWishlist] User not authenticated');
+      console.warn('⚠️ [useWishlist] Non authentifié');
       return false;
     }
-    // Optimistic local update if product provided
-    const currentlyIn = wishlist.some(p => p._id === productId);
-    if (product) {
-      try {
-        if (currentlyIn) removeItem(productId);
-        else addItem(product);
-      } catch {}
+
+    if (isTogglingRef.current) {
+      console.warn('⏸️ [useWishlist] Toggle déjà en cours');
+      return false;
     }
+
+    isTogglingRef.current = true;
+    console.log(`🔄 [useWishlist] Toggle ${productId}`);
 
     try {
-      // ✅ Typage explicite
-      const response = await apiClient.post<ToggleWishlistResponse>(
-        `/users/me/wishlist/${productId}`
-      );
+      // ✅ Appel API
+      const response = await apiClient.post(`/users/me/wishlist/${productId}`);
+      
+      const action = response?.data?.action || response?.action || 'unknown';
+      console.log('🎯 Action:', action);
 
-      // ✅ Mise à jour depuis la réponse serveur
-      const data = response?.data || response;
-      const newWishlist = data?.wishlist;
-
-      if (Array.isArray(newWishlist)) {
+      // ✅ CORRECTION : Mise à jour OPTIMISTE locale IMMÉDIATE
+      // Cela met à jour le store Zustand instantanément
+      const currentlyIn = wishlist.some((p: any) => p._id === productId || p.id === productId);
+      
+      if (action === 'removed') {
+        // Retrait : filtrer le produit
+        const newWishlist = wishlist.filter((p: any) => p._id !== productId && p.id !== productId);
+        console.log('➖ [useWishlist] Retrait local:', newWishlist.length, 'produits restants');
         setWishlist(newWishlist);
-      } else {
-        // Fallback : refetch complet
-        await fetchWishlist();
+      } else if (action === 'added') {
+        // Ajout : ajouter le produit si on l'a
+        if (product && !currentlyIn) {
+          const newWishlist = [...wishlist, product];
+          console.log('➕ [useWishlist] Ajout local:', newWishlist.length, 'produits');
+          setWishlist(newWishlist);
+        }
       }
 
-      return data?.action === 'added';
+      console.log('✅ Toggle terminé');
+      return true;
     } catch (err: any) {
       console.error('❌ [useWishlist] Toggle failed:', err);
-      // revert optimistic change
+      
+      // En cas d'erreur, refetch pour restaurer l'état correct
       await fetchWishlist();
+      
       return false;
+    } finally {
+      // ✅ CORRECTION CRITIQUE : Lever le flag AVANT de refetch
+      isTogglingRef.current = false;
+      
+      // ✅ Refetch après un court délai pour synchroniser avec le serveur
+      setTimeout(() => {
+        console.log('🔄 [useWishlist] Refetch post-toggle...');
+        fetchWishlist();
+      }, 300);
     }
-  }, [isAuthenticated, fetchWishlist, wishlist, addItem, removeItem, setWishlist]);
+  }, [isAuthenticated, wishlist, fetchWishlist, setWishlist]);
 
-  // ✅ Alias pour compatibilité
-  const addToWishlist = useCallback(async (productId: string): Promise<boolean> => {
-    return toggleWishlist(productId);
-  }, [toggleWishlist]);
-
-  const removeFromWishlist = useCallback(async (productId: string): Promise<boolean> => {
-    return toggleWishlist(productId);
-  }, [toggleWishlist]);
-
-  // ✅ Vérifier si un produit est dans la wishlist
+  // ✅ Vérifier si dans la wishlist
   const isInWishlist = useCallback((productId: string): boolean => {
-    return wishlist.some(p => p._id === productId);
+    return wishlist.some((p: any) => p._id === productId || p.id === productId);
   }, [wishlist]);
 
-  // ✅ Fetch initial
+  // ✅ Fetch initial - SEULEMENT quand l'authentification change
   useEffect(() => {
-    fetchWishlist();
-  }, [fetchWishlist]);
+    const prevAuth = prevAuthRef.current;
+    prevAuthRef.current = isAuthenticated;
+    
+    // Premier rendu ou changement d'auth
+    if (prevAuth === null || prevAuth !== isAuthenticated) {
+      console.log('🚀 [useWishlist] Initial fetch ou changement auth:', isAuthenticated);
+      fetchWishlist();
+    }
+  }, [isAuthenticated, fetchWishlist]);
 
   return {
     wishlist,
     loading,
+    error,
     toggleWishlist,
-    addToWishlist,
-    removeFromWishlist,
     isInWishlist,
     refetch: fetchWishlist,
+    addToWishlist: (id: string) => toggleWishlist(id),
+    removeFromWishlist: (id: string) => toggleWishlist(id),
   };
 }

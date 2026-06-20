@@ -10,6 +10,9 @@ import { STORAGE_KEYS } from '@/constants';
 import type { User, AuthPayload, ApiResponse, RegisterData } from '@/types';
 import { authApi } from '@/services';
 
+// ✅ Ré-exporter le nouveau cart store depuis ./cart
+export { useCartStore } from './cart';
+
 // ──────────────────────────────────────────────────────────────────────────
 // 🔹 AUTH STORE
 // ──────────────────────────────────────────────────────────────────────────
@@ -41,7 +44,6 @@ export const useAuthStore = create<AuthStore>()(
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
         try {
-          // authApi.login retourne AuthResponse = ApiResponse<AuthPayload>
           const response: ApiResponse<AuthPayload> = await authApi.login({ email, password });
           const authData = response.data;
           
@@ -51,10 +53,8 @@ export const useAuthStore = create<AuthStore>()(
           
           const { accessToken, user } = authData;
           
-          // Stocker au format simple pour l'intercepteur Axios
           localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify({ accessToken }));
           
-          // Cookie pour refresh token
           Cookies.set(STORAGE_KEYS.AUTH_TOKEN, accessToken, {
             expires: 7,
             secure: process.env.NODE_ENV === 'production',
@@ -174,31 +174,6 @@ export const useAuthStore = create<AuthStore>()(
 );
 
 // ──────────────────────────────────────────────────────────────────────────
-// 🔹 CART STORE
-// ──────────────────────────────────────────────────────────────────────────
-
-export interface CartStore {
-  cartCount: number;
-  setCartCount: (count: number) => void;
-  incrementCart: () => void;
-  decrementCart: () => void;
-  resetCart: () => void;
-}
-
-export const useCartStore = create<CartStore>()(
-  persist(
-    (set) => ({
-      cartCount: 0,
-      setCartCount: (count) => set({ cartCount: count }),
-      incrementCart: () => set((state) => ({ cartCount: state.cartCount + 1 })),
-      decrementCart: () => set((state) => ({ cartCount: Math.max(0, state.cartCount - 1) })),
-      resetCart: () => set({ cartCount: 0 }),
-    }),
-    { name: STORAGE_KEYS.CART }
-  )
-);
-
-// ──────────────────────────────────────────────────────────────────────────
 // 🔹 UI STORE
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -227,4 +202,4 @@ export const useUiStore = create<UiStore>()(
 // 🔹 EXPORTS CENTRALISÉS
 // ──────────────────────────────────────────────────────────────────────────
 
-//export { useAuthStore, useCartStore, useUiStore };
+// export { useAuthStore, useUiStore };

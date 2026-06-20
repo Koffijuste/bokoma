@@ -52,13 +52,28 @@ export function Header() {
 
   const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const { wishlist } = useWishlist();
-  const { cartCount } = useCartStore();
+  
+  // ✅ CORRECTION CRITIQUE : Utiliser un selector explicite
+  const cart = useCartStore((state) => state.cart);
+  const cartCount = cart?.items?.length || 0;
+
+  useEffect(() => {
+    console.log('🛒 [HEADER] cartCount depuis store:', cartCount);
+  }, [cartCount]);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   const [lastScrollY, setLastScrollY] = useState(0);
+
+  // ============================================================================
+  // 🔹 DEBUG LOGS
+  // ============================================================================
+  
+  useEffect(() => {
+    console.log('🛒 [HEADER] cartCount depuis store:', cartCount);
+  }, [cartCount]);
 
   // ============================================================================
   // 🔹 COMPUTED VALUES
@@ -276,13 +291,16 @@ export function Header() {
                 aria-label="Panier"
               >
                 <ShoppingBag className="w-5 h-5" />
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-gradient-to-br from-accent to-purple-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow-lg shadow-accent/30 px-1"
-                >
-                  {(cartCount ?? 0) > 99 ? '99+' : (cartCount ?? 0)}
-                </motion.span>
+                {cartCount > 0 && (
+                  <motion.span
+                    key={cartCount}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-gradient-to-br from-accent to-purple-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow-lg shadow-accent/30 px-1"
+                  >
+                    {cartCount > 99 ? '99+' : cartCount}
+                  </motion.span>
+                )}
               </Link>
             </motion.div>
 

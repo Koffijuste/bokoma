@@ -20,6 +20,8 @@ handlers.forEach(h => {
   const type = typeof orderController[h];
   if (type !== 'function') {
     console.error(`❌ [order.routes] ${h} is ${type} (expected function)`);
+  } else {
+    console.log(`  ✅ ${h}`);
   }
 });
 
@@ -30,7 +32,7 @@ handlers.forEach(h => {
 // ✅ Webhook CinetPay — SANS authentification
 router.post('/webhook/cinetpay', orderController.cinetpayWebhook);
 
-// ✅ Vérification publique de commande
+// ✅ Vérification publique de commande — SANS authentification
 router.get('/verify/:orderId', orderController.verifyOrderPublic);
 
 // ============================================================================
@@ -66,6 +68,9 @@ router.get('/:id', validateObjectId('id'), orderController.getOrder);
 
 // ✅ Suppression commande — admin uniquement
 router.delete('/:id', authorize('admin'), validateObjectId('id'), orderController.deleteOrder);
+
+// ❌ SUPPRIMÉ : ligne dupliquée qui causait l'erreur
+// router.get('/verify/:orderId', ctrl.verifyOrderPublic);
 
 console.log('✅ [order.routes] All routes configured');
 

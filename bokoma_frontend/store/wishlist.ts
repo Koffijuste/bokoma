@@ -1,31 +1,53 @@
 // store/wishlist.ts
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { Product } from '@/types';
 
 interface WishlistState {
   wishlist: Product[];
-  setWishlist: (items: Product[]) => void;
+  setWishlist: (wishlist: Product[]) => void;
   addItem: (product: Product) => void;
   removeItem: (productId: string) => void;
-  clear: () => void;
-  count: number;
+  clearWishlist: () => void;
+  getCount: () => number;
 }
 
-export const useWishlistStore = create<WishlistState>()(
-  persist(
-    (set, get) => ({
-      wishlist: [],
-      setWishlist: (items: Product[]) => set({ wishlist: items }),
-      addItem: (product: Product) => set((state) => ({ wishlist: [...state.wishlist, product] })),
-      removeItem: (productId: string) => set((state) => ({ wishlist: state.wishlist.filter(p => p._id !== productId) })),
-      clear: () => set({ wishlist: [] }),
-      get count() {
-        return get().wishlist.length;
-      },
-    }),
-    { name: 'bokoma-wishlist' }
-  )
-);
-
-export default useWishlistStore;
+export const useWishlistStore = create<WishlistState>((set, get) => ({
+  wishlist: [],
+  
+  setWishlist: (wishlist) => {
+    console.log('🔄 [STORE] setWishlist:', wishlist.length, 'produits');
+    set({ wishlist });
+  },
+  
+  addItem: (product) => {
+    console.log('➕ [STORE] addItem:', product.name);
+    set((state) => {
+      const exists = state.wishlist.some(p => p._id === product._id);
+      if (exists) {
+        console.log('⚠️ [STORE] Produit déjà dans la wishlist');
+        return state;
+      }
+      const newWishlist = [...state.wishlist, product];
+      console.log('✅ [STORE] Wishlist après ajout:', newWishlist.length);
+      return { wishlist: newWishlist };
+    });
+  },
+  
+  removeItem: (productId) => {
+    console.log('➖ [STORE] removeItem:', productId);
+    set((state) => {
+      const newWishlist = state.wishlist.filter(p => p._id !== productId);
+      console.log('✅ [STORE] Wishlist après retrait:', newWishlist.length);
+      return { wishlist: newWishlist };
+    });
+  },
+  
+  clearWishlist: () => {
+    console.log('🗑️ [STORE] clearWishlist');
+    set({ wishlist: [] });
+  },
+  
+  getCount: () => {
+    return get().wishlist.length;
+  },
+}));

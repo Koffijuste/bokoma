@@ -294,105 +294,174 @@ export default function DashboardPage() {
   // ============================================================================
   
   const refreshData = useCallback(async () => {
-    if (!isMountedRef.current || isRefreshing || !isAdmin) return;
-    
-    const requestId = ++requestCountRef.current;
-    setIsRefreshing(true);
-    setApiError(null);
-    setChartsLoading(true);
+  if (!isMountedRef.current || isRefreshing || !isAdmin) return;
+  
+  const requestId = ++requestCountRef.current;
+  setIsRefreshing(true);
+  setApiError(null);
+  setChartsLoading(true);
 
-    try {
-      // Requêtes parallèles
-      const [statsRes, ordersRes] = await Promise.allSettled([
-        apiClient.get<ApiResponse<StatsResponse>>('/orders/stats', { 
-          signal: AbortSignal.timeout(10000) 
-        }),
-        apiClient.get<ApiResponse<OrdersResponse>>('/orders', { 
-          params: { limit: 5, page: 1 },
-          signal: AbortSignal.timeout(10000)
-        }),
-      ]);
+  try {
+    // ✅ 4 Requêtes parallèles
+    const [statsRes, ordersRes, productsRes, usersRes] = await Promise.allSettled([
+      apiClient.get('/orders/stats', { 
+        signal: AbortSignal.timeout(10000) 
+      }),
+      apiClient.get('/orders', { 
+        params: { limit: 5, page: 1 },
+        signal: AbortSignal.timeout(10000)
+      }),
+      apiClient.get('/products', { 
+        params: { limit: 1, page: 1 },
+        signal: AbortSignal.timeout(10000)
+      }),
+      apiClient.get('/users', { 
+        params: { limit: 1, page: 1, role: 'customer' },
+        signal: AbortSignal.timeout(10000)
+      }),
+    ]);
 
-      // ✅ Parsing stats
-      if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
-        const s = statsRes.value.data.stats || statsRes.value.data;
-        
-        // Stats de base
-        setStats({
-          orders: s.totalOrders ?? s.orders ?? 0,
-          revenue: s.totalRevenue ?? s.revenue ?? 0,
-          products: s.totalProducts ?? s.products ?? 0,
-          customers: s.totalCustomers ?? s.customers ?? 0,
-        });
-        
-        // ✅ Données pour le graphique de répartition des statuts
-        if (s.byStatus && Array.isArray(s.byStatus)) {
-          const formatted = s.byStatus
-            .filter(item => STATUS_COLORS[item.status])
-            .map(item => ({
-              status: item.status,
-              count: item.count,
-              color: STATUS_COLORS[item.status],
-            }));
-          setStatusData(formatted);
-        } else {
-          // Fallback: générer des données mock si l'API ne retourne pas byStatus
-          setStatusData(generateMockStatusData(statsRes.value.data));
-        }
-        
-        // ✅ Données pour le graphique de revenu
-        if (s.revenueTrend && Array.isArray(s.revenueTrend)) {
-          const formatted = s.revenueTrend.map(item => ({
-            date: formatDate(item.date),
-            revenue: item.revenue,
-            orders: item.orders,
-          }));
-          setRevenueData(formatted);
-        } else {
-          // Fallback: générer des données mock
-          setRevenueData(generateMockRevenueData());
-        }
-      }
-
-      // ✅ Parsing commandes récentes
-      if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
-        const o = ordersRes.value.data;
-        const ordersList = o.orders || o.products || o.data?.orders || o.data?.products || [];
-        setRecentOrders(Array.isArray(ordersList) ? ordersList.slice(0, 5) : []);
-      }
-
-      // ✅ Gestion erreurs 401
-      const isAuthError = 
-        (statsRes.status === 'rejected' && (statsRes.reason as any)?.response?.status === 401) ||
-        (ordersRes.status === 'rejected' && (ordersRes.reason as any)?.response?.status === 401);
+    // ✅ Parsing stats (orders + revenue)
+    if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
+      const responseData = (statsRes.value as any).data;
+      const s = responseData.data?.stats || responseData.stats || {};
       
-      if (isAuthError) {
-        handleSessionExpired();
-        return;
+      console.log('📊 [DASHBOARD] Stats:', s);
+      
+      setStats(prev => ({
+        ...prev,
+        orders: s.totalOrders ?? s.orders ?? 0,
+        revenue: s.totalRevenue ?? s.revenue ?? 0,
+      }));
+      
+      // Graphique byStatus
+      const byStatus = responseData.data?.byStatus || s.byStatus;
+      if (byStatus && Array.isArray(byStatus)) {
+        const formatted = byStatus
+          .filter((item: any) => STATUS_COLORS[item.status])
+          .map((item: any) => ({
+            status: item.status,
+            count: item.count,
+            color: STATUS_COLORS[item.status],
+          }));
+        setStatusData(formatted);
+      } else {
+        setStatusData(generateMockStatusData({ stats: s }));
       }
-
-      // ✅ Autres erreurs
-      if (statsRes.status === 'rejected' || ordersRes.status === 'rejected') {
-        const err = statsRes.status === 'rejected' ? statsRes.reason : ordersRes.reason;
-        setApiError((err as any)?.message || 'Erreur de chargement');
-      }
-
-      setLastUpdated(new Date().toLocaleTimeString('fr-FR'));
-
-    } catch (err: any) {
-      if (isMountedRef.current && requestCountRef.current === requestId) {
-        setApiError(err?.message || 'Erreur inattendue');
-        // Fallback avec données mock en cas d'erreur API
+      
+      // Graphique revenueTrend
+      const revenueTrend = responseData.data?.revenueTrend || s.revenueTrend;
+      if (revenueTrend && Array.isArray(revenueTrend)) {
+        const formatted = revenueTrend.map((item: any) => ({
+          date: formatDate(item.date),
+          revenue: item.revenue,
+          orders: item.orders,
+        }));
+        setRevenueData(formatted);
+      } else {
         setRevenueData(generateMockRevenueData());
-        setStatusData(generateMockStatusData());
-      }
-    } finally {
-      if (isMountedRef.current && requestCountRef.current === requestId) {
-        setIsRefreshing(false);
-        setChartsLoading(false);
       }
     }
-  }, [isAdmin]);
+
+    // ✅ Parsing commandes récentes
+    if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
+      const responseData = (ordersRes.value as any).data;
+      const ordersData = responseData.data || responseData;
+      const ordersList = ordersData.orders || ordersData.products || [];
+      
+      console.log('📦 [DASHBOARD] Commandes:', ordersList.length);
+      setRecentOrders(Array.isArray(ordersList) ? ordersList.slice(0, 5) : []);
+    }
+
+  // ✅ Parsing nombre de produits
+console.log('🔍 [DASHBOARD] productsRes status:', productsRes.status);
+console.log('🔍 [DASHBOARD] productsRes.value:', productsRes.value);
+
+if (productsRes.status === 'fulfilled') {
+  console.log('✅ [DASHBOARD] productsRes fulfilled');
+  
+  // ✅ La réponse est directement au niveau racine (pas dans .data)
+  const responseData = (productsRes.value as any);
+  
+  console.group('📦 [DASHBOARD] Parsing Produits');
+  console.log('📥 Réponse complète:', responseData);
+  console.log('🔍 total:', responseData.total);
+  console.log('🔍 results:', responseData.results);
+  console.log('🔍 Clés disponibles:', Object.keys(responseData));
+  
+  // ✅ Extraire le total directement depuis la racine
+  let totalProducts = 0;
+  
+  if (responseData.total !== undefined) {
+    totalProducts = responseData.total;
+    console.log('✅ Total depuis responseData.total:', totalProducts);
+  } else if (responseData.data?.total !== undefined) {
+    totalProducts = responseData.data.total;
+    console.log('✅ Total depuis responseData.data.total:', totalProducts);
+  } else if (Array.isArray(responseData.products)) {
+    totalProducts = responseData.products.length;
+    console.log('✅ Total depuis products.length:', totalProducts);
+  } else if (Array.isArray(responseData)) {
+    totalProducts = responseData.length;
+    console.log('✅ Total depuis array length:', totalProducts);
+  } else {
+    console.warn('⚠️ Impossible de trouver le total des produits');
+  }
+  
+  console.log('📦 [DASHBOARD] Produits:', totalProducts);
+  setStats(prev => ({ ...prev, products: totalProducts }));
+  console.groupEnd();
+} else {
+  console.error('❌ [DASHBOARD] productsRes rejected:', productsRes.reason);
+}
+
+    // ✅ Parsing nombre de clients
+    if (usersRes.status === 'fulfilled' && usersRes.value?.data) {
+      const responseData = (usersRes.value as any).data;
+      const usersData = responseData.data || responseData;
+      const totalCustomers = usersData.pagination?.total || usersData.total || 0;
+      
+      console.log('👥 [DASHBOARD] Clients:', totalCustomers);
+      setStats(prev => ({ ...prev, customers: totalCustomers }));
+    }
+
+    // ✅ Gestion erreurs 401
+    const isAuthError = [statsRes, ordersRes, productsRes, usersRes].some(
+      res => res.status === 'rejected' && (res.reason as any)?.response?.status === 401
+    );
+    
+    if (isAuthError) {
+      handleSessionExpired();
+      return;
+    }
+
+    // ✅ Autres erreurs
+    const hasError = [statsRes, ordersRes, productsRes, usersRes].some(
+      res => res.status === 'rejected'
+    );
+    
+    if (hasError) {
+      const err = [statsRes, ordersRes, productsRes, usersRes].find(
+        res => res.status === 'rejected'
+      )?.reason;
+      setApiError((err as any)?.message || 'Erreur de chargement');
+    }
+
+    setLastUpdated(new Date().toLocaleTimeString('fr-FR'));
+
+  } catch (err: any) {
+    if (isMountedRef.current && requestCountRef.current === requestId) {
+      setApiError(err?.message || 'Erreur inattendue');
+      setRevenueData(generateMockRevenueData());
+      setStatusData(generateMockStatusData());
+    }
+  } finally {
+    if (isMountedRef.current && requestCountRef.current === requestId) {
+      setIsRefreshing(false);
+      setChartsLoading(false);
+    }
+  }
+}, [isAdmin]);
 
   // ============================================================================
   // 🔹 AUTO-REFRESH

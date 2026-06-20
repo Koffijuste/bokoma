@@ -256,24 +256,60 @@ export const orderApi = {
       params: filters,
     }),
 
-  updateOrderStatus: (id: string, status: string, note?: string) =>
+  updateOrderStatus: (id: string, status: string, note?: string, trackingNumber?: string) =>
     apiClient.patch<ApiResponse<{ order: Order }>>(API_ENDPOINTS.ORDERS.UPDATE_STATUS(id), {
       status,
       note,
+      trackingNumber,
     }),
 
-  getOrderStats: () =>
+  getOrderStats: (params?: { days?: number }) =>
     apiClient.get<ApiResponse<{
       stats: {
         totalOrders: number;
         totalRevenue: number;
         avgOrder: number;
+        byStatus: Array<{ _id: string; count: number }>;
+        revenueTrend: Array<{ date: string; revenue: number; orders: number }>;
       };
-      byStatus: Array<{ _id: string; count: number }>;
-    }>>(API_ENDPOINTS.ORDERS.STATS),
+    }>>(API_ENDPOINTS.ORDERS.STATS, { params }),
 
   cancelOrder: (id: string, reason?: string) =>
     apiClient.patch<ApiResponse<{ order: Order }>>(API_ENDPOINTS.ORDERS.CANCEL(id), { reason }),
+
+  deleteOrder: (id: string) =>
+    apiClient.delete<ApiResponse>(API_ENDPOINTS.ORDERS.DETAIL(id)),
+
+  // ✅ NOUVEAU : Vérification publique du paiement (SANS AUTH)
+  verifyPaymentPublic: async (params: {
+    orderId?: string | null;
+    merchantTransactionId?: string | null;
+    transactionId?: string | null;
+  }) => {
+    const { orderId, merchantTransactionId, transactionId } = params;
+    
+    // ✅ L'API backend attend l'orderId dans l'URL : /orders/verify/:orderId
+    const idToVerify = orderId || merchantTransactionId || transactionId;
+    
+    if (!idToVerify) {
+      throw new Error('Identifiant de commande manquant');
+    }
+    
+    const response = await apiClient.get<any>(`/orders/verify/${idToVerify}`);
+    return response;
+  },
+
+  // ✅ NOUVEAU : Récupérer une commande par ID (admin)
+  getOrderById: async (orderId: string) => {
+    const response = await apiClient.get<ApiResponse<{ order: Order }>>(`/orders/${orderId}`);
+    return response;
+  },
+
+  // ✅ NOUVEAU : Mise à jour du statut avec tracking
+  updateOrderTracking: (id: string, trackingNumber: string) =>
+    apiClient.patch<ApiResponse<{ order: Order }>>(API_ENDPOINTS.ORDERS.UPDATE_STATUS(id), {
+      trackingNumber,
+    }),
 };
 
 // ============================================================================

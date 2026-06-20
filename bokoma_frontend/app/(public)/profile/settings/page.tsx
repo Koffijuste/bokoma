@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMounted } from '@/hooks/useMounted';
 import { apiClient } from '@/services/api';
 import { ROUTES } from '@/constants';
-
+import axios from 'axios';
 // ============================================================================
 // 🔹 TYPES
 // ============================================================================
@@ -371,35 +371,120 @@ export default function ProfileSettingsPage() {
     setAvatarPreview(URL.createObjectURL(file));
   };
 
-  const handleAvatarSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+const handleAvatarSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    if (!avatarFile) {
-      showError('Sélectionnez une image');
-      return;
-    }
+  if (!avatarFile) {
+    showError('Sélectionnez une image');
+    return;
+  }
 
-    try {
-      setSaving(true);
-      const formData = new FormData();
-      formData.append('avatar', avatarFile);
+  try {
+    setSaving(true);
+    const formData = new FormData();
+    formData.append('avatar', avatarFile);
 
-      // Backend expects PATCH /users/me/avatar — use PATCH with FormData
-      await apiClient.patch('/users/me/avatar', formData);
-      showSuccess('Avatar mis à jour');
-      
-      // Cleanup
-      if (avatarPreview) {
-        URL.revokeObjectURL(avatarPreview);
+    console.log('📤 [AVATAR] Upload en cours...');
+    console.log('📦 Fichier:', avatarFile.name, avatarFile.size, 'bytes');
+
+    // Récupérer le token
+    let token: string | null = null;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('bokoma-auth-storage');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          token = parsed?.state?.accessToken || null;
+        }
+        if (!token) {
+          const auth = localStorage.getItem('auth');
+          if (auth) {
+            const authState = JSON.parse(auth);
+            token = authState?.accessToken || null;
+          }
+        }
+      } catch {
+        token = null;
       }
-      setAvatarFile(null);
-      setAvatarPreview(null);
-    } catch (err: any) {
-      showError(err?.response?.data?.message || err?.message || 'Erreur lors de l\'upload');
-    } finally {
-      setSaving(false);
     }
-  };
+
+    // Upload de l'avatar
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/users/me/avatar`,
+      {
+        method: 'PATCH',
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+        credentials: 'include',
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Erreur ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ [AVATAR] Upload réussi:', result);
+
+    // ✅ CORRECTION : Rafraîchir le profil utilisateur
+    console.log('🔄 [AVATAR] Rafraîchissement du profil...');
+    const profileResponse = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/users/me`,
+      {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      }
+    );
+
+    if (profileResponse.ok) {
+      const profileData = await profileResponse.json();
+      console.log('✅ [AVATAR] Profil rafraîchi:', profileData);
+      
+      // ✅ Mettre à jour le localStorage avec le nouvel avatar
+      const stored = localStorage.getItem('bokoma-auth-storage');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.state?.user && profileData?.data?.user) {
+          parsed.state.user.avatar = profileData.data.user.avatar;
+          localStorage.setItem('bokoma-auth-storage', JSON.stringify(parsed));
+          console.log('✅ [AVATAR] localStorage mis à jour');
+        }
+      }
+      
+      const auth = localStorage.getItem('auth');
+      if (auth) {
+        const authState = JSON.parse(auth);
+        if (authState?.user && profileData?.data?.user) {
+          authState.user.avatar = profileData.data.user.avatar;
+          localStorage.setItem('auth', JSON.stringify(authState));
+          console.log('✅ [AVATAR] auth localStorage mis à jour');
+        }
+      }
+    }
+
+    showSuccess('Avatar mis à jour');
+    
+    // Cleanup
+    if (avatarPreview) {
+      URL.revokeObjectURL(avatarPreview);
+    }
+    setAvatarFile(null);
+    setAvatarPreview(null);
+    
+    // ✅ Recharger la page pour forcer le refresh du contexte
+    window.location.reload();
+  } catch (err: any) {
+    console.error('❌ [AVATAR] Erreur:', err);
+    showError(err?.message || 'Erreur lors de l\'upload');
+  } finally {
+    setSaving(false);
+  }
+};
 
   const cancelAvatarChange = () => {
     if (avatarPreview) {
@@ -1007,7 +1092,7 @@ export default function ProfileSettingsPage() {
                       <p className="font-medium mb-1">Recommandations</p>
                       <ul className="text-xs text-blue-600/80 space-y-1 list-disc list-inside">
                         <li>Format : JPG, PNG ou WEBP</li>
-                        <li>Taille maximale : 2MB</li>
+                        <li>Taille maximale : 10MB</li>
                         <li>Dimensions recommandées : 400x400px</li>
                       </ul>
                     </div>

@@ -23,6 +23,8 @@ const mapUploadedFileToImage = (file, index, altText) => {
     url,
     alt: altText,
     isPrimary: index === 0,
+    publicId: file?.filename,
+    isUploaded: true,
   };
 };
 
@@ -45,6 +47,38 @@ const safeParseJSON = (value, fallback = null) => {
   }
 };
 
+// ✅ NOUVEAU : Extraire les images existantes du format indexé
+const extractExistingImages = (body) => {
+  const existingImages = [];
+  
+  // Format 1 : existingImages[0], existingImages[1], etc.
+  Object.keys(body).forEach(key => {
+    const match = key.match(/^existingImages\[(\d+)\]$/);
+    if (match) {
+      const url = body[key];
+      if (url && typeof url === 'string' && url.trim()) {
+        existingImages.push({ url: url.trim() });
+      }
+    }
+  });
+  
+  // Format 2 : existingImages en JSON
+  if (existingImages.length === 0 && body.existingImages) {
+    const parsed = safeParseJSON(body.existingImages, []);
+    if (Array.isArray(parsed)) {
+      parsed.forEach(img => {
+        if (typeof img === 'string' && img.trim()) {
+          existingImages.push({ url: img.trim() });
+        } else if (img?.url) {
+          existingImages.push({ url: img.url.trim() });
+        }
+      });
+    }
+  }
+  
+  return existingImages;
+};
+
 // ─────────────────────────────────────────────────────────────
 // GET /api/v1/products
 exports.getProducts = async (req, res) => {
@@ -56,10 +90,8 @@ exports.getProducts = async (req, res) => {
       const input = String(req.query.category).toLowerCase().trim();
       let categoryDoc = null;
 
-      // Essai 1 : Match exact du slug
       categoryDoc = await Category.findOne({ slug: input, isActive: true }).select('_id');
 
-      // Essai 2 : Regex pour gérer les suffixes
       if (!categoryDoc) {
         categoryDoc = await Category.findOne({
           slug: { $regex: `^${input}(-|$)`, $options: 'i' },
@@ -67,7 +99,6 @@ exports.getProducts = async (req, res) => {
         }).select('_id');
       }
 
-      // Essai 3 : Si c'est déjà un ObjectId
       if (!categoryDoc && isValidObjectId(input)) {
         categoryDoc = await Category.findOne({ _id: input, isActive: true }).select('_id');
       }
@@ -184,6 +215,10 @@ exports.createProduct = async (req, res, _next) => {
   let tempFiles = req.files || [];
 
   try {
+    console.group('📦 [createProduct] Création produit');
+    console.log('📝 Body:', req.body);
+    console.log('📎 Files:', tempFiles.length);
+
     // ✅ 1. VALIDATION DES CHAMPS REQUIS
     const { name, description, category, basePrice, type } = req.body;
 
@@ -292,12 +327,17 @@ exports.createProduct = async (req, res, _next) => {
       createdBy: req.user?.userId,
     };
 
+    console.log('📊 Données produit:', {
+      name: productData.name,
+      totalStock: productData.totalStock,
+      imagesCount: productData.images.length,
+    });
+
     const product = await Product.create(productData);
     await product.populate('category', 'name slug');
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('✅ [createProduct] Product created:', product._id);
-    }
+    console.log('✅ Produit créé:', product._id, 'Stock:', product.totalStock);
+    console.groupEnd();
 
     res.status(201).json({
       success: true,
@@ -309,6 +349,7 @@ exports.createProduct = async (req, res, _next) => {
     await cleanupTempFiles(tempFiles);
 
     console.error('❌ [createProduct] Error:', err.message);
+    console.groupEnd();
 
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(e => e.message);
@@ -331,12 +372,11 @@ exports.createProduct = async (req, res, _next) => {
 // ─────────────────────────────────────────────────────────────
 // PATCH /api/v1/products/:id [admin/manager]
 exports.updateProduct = async (req, res) => {
+  console.group('📝 [updateProduct] Mise à jour produit');
+  console.log('🆔 ID:', req.params.id);
+  console.log('📝 Body keys:', Object.keys(req.body));
+  console.log('📎 Files:', req.files?.length || 0);
   
-  console.log('📝 [updateProduct] Received:', {
-    params: req.params,
-    body: req.body,
-    files: req.files?.length || 0,
-  });
   let tempFiles = req.files || [];
 
   try {
@@ -351,9 +391,16 @@ exports.updateProduct = async (req, res) => {
       throw new AppError('Produit introuvable', 404);
     }
 
+    console.log('📦 Produit actuel:', {
+      name: product.name,
+      totalStock: product.totalStock,
+      imagesCount: product.images?.length || 0,
+    });
+
     // ✅ Générer un nouveau slug si le nom change
     if (req.body.name && req.body.name !== product.name) {
       req.body.slug = await generateSlug(req.body.name, Product);
+      console.log('🔗 Nouveau slug:', req.body.slug);
     }
 
     // ✅ Parser les variantes
@@ -366,32 +413,29 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
-    // ✅ Gestion des images
-    if (req.files?.length || req.body.imageUrls || req.body.existingImages) {
-      const existingImages = product.images || [];
+    // ✅ CORRECTION CRITIQUE : Gestion des images
+    const existingImagesFromRequest = extractExistingImages(req.body);
+    console.log('🖼️ Images existantes reçues:', existingImagesFromRequest.length);
+    console.log('🖼️ Nouvelles images uploadées:', tempFiles.length);
+
+    if (tempFiles.length > 0 || existingImagesFromRequest.length > 0 || req.body.imageUrls) {
+      const oldImages = product.images || [];
       
-      // Parser les images existantes conservées
-      let keptImages = [];
-      if (req.body.existingImages) {
-        const parsed = safeParseJSON(req.body.existingImages, []);
-        if (Array.isArray(parsed)) {
-          keptImages = parsed
-            .filter(img => img?.url)
-            .map(img => ({
-              url: img.url,
-              alt: img.alt || product.name,
-              publicId: img.publicId,
-              isPrimary: false,
-            }));
-        }
-      }
+      // ✅ 1. Images existantes conservées
+      let keptImages = existingImagesFromRequest.map((img, idx) => ({
+        url: img.url,
+        alt: img.alt || product.name,
+        publicId: img.publicId,
+        isPrimary: idx === 0,
+        isUploaded: true,
+      }));
       
-      // Nouvelles images uploadées
-      const newUploadedImages = req.files?.map((f, i) => 
+      // ✅ 2. Nouvelles images uploadées
+      const newUploadedImages = tempFiles.map((f, i) => 
         mapUploadedFileToImage(f, keptImages.length + i, req.body.name || product.name)
-      ) || [];
+      );
       
-      // Images manuelles via URLs
+      // ✅ 3. Images manuelles via URLs
       let newManualImages = [];
       if (req.body.imageUrls) {
         const parsed = safeParseJSON(req.body.imageUrls, []);
@@ -402,32 +446,53 @@ exports.updateProduct = async (req, res) => {
               url: img.url.trim(),
               alt: img.alt || req.body.name || product.name,
               isPrimary: keptImages.length + newUploadedImages.length === 0 && idx === 0,
+              isUploaded: true,
             }));
         }
       }
       
-      // Combiner toutes les images
+      // ✅ 4. Combiner toutes les images
       req.body.images = [...keptImages, ...newUploadedImages, ...newManualImages];
       
-      // Marquer la première image comme principale
+      // ✅ 5. Marquer la première image comme principale
       if (req.body.images.length > 0) {
         req.body.images[0].isPrimary = true;
       }
       
-      // ✅ Supprimer les anciennes images non conservées
+      console.log('🖼️ Total images finales:', req.body.images.length);
+      
+      // ✅ 6. Supprimer les anciennes images non conservées
       const keptUrls = req.body.images.map(img => img.url);
-      const imagesToDelete = existingImages
+      const imagesToDelete = oldImages
         .filter(img => !keptUrls.includes(img.url))
         .map(img => img.url);
       
       if (imagesToDelete.length > 0) {
+        console.log('🗑️ Suppression de', imagesToDelete.length, 'ancienne(s) image(s)');
         await deleteImages(imagesToDelete).catch(err => {
           console.warn('⚠️ Failed to delete old images:', err.message);
         });
       }
     }
 
-    const updated = await Product.findByIdAndUpdate(req.params.id, req.body, { 
+    // ✅ Mise à jour du produit
+    const updateData = { ...req.body };
+    
+    // Nettoyer les champs qui ne doivent pas être mis à jour
+    delete updateData.existingImages;
+    Object.keys(updateData).forEach(key => {
+      if (key.startsWith('existingImages[')) {
+        delete updateData[key];
+      }
+    });
+
+    console.log('💾 Mise à jour avec:', {
+      name: updateData.name,
+      totalStock: updateData.totalStock,
+      imagesCount: updateData.images?.length || 0,
+    });
+
+    const updated = await Product.findByIdAndUpdate(req.params.id, updateData, { 
       returnDocument: 'after', 
       runValidators: true,
       new: true,
@@ -435,9 +500,10 @@ exports.updateProduct = async (req, res) => {
     
     await updated.populate('category', 'name slug');
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('✅ [updateProduct] Product updated:', updated._id);
-    }
+    console.log('✅ Produit mis à jour:', updated._id);
+    console.log('✅ Stock final:', updated.totalStock);
+    console.log('✅ Images finales:', updated.images?.length || 0);
+    console.groupEnd();
 
     res.json({ 
       success: true, 
@@ -446,10 +512,10 @@ exports.updateProduct = async (req, res) => {
     });
 
   } catch (err) {
-    // ✅ Cleanup des fichiers en cas d'erreur
     await cleanupTempFiles(tempFiles);
 
     console.error('❌ [updateProduct] Error:', err.message);
+    console.groupEnd();
 
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(e => e.message);

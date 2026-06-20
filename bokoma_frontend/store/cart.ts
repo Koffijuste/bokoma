@@ -1,83 +1,31 @@
+// store/cart.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-
-interface CartItem {
-  productId: string;
-  quantity: number;
-}
+import type { Cart } from '@/types';
 
 interface CartState {
-  items: CartItem[];
-  cartCount: number; // number of distinct items in cart
-  setCartCount: (count: number) => void;
-  incrementCart: () => void;
-  decrementCart: () => void;
-  addItem: (productId: string, quantity?: number) => void;
-  removeItem: (productId: string) => void;
+  cart: Cart | null;
+  setCart: (cart: Cart | null) => void;
   clearCart: () => void;
 }
 
 export const useCartStore = create<CartState>()(
   persist(
     (set) => ({
-      items: [],
-      cartCount: 0,
+      cart: null,
 
-      setCartCount: (count: number) => set({ cartCount: count }),
+      setCart: (cart) => {
+        console.log('🔄 [CART STORE] setCart, items:', cart?.items?.length || 0);
+        set({ cart });
+      },
 
-      incrementCart: () => set((state) => ({ cartCount: state.cartCount + 1 })),
-
-      decrementCart: () => set((state) => ({ cartCount: Math.max(0, state.cartCount - 1) })),
-
-      addItem: (productId: string, quantity = 1) =>
-        set((state) => {
-          const existing = state.items.find((item) => item.productId === productId);
-          let newItems;
-
-          if (existing) {
-            newItems = state.items.map((item) =>
-              item.productId === productId ? { ...item, quantity: item.quantity + quantity } : item
-            );
-          } else {
-            newItems = [...state.items, { productId, quantity }];
-          }
-
-          return {
-            items: newItems,
-            // Count distinct items (length) instead of summing quantities
-            cartCount: newItems.length,
-          };
-        }),
-
-      removeItem: (productId: string) =>
-        set((state) => {
-          const newItems = state.items.filter((item) => item.productId !== productId);
-          return {
-            items: newItems,
-            // Count distinct items
-            cartCount: newItems.length,
-          };
-        }),
-
-      clearCart: () => set({ items: [], cartCount: 0 }),
+      clearCart: () => {
+        console.log('🗑️ [CART STORE] clearCart');
+        set({ cart: null });
+      },
     }),
     {
       name: 'bokoma-cart',
-      // When rehydrating from storage, recompute cartCount from the saved items
-      onRehydrateStorage: () => (state) => {
-        try {
-          const persisted = (state as any) || {};
-          const items = persisted?.items || (persisted?.state && persisted.state.items) || [];
-          const count = Array.isArray(items) ? items.length : 0;
-          // update store's cartCount after rehydrate
-          const store = useCartStore.getState();
-          if (store && typeof store.setCartCount === 'function') {
-            store.setCartCount(count);
-          }
-        } catch (e) {
-          // ignore
-        }
-      },
     }
   )
 );

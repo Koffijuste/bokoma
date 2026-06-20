@@ -1,7 +1,7 @@
 // app/(public)/wishlist/page.tsx
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Heart, ShoppingCart, Trash2, Eye, AlertCircle, Loader2, 
@@ -41,30 +41,61 @@ const getProductImage = (product: Product): string => {
 // ============================================================================
 
 export default function WishlistPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const mounted = useMounted();
   
   // ✅ Utilise le hook useWishlist qui fetch déjà correctement
   const { 
     wishlist, 
     loading: wishlistLoading, 
+    error: wishlistError,
     removeFromWishlist,
     toggleWishlist,
+    refreshWishlist,
   } = useWishlist();
 
   const [addingToCart, setAddingToCart] = useState<Set<string>>(new Set());
   const [addingAllToCart, setAddingAllToCart] = useState(false);
 
   // ============================================================================
+  // 🔹 DEBUG LOGS
+  // ============================================================================
+
+  useEffect(() => {
+    console.group('🔍 [WISHLIST DEBUG] État du composant');
+    console.log('📍 mounted:', mounted);
+    console.log('👤 isAuthenticated:', isAuthenticated);
+    console.log('👤 user:', user);
+    console.log('⏳ authLoading:', authLoading);
+    console.log('⏳ wishlistLoading:', wishlistLoading);
+    console.log('📦 wishlist:', wishlist);
+    console.log('📦 wishlist.length:', wishlist.length);
+    console.log('❌ wishlistError:', wishlistError);
+    console.groupEnd();
+  }, [mounted, isAuthenticated, user, authLoading, wishlistLoading, wishlist, wishlistError]);
+
+  useEffect(() => {
+    console.log('🔄 [WISHLIST DEBUG] Wishlist mise à jour:', wishlist);
+    if (wishlist.length > 0) {
+      console.log('📦 [WISHLIST DEBUG] Premier produit:', wishlist[0]);
+      console.log('🖼️ [WISHLIST DEBUG] Images du premier produit:', wishlist[0].images);
+    }
+  }, [wishlist]);
+
+  // ============================================================================
   // 🔹 COMPUTED VALUES
   // ============================================================================
 
   const totalValue = useMemo(() => {
-    return wishlist.reduce((sum, product) => sum + (product.basePrice || 0), 0);
+    const value = wishlist.reduce((sum, product) => sum + (product.basePrice || 0), 0);
+    console.log('💰 [WISHLIST DEBUG] Valeur totale calculée:', value);
+    return value;
   }, [wishlist]);
 
   const inStockCount = useMemo(() => {
-    return wishlist.filter(p => (p.totalStock || 0) > 0).length;
+    const count = wishlist.filter(p => (p.totalStock || 0) > 0).length;
+    console.log('📊 [WISHLIST DEBUG] Produits en stock:', count);
+    return count;
   }, [wishlist]);
 
   // ============================================================================
@@ -72,7 +103,9 @@ export default function WishlistPage() {
   // ============================================================================
 
   const handleRemoveFromWishlist = useCallback(async (productId: string, productName: string) => {
+    console.log('🗑️ [WISHLIST DEBUG] Suppression du produit:', productId, productName);
     const success = await removeFromWishlist(productId);
+    console.log('✅ [WISHLIST DEBUG] Suppression réussie:', success);
     if (success) {
       toast.success(`${productName} retiré des favoris`);
     } else {
@@ -81,6 +114,7 @@ export default function WishlistPage() {
   }, [removeFromWishlist]);
 
   const handleAddToCart = useCallback(async (product: Product) => {
+    console.log('🛒 [WISHLIST DEBUG] Ajout au panier:', product);
     if ((product.totalStock || 0) <= 0) {
       toast.error(`${product.name} est en rupture de stock`);
       return;
@@ -152,6 +186,7 @@ export default function WishlistPage() {
   // ============================================================================
 
   if (!mounted || authLoading || wishlistLoading) {
+    console.log('⏳ [WISHLIST DEBUG] Affichage du loader');
     return (
       <div className="min-h-screen flex items-center justify-center px-4 py-12">
         <div className="flex flex-col items-center gap-3">
@@ -167,6 +202,7 @@ export default function WishlistPage() {
   // ============================================================================
 
   if (!isAuthenticated) {
+    console.log('🔒 [WISHLIST DEBUG] Utilisateur non authentifié');
     return (
       <div className="min-h-screen flex items-center justify-center px-4 py-12">
         <motion.div
@@ -192,8 +228,42 @@ export default function WishlistPage() {
   }
 
   // ============================================================================
+  // 🔹 ERROR STATE
+  // ============================================================================
+
+  if (wishlistError) {
+    console.error('❌ [WISHLIST DEBUG] Erreur:', wishlistError);
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 py-12">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center max-w-md"
+        >
+          <div className="w-20 h-20 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-10 h-10 text-destructive" />
+          </div>
+          <h2 className="text-2xl font-bold mb-3">Erreur de chargement</h2>
+          <p className="text-muted-foreground mb-6">
+            {wishlistError}
+          </p>
+          <Button 
+            variant="primary" 
+            size="lg"
+            onClick={() => refreshWishlist()}
+          >
+            Réessayer
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ============================================================================
   // 🔹 RENDER
   // ============================================================================
+
+  console.log('🎨 [WISHLIST DEBUG] Rendu de la page - wishlist.length:', wishlist.length);
 
   return (
     <div className="min-h-screen bg-background px-4 py-8">
@@ -281,6 +351,14 @@ export default function WishlistPage() {
                 const isOutOfStock = (product.totalStock || 0) === 0;
                 const isAdding = addingToCart.has(product._id);
 
+                console.log(`📦 [WISHLIST DEBUG] Produit ${index}:`, {
+                  id: product._id,
+                  name: product.name,
+                  imageUrl,
+                  isOutOfStock,
+                  stock: product.totalStock,
+                });
+
                 return (
                   <motion.div
                     key={product._id}
@@ -299,6 +377,7 @@ export default function WishlistPage() {
                           alt={product.name}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                           onError={(e) => {
+                            console.warn(`⚠️ [WISHLIST DEBUG] Erreur chargement image:`, imageUrl);
                             (e.target as HTMLImageElement).src = '/placeholder-product.svg';
                           }}
                         />

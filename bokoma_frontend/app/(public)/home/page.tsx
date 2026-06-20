@@ -12,6 +12,8 @@ import NextImage from 'next/image'; // ✅ Renommé pour éviter conflit avec ne
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants';
 
+
+
 // 🎯 CONFIGURATION CENTRALE DES IMAGES
 export const IMAGE_CONFIG = {
   hero: {
@@ -100,7 +102,7 @@ const SafeImage = ({
 }) => {
   const [imgSrc, setImgSrc] = useState(src);
   const isExternal = src.startsWith('http');
-  
+
   // Pour les URLs externes : utiliser img classique (évite config next.config.js)
   if (isExternal) {
     return (
@@ -133,6 +135,10 @@ const SafeImage = ({
       }}
     />
   );
+
+  useEffect(() => {
+    console.log('HomePage mounted');
+  }, []);
 };
 
 export default function HomePage() {

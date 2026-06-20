@@ -1,3 +1,4 @@
+// app/(public)/products/[slug]/page.tsx
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -8,6 +9,8 @@ import { ArrowLeft, Heart, ShoppingCart, Star, Check, AlertCircle, Loader2 } fro
 import { useFetch } from '@/hooks';
 import { productApi } from '@/services';
 import { useCart } from '@/hooks/useCart';
+import { useWishlist } from '@/hooks/useWishlist';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
@@ -37,12 +40,13 @@ export default function ProductDetailsPage() {
   const slug = typeof params?.slug === 'string' ? params.slug : '';
   
   const { addItem } = useCart();
+  const { isAuthenticated } = useAuth();
+  const { isInWishlist, toggleWishlist } = useWishlist();
   
   // États
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
-  const [wishlisted, setWishlisted] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
 
   // Fetch produit
@@ -54,17 +58,28 @@ export default function ProductDetailsPage() {
   // ✅ Extraction robuste du produit
   const product = useMemo(() => extractProduct(apiResponse), [apiResponse]);
 
+  // ✅ Récupérer l'ID du produit
+  const productId = product?._id || (product as any)?.id;
+
+  // ✅ Vérifier si le produit est dans la wishlist
+  const wishlisted = useMemo(() => {
+    if (!productId) return false;
+    return isInWishlist(productId);
+  }, [productId, isInWishlist]);
+
   // 🔍 Debug en dev
   useEffect(() => {
     if (process.env.NODE_ENV === 'development' && product) {
-      console.log('✅ Product loaded:', {
-        id: product._id || product.id,
-        name: product.name,
-        basePrice: product.basePrice,
-        hasImages: product.images?.length > 0,
-      });
+      console.group('✅ [PRODUCT DETAILS] Produit chargé');
+      console.log('📦 ID:', productId);
+      console.log('📝 Nom:', product.name);
+      console.log('💰 Prix:', product.basePrice);
+      console.log('🖼️ Images:', product.images?.length || 0);
+      console.log('❤️ Dans wishlist:', wishlisted);
+      console.log('👤 Authentifié:', isAuthenticated);
+      console.groupEnd();
     }
-  }, [product]);
+  }, [product, productId, wishlisted, isAuthenticated]);
 
   // Image principale optimisée Cloudinary
   const currentImage = useMemo(() => {
@@ -79,51 +94,118 @@ export default function ProductDetailsPage() {
 
   // ───────── ACTIONS ─────────
 
+  const handleAddToCart = useCallback(async () => {
+    console.group('🛒 [PRODUCT DETAILS] Ajout au panier');
+    console.log('📦 Produit:', product?.name);
+    console.log('🆔 ID:', productId);
+    console.log('📏 Taille:', selectedSize);
+    console.log('🔢 Quantité:', quantity);
+    
+    if (!productId) {
+      console.error('❌ Product ID missing:', { product, apiResponse });
+      toast.error('Produit non chargé correctement');
+      console.groupEnd();
+      return;
+    }
 
-const handleAddToCart = useCallback(async () => {
-  // ✅ Récupérer l'ID avec fallback robuste
-  const productId = product?._id || (product as any)?.id;
-  
-  if (!productId) {
-    console.error('❌ Product ID missing:', { product, apiResponse });
-    toast.error('Produit non chargé correctement');
-    return;
-  }
+    // ✅ Validation pointure
+    const hasSizeVariants = product.variants?.some((v: any) => v.size);
+    if (hasSizeVariants && !selectedSize) {
+      toast.error('Veuillez sélectionner une pointure');
+      console.log('⚠️ Pointure non sélectionnée');
+      console.groupEnd();
+      return;
+    }
 
-  // ✅ Validation pointure
-  const hasSizeVariants = product.variants?.some((v: any) => v.size);
-  if (hasSizeVariants && !selectedSize) {
-    toast.error('Veuillez sélectionner une pointure');
-    return;
-  }
+    setIsAdding(true);
+    try {
+      console.log('🔄 Appel de addItem...');
+      await addItem({
+        product: productId,
+        size: selectedSize || undefined,
+        quantity,
+      });
+      console.log('✅ Produit ajouté au panier');
+      toast.success('Produit ajouté au panier 🛒');
+    } catch (err: any) {
+      console.error('❌ Add to cart error:', err);
+      const message = err?.response?.data?.message || err?.message || 'Impossible d\'ajouter au panier';
+      
+      // Vérifier si c'est une erreur "produit déjà existant"
+      if (message.includes('déjà') || message.includes('exist')) {
+        console.log('ℹ️ Produit déjà dans le panier, quantité augmentée');
+        toast.info('Quantité augmentée dans le panier');
+      } else {
+        toast.error(message);
+      }
+    } finally {
+      setIsAdding(false);
+      console.groupEnd();
+    }
+  }, [product, productId, selectedSize, quantity, addItem, apiResponse]);
 
-  setIsAdding(true);
-  try {
-    // ✅ CORRECTION CRITIQUE : Passer un OBJET avec la clé 'product'
-    await addItem({
-      product: productId,  // ← Clé 'product' requise par useCart
-      size: selectedSize || undefined,
-      quantity,
-    });
-    toast.success('Produit ajouté au panier 🛒');
-  } catch (err: any) {
-    console.error('❌ Add to cart error:', err);
-    toast.error(err?.message || 'Impossible d\'ajouter au panier');
-  } finally {
-    setIsAdding(false);
-  }
-}, [product, apiResponse, selectedSize, quantity, addItem]);
+  // ✅ CORRECTION CRITIQUE : Utiliser le hook useWishlist avec gestion authentification
+  const handleWishlist = useCallback(async () => {
+    console.group('❤️ [PRODUCT DETAILS] Toggle wishlist');
+    console.log('📦 Produit:', product?.name);
+    console.log('🆔 ID:', productId);
+    console.log('👤 isAuthenticated:', isAuthenticated);
+    
+    if (!productId) {
+      console.error('❌ Product ID manquant');
+      toast.error('Produit non chargé');
+      console.groupEnd();
+      return;
+    }
 
-  const handleWishlist = useCallback(() => {
-    setWishlisted((s) => !s);
-    toast.success(wishlisted ? 'Supprimé des favoris' : 'Ajouté aux favoris ❤️');
-  }, [wishlisted]);
+    if (!isAuthenticated) {
+      console.log('🔒 Utilisateur non authentifié');
+      toast.error('Veuillez vous connecter pour ajouter aux favoris');
+      router.push(`/auth/login?from=/products/${slug}`);
+      console.groupEnd();
+      return;
+    }
+
+    const wasInWishlist = isInWishlist(productId);
+    console.log('📊 État actuel:', wasInWishlist);
+    console.log('🎯 Action prévue:', wasInWishlist ? 'RETIRER' : 'AJOUTER');
+    
+    try {
+      console.log('🔄 Appel de toggleWishlist...');
+      const success = await toggleWishlist(productId, product || undefined);
+      console.log('✅ toggleWishlist terminé, succès:', success);
+      
+      if (success) {
+        // ✅ Message basé sur l'état AVANT le toggle
+        if (wasInWishlist) {
+          toast.success('Retiré des favoris');
+          console.log('✅ Message: Retiré des favoris');
+        } else {
+          toast.success('Ajouté aux favoris ❤️');
+          console.log('✅ Message: Ajouté aux favoris');
+        }
+      } else {
+        console.error('❌ Échec du toggle');
+        toast.error('Erreur lors de la mise à jour des favoris');
+      }
+    } catch (error) {
+      console.error('❌ Erreur toggleWishlist:', error);
+      toast.error('Erreur lors de la mise à jour des favoris');
+    }
+    
+    console.groupEnd();
+  }, [productId, product, isAuthenticated, toggleWishlist, isInWishlist, router, slug]);
 
   const handleQuantityChange = useCallback((delta: number) => {
-    setQuantity((prev) => Math.max(1, Math.min(prev + delta, product?.totalStock || 10)));
+    setQuantity((prev) => {
+      const newQty = Math.max(1, Math.min(prev + delta, product?.totalStock || 10));
+      console.log('🔢 Quantité changée:', prev, '->', newQty);
+      return newQty;
+    });
   }, [product?.totalStock]);
 
   const handleBack = useCallback(() => {
+    console.log('⬅️ Retour aux produits');
     router.push(ROUTES.PRODUCTS);
   }, [router]);
 
@@ -141,6 +223,7 @@ const handleAddToCart = useCallback(async () => {
   }
 
   if (error) {
+    console.error('❌ Erreur de chargement:', error);
     return (
       <div className="min-h-screen px-4 py-12 flex items-center justify-center">
         <div className="max-w-md w-full rounded-3xl border border-destructive/50 bg-destructive/10 p-8 text-center space-y-4">
@@ -160,6 +243,7 @@ const handleAddToCart = useCallback(async () => {
   }
 
   if (!product) {
+    console.warn('⚠️ Produit introuvable après chargement');
     return (
       <div className="min-h-screen px-4 py-12 flex items-center justify-center">
         <div className="max-w-md w-full rounded-3xl border border-border bg-card p-12 text-center space-y-4">
@@ -174,8 +258,9 @@ const handleAddToCart = useCallback(async () => {
 
   // ───────── MAIN RENDER ─────────
   const hasSizeVariants = product.variants?.some((v: any) => v.size);
-  const productId = product._id || (product as any).id;
   const categoryName = typeof product.category === 'object' ? product.category?.name : 'Catégorie';
+
+  console.log('🎨 [PRODUCT DETAILS] Rendu de la page pour:', product.name);
 
   return (
     <div className="min-h-screen px-4 py-12">
@@ -216,6 +301,7 @@ const handleAddToCart = useCallback(async () => {
                     className="w-full h-full object-cover transition-transform hover:scale-105"
                     loading="eager"
                     onError={(e) => {
+                      console.warn('⚠️ Erreur chargement image:', currentImage);
                       const t = e.target as HTMLImageElement;
                       if (t.src !== PLACEHOLDER_IMAGE) t.src = PLACEHOLDER_IMAGE;
                     }}
@@ -236,7 +322,10 @@ const handleAddToCart = useCallback(async () => {
                       <motion.button
                         key={img.url || idx}
                         type="button"
-                        onClick={() => setSelectedImage(idx)}
+                        onClick={() => {
+                          console.log('🖼️ Sélection image:', idx);
+                          setSelectedImage(idx);
+                        }}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         className={`overflow-hidden rounded-3xl border p-1 transition ${
@@ -275,7 +364,11 @@ const handleAddToCart = useCallback(async () => {
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={handleWishlist}
-                  className="rounded-full border border-border bg-background p-3 text-accent transition hover:border-accent"
+                  className={`rounded-full border p-3 transition ${
+                    wishlisted 
+                      ? 'border-pink-500 bg-pink-500 text-white hover:bg-pink-600' 
+                      : 'border-border bg-background text-accent hover:border-accent'
+                  }`}
                   aria-label={wishlisted ? 'Retirer des favoris' : 'Ajouter aux favoris'}
                 >
                   <Heart className="h-5 w-5" fill={wishlisted ? 'currentColor' : 'none'} />
@@ -351,7 +444,12 @@ const handleAddToCart = useCallback(async () => {
                           type="button"
                           whileHover={inStock ? { scale: 1.05 } : {}}
                           whileTap={inStock ? { scale: 0.95 } : {}}
-                          onClick={() => inStock && setSelectedSize(size)}
+                          onClick={() => {
+                            if (inStock) {
+                              console.log('📏 Pointure sélectionnée:', size);
+                              setSelectedSize(size);
+                            }
+                          }}
                           disabled={!inStock}
                           className={`
                             relative h-10 rounded-lg border text-sm font-medium transition

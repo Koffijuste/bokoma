@@ -47,27 +47,88 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 // ──────────────────────────────────────────────────────────────────────────
+// 🔹 COMPOSANT AVATAR
+// ──────────────────────────────────────────────────────────────────────────
+
+const UserAvatar = ({ 
+  user, 
+  size = 'md',
+  showFallback = true 
+}: { 
+  user: User; 
+  size?: 'sm' | 'md' | 'lg';
+  showFallback?: boolean;
+}) => {
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const sizeClasses = {
+    sm: 'w-8 h-8 text-xs',
+    md: 'w-9 h-9 text-sm',
+    lg: 'w-14 h-14 text-xl',
+  };
+
+  const getInitials = () => {
+    const first = user.firstName?.[0] || '';
+    const last = user.lastName?.[0] || '';
+    return `${first}${last}`.toUpperCase() || '?';
+  };
+
+  // ✅ Vérifier si l'URL d'avatar est valide
+  const isValidAvatarUrl = user.avatar && 
+    typeof user.avatar === 'string' && 
+    (user.avatar.startsWith('http://') || 
+     user.avatar.startsWith('https://') || 
+     user.avatar.startsWith('/'));
+
+  // ✅ Afficher les initiales si pas d'avatar ou erreur
+  if (!isValidAvatarUrl || hasError) {
+    if (!showFallback) return null;
+    
+    return (
+      <div className={`${sizeClasses[size]} rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold flex-shrink-0`}>
+        {getInitials()}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${sizeClasses[size]} rounded-full overflow-hidden flex-shrink-0 relative bg-accent/20`}>
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Loader2 className="w-4 h-4 animate-spin text-accent" />
+        </div>
+      )}
+      <img
+        src={user.avatar}
+        alt={`${user.firstName} ${user.lastName}`}
+        className="w-full h-full object-cover"
+        onLoad={() => setIsLoading(false)}
+        onError={(e) => {
+          console.warn('⚠️ Avatar load error:', user.avatar);
+          setHasError(true);
+          setIsLoading(false);
+        }}
+      />
+    </div>
+  );
+};
+
+// ──────────────────────────────────────────────────────────────────────────
 // 🔹 UTILS - ERROR HANDLING
 // ──────────────────────────────────────────────────────────────────────────
 
-/**
- * Extrait un message d'erreur lisible depuis une erreur API (Axios, fetch, ou objet brut)
- */
 const getErrorMessage = (err: any): string => {
   if (!err) return 'Erreur inconnue';
   
-  // ✅ Erreur Axios : priorité au message du backend
   if (err.response?.data?.message) return err.response.data.message;
   if (err.response?.data?.error) return err.response.data.error;
   if (err.response?.statusText) return `Erreur ${err.response.status}: ${err.response.statusText}`;
   
-  // ✅ Erreur fetch ou Error natif
   if (err.message) return err.message;
   
-  // ✅ Objet brut avec propriété message
   if (typeof err === 'object' && err.message) return err.message;
   
-  // ✅ Fallback sécurisé
   if (typeof err === 'string') return err;
   
   return 'Erreur lors du chargement des données';
@@ -99,19 +160,36 @@ export default function UsersAdminPage() {
       setLoading(true);
       setError(null);
       
+      console.log('👥 [Users] Fetching users...');
       const response = await userApi.getUsers({ page: 1, limit: 100 });
       
-      const userList = Array.isArray(response) 
-        ? response 
-        : Array.isArray(response?.data) 
-          ? response.data 
-          : Array.isArray(response?.users) 
-            ? response.users 
-            : [];
+      console.group('👥 [Users] Parsing response');
+      console.log('📥 Response complète:', response);
+      console.log('🔍 response.data:', response?.data);
+      console.log('🔍 response.data.data:', response?.data?.data);
       
-      setUsers(userList);
+      // ✅ CORRECTION CRITIQUE : Naviguer dans la structure imbriquée
+      const responseData = response?.data || response;
+      const usersData = responseData?.data || responseData;
+      const userList = usersData?.users || usersData || [];
+      
+      console.log('✅ Users extraits:', Array.isArray(userList) ? userList.length : 0);
+      
+      // ✅ DEBUG : Log les avatars
+      if (Array.isArray(userList) && userList.length > 0) {
+        console.log('🖼️ Avatars détectés:');
+        userList.slice(0, 3).forEach(u => {
+          console.log(`  ${u.firstName} ${u.lastName}:`, u.avatar || '❌ Pas d\'avatar');
+        });
+      }
+      
+      console.groupEnd();
+      
+      setUsers(Array.isArray(userList) ? userList : []);
     } catch (err: any) {
       console.error('❌ Error fetching users:', err);
+      console.error('   Response:', err?.response?.data);
+      
       const msg = getErrorMessage(err);
       setError(msg);
       toast.error(msg);
@@ -140,7 +218,7 @@ export default function UsersAdminPage() {
     setUpdating(userId);
     
     try {
-      await userApi.updateUser(userId, { role: newRole });
+      await userApi.updateUserRole(userId, newRole);
       toast.success(`Rôle mis à jour en "${newRole}"`);
       
       setUsers(prev => prev.map(u => u._id === userId ? { ...u, role: newRole } : u));
@@ -159,11 +237,11 @@ export default function UsersAdminPage() {
     setUpdating(userId);
     
     try {
-      await userApi.updateUser(userId, { isActive: !currentStatus });
+      await userApi.toggleUserStatus(userId, !currentStatus);
       toast.success(`Compte ${currentStatus ? 'désactivé' : 'réactivé'}`);
       
       setUsers(prev => prev.map(u => u._id === userId ? { ...u, isActive: !currentStatus } : u));
-      fetchUsers();
+      setSelectedUser(prev => prev?._id === userId ? { ...prev, isActive: !currentStatus } : prev);
     } catch (err: any) {
       console.error('❌ Status toggle error:', err);
       const msg = getErrorMessage(err);
@@ -172,9 +250,6 @@ export default function UsersAdminPage() {
       setUpdating(null);
     }
   };
-
-  const getInitials = (first?: string, last?: string) => 
-    `${first?.[0] || ''}${last?.[0] || ''}`.toUpperCase() || '?';
 
   // ───────── RENDER ─────────
   return (
@@ -314,12 +389,11 @@ export default function UsersAdminPage() {
                     animate={{ opacity: 1 }}
                     className="hover:bg-accent/5 transition-colors group"
                   >
-                    {/* Utilisateur */}
+                    {/* Utilisateur avec Avatar */}
                     <td className="px-4 sm:px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold text-sm flex-shrink-0">
-                          {getInitials(user.firstName, user.lastName)}
-                        </div>
+                        {/* ✅ AVATAR ICI */}
+                        <UserAvatar user={user} size="md" />
                         <div className="min-w-0">
                           <p className="font-medium truncate">{user.firstName} {user.lastName}</p>
                           <p className="text-xs text-muted-foreground truncate">{user.phone || '—'}</p>
@@ -390,11 +464,10 @@ export default function UsersAdminPage() {
 
           {selectedUser && (
             <div className="space-y-5 py-2">
-              {/* Profile header */}
+              {/* Profile header avec Avatar */}
               <div className="flex items-center gap-4 p-4 bg-muted/40 rounded-xl">
-                <div className="w-14 h-14 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-xl flex-shrink-0">
-                  {getInitials(selectedUser.firstName, selectedUser.lastName)}
-                </div>
+                {/* ✅ AVATAR DANS LE MODAL */}
+                <UserAvatar user={selectedUser} size="lg" />
                 <div className="min-w-0">
                   <h3 className="font-semibold truncate">{selectedUser.firstName} {selectedUser.lastName}</h3>
                   <p className="text-sm text-muted-foreground truncate">{selectedUser.email}</p>

@@ -162,6 +162,13 @@ exports.updatePassword = async (req, res, next) => {
  */
 exports.updateAvatar = async (req, res, next) => {
   try {
+    console.log('📥 [Avatar] Upload reçu');
+    console.log('📎 req.file:', req.file ? {
+      path: req.file.path,
+      filename: req.file.filename,
+      originalname: req.file.originalname,
+    } : 'UNDEFINED');
+
     if (!req.file) {
       return next(new AppError('Aucune image reçue', 400));
     }
@@ -169,17 +176,23 @@ exports.updateAvatar = async (req, res, next) => {
     const user = await findUserOrError(req.user.userId, next);
     if (!user) return;
 
-    // ✅ Supprimer l'ancien avatar
-    if (user.avatar) {
+    // ✅ Cloudinary : req.file.path contient déjà l'URL complète
+    const newAvatarUrl = req.file.path;
+    console.log('✅ [Avatar] Nouvelle URL:', newAvatarUrl);
+
+    // ✅ Supprimer l'ancien avatar de Cloudinary (pas fs.unlink !)
+    if (user.avatar && user.avatar.includes('cloudinary.com')) {
       try {
-        await fs.unlink(user.avatar);
+        const { deleteImage } = require('../services/upload.service');
+        console.log('🗑️ [Avatar] Suppression ancien avatar:', user.avatar);
+        await deleteImage(user.avatar);
       } catch (err) {
-        console.warn('⚠️ Failed to delete old avatar:', err.message);
+        console.warn('⚠️ [Avatar] Failed to delete old avatar from Cloudinary:', err.message);
       }
     }
 
-    // ✅ Sauvegarder le chemin normalisé
-    user.avatar = req.file.path.replace(/\\/g, '/');
+    // ✅ Sauvegarder l'URL Cloudinary
+    user.avatar = newAvatarUrl;
     await user.save();
 
     res.json({
@@ -627,10 +640,15 @@ exports.deleteAvatar = async (req, res, next) => {
       return next(new AppError('Aucun avatar à supprimer', 400));
     }
 
-    try {
-      await fs.unlink(user.avatar);
-    } catch (err) {
-      console.warn('⚠️ Failed to delete avatar file:', err.message);
+    // ✅ Cloudinary : supprimer depuis Cloudinary (pas fs.unlink !)
+    if (user.avatar.includes('cloudinary.com')) {
+      try {
+        const { deleteImage } = require('../services/upload.service');
+        console.log('🗑️ [Avatar] Suppression avatar Cloudinary:', user.avatar);
+        await deleteImage(user.avatar);
+      } catch (err) {
+        console.warn('⚠️ [Avatar] Failed to delete from Cloudinary:', err.message);
+      }
     }
 
     user.avatar = undefined;
@@ -639,7 +657,7 @@ exports.deleteAvatar = async (req, res, next) => {
     res.json({
       success: true,
       message: 'Avatar supprimé',
-      data: { avatar: user.avatar },
+      data: { avatar: null },
     });
   } catch (err) {
     console.error('❌ [UserController] deleteAvatar error:', err);
