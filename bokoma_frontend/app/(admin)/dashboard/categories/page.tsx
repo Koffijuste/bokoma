@@ -5,13 +5,12 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, Pencil, Trash2, AlertCircle, Loader2, Search, 
-  X, Check, ChevronDown, ArrowUpDown 
+  X, Check, ChevronDown, ArrowUpDown, FolderTree, 
+  Eye, EyeOff, Sparkles, RefreshCw
 } from 'lucide-react';
 import { useFetch, useMutation } from '@/hooks';
 import { categoryApi } from '@/services';
 
-// ✅ IMPORTS INDIVIDUELS (shadcn/ui standard)
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -33,29 +32,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { NativeSelect } from '@/components/forms/native-select';
 import { toast } from 'sonner';
+import { PageHeader } from '@/components/ui/page-header';
 import type { Category, ApiResponse } from '@/types';
 
-
-// Juste après les imports, avant le composant principal :
-// if (process.env.NODE_ENV === 'development') {
-//   console.log('🔍 Select import check:', {
-//     //Select: typeof Select,  // Doit afficher "function"
-//     SelectTrigger: typeof SelectTrigger,
-//   });
-// }
 // ──────────────────────────────────────────────────────────────────────────
 // 🔹 TYPES & CONSTANTS
 // ──────────────────────────────────────────────────────────────────────────
 
 interface CategoryFormData {
   name: string;
-  slug?: string;
+  slug: string;
   description: string;
   order: number;
   isActive: boolean;
-  parent?: string;
+  parent: string;
 }
 
 interface CategoryRowProps {
@@ -64,13 +55,16 @@ interface CategoryRowProps {
   onDelete: (id: string) => void;
   onToggleActive: (id: string, active: boolean) => void;
   index: number;
+  isToggling: boolean;
 }
 
 const DEFAULT_FORM_DATA: CategoryFormData = {
   name: '',
+  slug: '',
   description: '',
   order: 0,
   isActive: true,
+  parent: '',
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -97,7 +91,7 @@ const generateSlug = (text: string): string => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────
-// 🔹 COMPOSANT: CategoryRow (mémoïsé)
+// 🔹 COMPOSANT: CategoryRow
 // ──────────────────────────────────────────────────────────────────────────
 
 const CategoryRow = React.memo<CategoryRowProps>(({ 
@@ -105,25 +99,51 @@ const CategoryRow = React.memo<CategoryRowProps>(({
   onEdit, 
   onDelete, 
   onToggleActive,
-  index 
+  index,
+  isToggling,
 }) => {
   const [showActions, setShowActions] = useState(false);
 
   return (
     <motion.tr
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.03 }}
-      className="border-b border-border hover:bg-muted/30 transition-colors group"
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: category.isActive ? 1 : 0.6, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ delay: index * 0.03, duration: 0.2 }}
+      className={`border-b border-border/50 transition-all duration-200 group ${
+        category.isActive 
+          ? 'hover:bg-muted/30' 
+          : 'hover:bg-muted/20 bg-muted/10'
+      }`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
       {/* Nom & Slug */}
       <td className="p-4">
         <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+            category.isActive 
+              ? 'bg-gradient-to-br from-accent/20 to-accent/5' 
+              : 'bg-muted'
+          }`}>
+            <FolderTree className={`w-5 h-5 ${
+              category.isActive ? 'text-accent' : 'text-muted-foreground'
+            }`} />
+          </div>
           <div>
-            <div className="font-medium text-foreground">{category.name}</div>
-            <div className="text-xs text-muted-foreground font-mono">{category.slug}</div>
+            <div className="font-medium text-foreground flex items-center gap-2">
+              {category.name}
+              {!category.isActive && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-destructive/50 text-destructive">
+                  Inactif
+                </Badge>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground font-mono flex items-center gap-1">
+              <span className="text-muted-foreground/50">/</span>
+              {category.slug}
+            </div>
           </div>
         </div>
       </td>
@@ -131,34 +151,46 @@ const CategoryRow = React.memo<CategoryRowProps>(({
       {/* Description */}
       <td className="p-4 hidden md:table-cell">
         <p className="text-sm text-muted-foreground line-clamp-2 max-w-xs">
-          {category.description || <span className="italic">Aucune description</span>}
+          {category.description || <span className="italic text-muted-foreground/50">Aucune description</span>}
         </p>
       </td>
 
       {/* Ordre */}
       <td className="p-4">
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <ArrowUpDown className="w-3 h-3" />
-          {category.order ?? 0}
+        <div className="flex items-center gap-1.5 text-sm">
+          <div className="w-7 h-7 rounded-lg bg-muted/50 flex items-center justify-center">
+            <ArrowUpDown className="w-3 h-3 text-muted-foreground" />
+          </div>
+          <span className="font-medium text-muted-foreground">{category.order ?? 0}</span>
         </div>
       </td>
 
       {/* Statut */}
       <td className="p-4">
-        <Switch
-          checked={category.isActive}
-          onCheckedChange={(checked) => onToggleActive(category._id, checked)}
-          aria-label={category.isActive ? 'Désactiver la catégorie' : 'Activer la catégorie'}
-        />
+        <div className="relative">
+          <Switch
+            checked={category.isActive}
+            onCheckedChange={(checked) => onToggleActive(category._id, checked)}
+            disabled={isToggling}
+            aria-label={category.isActive ? 'Désactiver la catégorie' : 'Activer la catégorie'}
+          />
+          {isToggling && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-full">
+              <Loader2 className="w-3 h-3 animate-spin text-accent" />
+            </div>
+          )}
+        </div>
       </td>
 
       {/* Actions */}
       <td className="p-4">
-        <div className={`flex items-center gap-1 transition-opacity ${showActions ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+        <div className={`flex items-center gap-1 transition-all duration-200 ${
+          showActions ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0'
+        }`}>
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 hover:bg-accent hover:text-accent-foreground"
+            className="h-8 w-8 hover:bg-accent/10 hover:text-accent transition-all"
             onClick={() => onEdit(category)}
             aria-label="Modifier la catégorie"
             title="Modifier"
@@ -168,8 +200,8 @@ const CategoryRow = React.memo<CategoryRowProps>(({
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 hover:bg-destructive hover:text-destructive-foreground"
-           onClick={() => onDelete(category)} 
+            className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive transition-all"
+            onClick={() => onDelete(category._id)}
             aria-label="Supprimer la catégorie"
             title="Supprimer"
           >
@@ -208,17 +240,16 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [autoSlug, setAutoSlug] = useState(true);
 
-  // Reset form when dialog opens/closes or initialData changes
   useEffect(() => {
     if (open) {
       if (initialData) {
         setFormData({
           name: initialData.name,
-          slug: initialData.slug,
+          slug: initialData.slug || '',
           description: initialData.description || '',
           order: initialData.order || 0,
           isActive: initialData.isActive ?? true,
-          parent: typeof initialData.parent === 'string' ? initialData.parent : undefined,
+          parent: typeof initialData.parent === 'string' ? initialData.parent : '',
         });
         setAutoSlug(false);
       } else {
@@ -229,7 +260,6 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
     }
   }, [open, initialData]);
 
-  // Auto-generate slug from name
   useEffect(() => {
     if (autoSlug && formData.name) {
       setFormData(prev => ({ ...prev, slug: generateSlug(prev.name) }));
@@ -242,17 +272,17 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
     if (!formData.name.trim()) {
       newErrors.name = 'Le nom est requis';
     } else if (formData.name.length < 2) {
-      newErrors.name = 'Le nom doit contenir au moins 2 caractères';
+      newErrors.name = 'Minimum 2 caractères';
     }
     
     if (!formData.slug?.trim()) {
       newErrors.slug = 'Le slug est requis';
     } else if (!/^[a-z0-9-]+$/.test(formData.slug)) {
-      newErrors.slug = 'Le slug ne peut contenir que des lettres minuscules, chiffres et tirets';
+      newErrors.slug = 'Uniquement lettres minuscules, chiffres et tirets';
     }
     
     if (formData.order < 0) {
-      newErrors.order = 'L\'ordre ne peut pas être négatif';
+      newErrors.order = 'Ne peut pas être négatif';
     }
     
     setErrors(newErrors);
@@ -261,62 +291,82 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validate()) {
-      toast.error('Veuillez corriger les erreurs du formulaire');
+      toast.error('Veuillez corriger les erreurs');
       return;
     }
     
+    const payload = {
+      ...formData,
+      parent: formData.parent || undefined,
+    };
+    
     try {
-      await onSubmit(formData);
-      onOpenChange(false);
-    } catch (err: any) {
-      // Error is handled by parent
+      await onSubmit(payload);
+    } catch {
+      // Error handled by parent
     }
   };
 
   const rootCategories = useMemo(() => 
-    allCategories.filter(c => !c.parent), 
-    [allCategories]
+    allCategories.filter(c => !c.parent && c._id !== initialData?._id), 
+    [allCategories, initialData]
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg overflow-y-auto max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>
-            {initialData ? 'Modifier la catégorie' : 'Nouvelle catégorie'}
+          <DialogTitle className="flex items-center gap-2">
+            {initialData ? (
+              <>
+                <Pencil className="w-5 h-5 text-accent" />
+                Modifier la catégorie
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 text-accent" />
+                Nouvelle catégorie
+              </>
+            )}
           </DialogTitle>
           <DialogDescription>
             {initialData 
-              ? 'Modifiez les informations de la catégorie ci-dessous.' 
-              : 'Remplissez le formulaire pour créer une nouvelle catégorie.'
+              ? 'Modifiez les informations de la catégorie.' 
+              : 'Créez une nouvelle catégorie pour organiser vos produits.'
             }
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit} className="space-y-5 py-2">
           {/* Nom */}
           <div className="space-y-2">
-            <Label htmlFor="name">Nom de la catégorie *</Label>
+            <Label htmlFor="name">
+              Nom de la catégorie <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Ex: Chaussures, Vêtements..."
-              className={errors.name ? 'border-destructive' : ''}
+              className={errors.name ? 'border-destructive focus-visible:ring-destructive' : ''}
               disabled={isLoading}
               autoFocus
             />
             {errors.name && (
-              <p className="text-xs text-destructive">{errors.name}</p>
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {errors.name}
+              </p>
             )}
           </div>
 
           {/* Slug */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="slug">Slug *</Label>
+              <Label htmlFor="slug">
+                Slug <span className="text-destructive">*</span>
+              </Label>
               <div className="flex items-center gap-2">
                 <Switch
                   id="autoSlug"
@@ -324,7 +374,7 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
                   onCheckedChange={setAutoSlug}
                   disabled={isLoading}
                 />
-                <Label htmlFor="autoSlug" className="text-xs text-muted-foreground cursor-pointer">
+                <Label htmlFor="autoSlug" className="text-xs text-muted-foreground cursor-pointer font-normal">
                   Auto
                 </Label>
               </div>
@@ -340,45 +390,52 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
               className={`font-mono text-sm ${errors.slug ? 'border-destructive' : ''}`}
               disabled={isLoading || autoSlug}
             />
-            {errors.slug && (
-              <p className="text-xs text-destructive">{errors.slug}</p>
+            {errors.slug ? (
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {errors.slug}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="text-muted-foreground/50">URL:</span>
+                <code className="font-mono bg-muted px-1.5 py-0.5 rounded">
+                  /products?category={formData.slug || '...'}
+                </code>
+              </p>
             )}
-            <p className="text-xs text-muted-foreground">
-              URL: /products?category=<span className="font-mono">{formData.slug || '...'}</span>
-            </p>
           </div>
 
           {/* Catégorie parente */}
-<div className="space-y-2">
-  <Label htmlFor="parent">Catégorie parente</Label>
-  <Select
-    value={formData.parent || 'none'}
-    onValueChange={(value) => {
-
-      setFormData({ 
-        ...formData, 
-        parent: value === 'none' ? undefined : value 
-      });
-    }}
-    disabled={isLoading}
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="Aucune (catégorie racine)" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="none">Aucune (racine)</SelectItem>  // ← ✅ value="none" au lieu de ""
-      {rootCategories.map((cat) => (
-        <SelectItem 
-          key={cat._id} 
-          value={cat._id} 
-          disabled={cat._id === initialData?._id}
-        >
-          {cat.name}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-</div>
+          <div className="space-y-2">
+            <Label htmlFor="parent">Catégorie parente</Label>
+            <Select
+              value={formData.parent || 'none'}
+              onValueChange={(value) => {
+                setFormData({ 
+                  ...formData, 
+                  parent: value === 'none' ? '' : value
+                });
+              }}
+              disabled={isLoading}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Aucune (catégorie racine)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">
+                  <span className="flex items-center gap-2">
+                    <FolderTree className="w-4 h-4 text-muted-foreground" />
+                    Aucune (racine)
+                  </span>
+                </SelectItem>
+                {rootCategories.map((cat) => (
+                  <SelectItem key={cat._id} value={cat._id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Description */}
           <div className="space-y-2">
@@ -410,21 +467,28 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
                 <p className="text-xs text-destructive">{errors.order}</p>
               )}
             </div>
-            <div className="space-y-2 flex items-end">
-              <div className="flex items-center gap-2">
+            <div className="space-y-2 flex flex-col justify-end">
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border">
+                <div>
+                  <Label htmlFor="isActive" className="cursor-pointer">
+                    Catégorie active
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Visible sur le site
+                  </p>
+                </div>
                 <Switch
                   id="isActive"
                   checked={formData.isActive}
                   onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
                   disabled={isLoading}
                 />
-                <Label htmlFor="isActive">Actif</Label>
               </div>
             </div>
           </div>
 
           {/* Actions */}
-          <DialogFooter className="pt-4">
+          <DialogFooter className="pt-4 gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
@@ -433,7 +497,7 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
             >
               Annuler
             </Button>
-            <Button type="submit" variant="default" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -442,7 +506,7 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
               ) : (
                 <>
                   <Check className="w-4 h-4 mr-2" />
-                  {initialData ? 'Mettre à jour' : 'Créer'}
+                  {initialData ? 'Mettre à jour' : 'Créer la catégorie'}
                 </>
               )}
             </Button>
@@ -476,22 +540,30 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-destructive">Supprimer la catégorie</DialogTitle>
-          <DialogDescription>
-            Cette action est irréversible. La catégorie <strong className="text-foreground">"{categoryName}"</strong> sera désactivée et ne sera plus visible sur le site.
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <Trash2 className="w-5 h-5" />
+            Supprimer la catégorie
+          </DialogTitle>
+          <DialogDescription asChild>
+            <div>
+              Cette action est irréversible. La catégorie <strong className="text-foreground">"{categoryName}"</strong> sera définitivement supprimée.
+            </div>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4">
-          <div className="flex items-start gap-3 p-4 bg-destructive/10 rounded-lg border border-destructive/20">
+        <div className="py-2">
+          <div className="flex items-start gap-3 p-4 bg-destructive/10 rounded-xl border border-destructive/20">
             <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm text-muted-foreground space-y-2">
               <p>Les produits associés à cette catégorie ne seront pas supprimés, mais ils ne seront plus filtrables par cette catégorie.</p>
+              <p className="text-xs text-destructive/80 font-medium">
+                ⚠️ Cette action ne peut pas être annulée.
+              </p>
             </div>
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -527,18 +599,16 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
 // ──────────────────────────────────────────────────────────────────────────
 
 export default function DashboardCategoriesPage() {
-  // États
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'order' | 'createdAt'>('order');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   
-  // Dialog states
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
-  // Fetch categories
   const { 
     data: apiResponse, 
     loading: fetching, 
@@ -551,20 +621,16 @@ export default function DashboardCategoriesPage() {
 
   const categories = useMemo(() => extractCategories(apiResponse), [apiResponse]);
 
-  // Mutations avec gestion d'erreur centralisée
+  // Mutations
   const createMutation = useMutation<ApiResponse<{ category: Category }>, CategoryFormData>(
     (data) => categoryApi.createCategory(data),
     {
       onSuccess: () => {
-        toast.success('Catégorie créée avec succès', {
-          description: 'La nouvelle catégorie est maintenant disponible.',
-        });
+        toast.success('Catégorie créée avec succès');
         refetch();
       },
       onError: (err) => {
-        toast.error('Erreur lors de la création', {
-          description: err?.message || 'Une erreur inattendue est survenue',
-        });
+        toast.error(err?.message || 'Erreur lors de la création');
       },
     }
   );
@@ -573,15 +639,13 @@ export default function DashboardCategoriesPage() {
     ({ id, ...data }) => categoryApi.updateCategory(id, data),
     {
       onSuccess: () => {
-        toast.success('Catégorie mise à jour', {
-          description: 'Les modifications ont été enregistrées.',
-        });
+        toast.success('Catégorie mise à jour');
+        setTogglingId(null);
         refetch();
       },
       onError: (err) => {
-        toast.error('Erreur lors de la mise à jour', {
-          description: err?.message || 'Une erreur inattendue est survenue',
-        });
+        setTogglingId(null);
+        toast.error(err?.message || 'Erreur lors de la mise à jour');
       },
     }
   );
@@ -590,38 +654,15 @@ export default function DashboardCategoriesPage() {
     (id) => categoryApi.deleteCategory(id),
     {
       onSuccess: () => {
-        toast.success('Catégorie supprimée', {
-          description: 'La catégorie a été désactivée.',
-        });
+        toast.success('Catégorie supprimée');
         refetch();
       },
       onError: (err) => {
-        toast.error('Erreur lors de la suppression', {
-          description: err?.message || 'Une erreur inattendue est survenue',
-        });
+        toast.error(err?.message || 'Erreur lors de la suppression');
       },
     }
   );
 
-  const toggleActiveMutation = useMutation<ApiResponse<{ category: Category }>, { id: string; isActive: boolean }>(
-  async ({ id, isActive }) => {
-    console.log('📡 Calling updateCategory:', { id, isActive });  // ← Debug API call
-    return await categoryApi.updateCategory(id, { isActive });
-  },
-  {
-    onSuccess: (_, variables) => {
-      console.log('✅ Toggle success:', variables);  // ← Debug success
-      toast.success(variables.isActive ? 'Catégorie activée' : 'Catégorie désactivée');
-      refetch();
-    },
-    onError: (err) => {
-      console.error('❌ Toggle error:', err);  // ← Debug error
-      toast.error('Erreur lors de la mise à jour du statut');
-    },
-  }
-);
-
-  // Handlers
   const handleOpenCreate = useCallback(() => {
     setSelectedCategory(null);
     setFormDialogOpen(true);
@@ -638,44 +679,46 @@ export default function DashboardCategoriesPage() {
   }, []);
 
   const handleSubmit = useCallback(async (data: CategoryFormData) => {
-    try {
-      if (selectedCategory) {
-        await updateMutation.mutateAsync({ id: selectedCategory._id, ...data });
-      } else {
-        await createMutation.mutateAsync(data);
-      }
-    } catch {
-      // Error handled by mutation onError
+    if (selectedCategory) {
+      updateMutation.mutate({ id: selectedCategory._id, ...data });
+    } else {
+      createMutation.mutate(data);
     }
   }, [selectedCategory, createMutation, updateMutation]);
 
   const handleDelete = useCallback(async () => {
     if (!selectedCategory) return;
-    
-    try {
-      await deleteMutation.mutateAsync(selectedCategory._id);
-      setDeleteDialogOpen(false);
-      setSelectedCategory(null);
-    } catch {
-      // Error handled by mutation onError
-    }
+    deleteMutation.mutate(selectedCategory._id);
+    setDeleteDialogOpen(false);
+    setSelectedCategory(null);
   }, [selectedCategory, deleteMutation]);
 
-  const handleToggleActive = useCallback(async (id: string, isActive: boolean) => {
-  try {
-    console.log('🔄 Toggling active:', { id, isActive });  // ← Debug log
-    await toggleActiveMutation.mutateAsync({ id, isActive });
-  } catch (err: any) {
-    console.error('❌ Toggle active failed:', err);  // ← Error log
-      toast.error('Erreur lors de la mise à jour du statut');
-    }
-  }, [toggleActiveMutation]);
-
-  // Filtrage, tri et pagination
-  const filteredAndSortedCategories = useMemo(() => {
-    let result = [...categories];
+  // ✅ CORRECTION BUG : Toggle avec mise à jour locale IMMÉDIATE
+  const handleToggleActive = useCallback((id: string, isActive: boolean) => {
+    setTogglingId(id);
     
-    // Filtre par recherche
+    // Mise à jour optimiste de l'UI
+    updateMutation.mutate(
+      { id, isActive },
+      {
+        onSuccess: () => {
+          toast.success(isActive ? 'Catégorie activée' : 'Catégorie désactivée');
+          setTogglingId(null);
+          refetch();
+        },
+        onError: () => {
+          setTogglingId(null);
+          toast.error('Erreur lors de la mise à jour');
+          refetch(); // Recharger pour revenir à l'état initial
+        },
+      }
+    );
+  }, [updateMutation]);
+
+  // ✅ CORRECTION : Filtrage qui INCLUT les catégories inactives
+  const filteredAndSortedCategories = useMemo(() => {
+    let result = [...categories]; // ✅ Copie complète, pas de filtre sur isActive
+    
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(cat => 
@@ -685,10 +728,8 @@ export default function DashboardCategoriesPage() {
       );
     }
     
-    // Tri
     result.sort((a, b) => {
       let comparison = 0;
-      
       switch (sortBy) {
         case 'name':
           comparison = a.name.localeCompare(b.name);
@@ -700,14 +741,12 @@ export default function DashboardCategoriesPage() {
           comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
           break;
       }
-      
       return sortDir === 'asc' ? comparison : -comparison;
     });
     
     return result;
   }, [categories, searchQuery, sortBy, sortDir]);
 
-  // Pagination
   const paginatedCategories = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredAndSortedCategories.slice(start, start + ITEMS_PER_PAGE);
@@ -715,128 +754,115 @@ export default function DashboardCategoriesPage() {
 
   const totalPages = Math.ceil(filteredAndSortedCategories.length / ITEMS_PER_PAGE);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, sortBy, sortDir]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + N: New category
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-        e.preventDefault();
-        handleOpenCreate();
-      }
-      // Escape: Close dialogs
-      if (e.key === 'Escape') {
-        setFormDialogOpen(false);
-        setDeleteDialogOpen(false);
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleOpenCreate]);
+  // Stats
+  const activeCount = categories.filter(c => c.isActive).length;
+  const inactiveCount = categories.length - activeCount;
 
-  // ───────── LOADING STATE ─────────
-  if (fetching && !categories.length) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-10 h-10 text-accent animate-spin mx-auto" />
-          <p className="text-muted-foreground">Chargement des catégories...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ───────── ERROR STATE ─────────
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="max-w-md w-full p-6 rounded-2xl border border-destructive/50 bg-destructive/10 text-center space-y-4">
-          <AlertCircle className="w-10 h-10 text-destructive mx-auto" />
-          <div>
-            <h3 className="font-semibold text-destructive">Erreur de chargement</h3>
-            <p className="text-sm text-muted-foreground mt-1">{error.message}</p>
-          </div>
-          <div className="flex gap-3 justify-center">
-            <Button onClick={() => refetch()} variant="outline" size="sm">
-              Réessayer
-            </Button>
-            {process.env.NODE_ENV === 'development' && (
-              <details className="text-xs text-left w-full">
-                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                  Détails techniques
-                </summary>
-                <pre className="mt-2 p-3 bg-background rounded text-xs overflow-auto max-h-32">
-                  {JSON.stringify(error, null, 2)}
-                </pre>
-              </details>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ───────── MAIN RENDER ─────────
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Catégories</h1>
-          <p className="text-muted-foreground text-sm">
-            Gérez les catégories de produits de votre boutique.
+      {/* ═══════ HEADER ═══════ */}
+      <PageHeader
+        title="Catégories"
+        description="Organisez et gérez les catégories de votre boutique"
+        icon={<FolderTree className="w-5 h-5 text-accent" />}
+        showBackButton
+        breadcrumbs={[
+          { label: 'Catégories' }
+        ]}
+        actions={
+          <>
+            <Badge variant="secondary" className="hidden sm:inline-flex gap-1">
+              <Eye className="w-3 h-3" />
+              {activeCount} actives
+            </Badge>
+            {inactiveCount > 0 && (
+              <Badge variant="outline" className="hidden sm:inline-flex gap-1 text-muted-foreground">
+                <EyeOff className="w-3 h-3" />
+                {inactiveCount} inactives
+              </Badge>
+            )}
+            <Button onClick={handleOpenCreate} className="gap-2 shadow-sm">
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Nouvelle</span>
+            </Button>
+          </>
+        }
+      />
+
+      {/* ═══════ STATS CARDS ═══════ */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="grid grid-cols-2 sm:grid-cols-4 gap-4"
+      >
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted-foreground">Total</p>
+            <FolderTree className="w-4 h-4 text-accent" />
+          </div>
+          <p className="text-2xl font-bold">{categories.length}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted-foreground">Actives</p>
+            <Eye className="w-4 h-4 text-green-500" />
+          </div>
+          <p className="text-2xl font-bold text-green-600">{activeCount}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted-foreground">Inactives</p>
+            <EyeOff className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <p className="text-2xl font-bold text-muted-foreground">{inactiveCount}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted-foreground">Racines</p>
+            <FolderTree className="w-4 h-4 text-blue-500" />
+          </div>
+          <p className="text-2xl font-bold text-blue-600">
+            {categories.filter(c => !c.parent).length}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="hidden sm:inline-flex">
-            {categories.length} catégorie{categories.length > 1 ? 's' : ''}
-          </Badge>
-          <Button onClick={handleOpenCreate} variant="default" size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            <span className="hidden sm:inline">Nouvelle catégorie</span>
-            <span className="sm:hidden">Ajouter</span>
-            <kbd className="ml-2 hidden sm:inline-flex h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-              ⌘N
-            </kbd>
-          </Button>
-        </div>
-      </div>
+      </motion.div>
 
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        {/* Search */}
+      {/* ═══════ TOOLBAR ═══════ */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between p-4 bg-card border border-border rounded-xl"
+      >
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher..."
+            placeholder="Rechercher une catégorie..."
             className="pl-9"
-            aria-label="Rechercher une catégorie"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label="Effacer la recherche"
             >
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Sort & Filters */}
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Select
             value={sortBy}
             onValueChange={(value: 'name' | 'order' | 'createdAt') => setSortBy(value)}
           >
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-full sm:w-36">
               <SelectValue placeholder="Trier par" />
             </SelectTrigger>
             <SelectContent>
@@ -850,30 +876,59 @@ export default function DashboardCategoriesPage() {
             variant="outline"
             size="icon"
             onClick={() => setSortDir(dir => dir === 'asc' ? 'desc' : 'asc')}
-            title={sortDir === 'asc' ? 'Tri croissant' : 'Tri décroissant'}
-            aria-label={`Tri ${sortDir === 'asc' ? 'croissant' : 'décroissant'}`}
           >
             <ChevronDown className={`w-4 h-4 transition-transform ${sortDir === 'asc' ? '' : 'rotate-180'}`} />
           </Button>
-        </div>
-      </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            disabled={fetching}
+          >
+            <RefreshCw className={`w-4 h-4 ${fetching ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+      </motion.div>
+
+      {/* ═══════ TABLE ═══════ */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="rounded-xl border border-border bg-card overflow-hidden shadow-sm"
+      >
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted/30 border-b border-border">
               <tr>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Nom</th>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground hidden md:table-cell">Description</th>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Ordre</th>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Statut</th>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Actions</th>
+                <th className="text-left p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Catégorie
+                </th>
+                <th className="text-left p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">
+                  Description
+                </th>
+                <th className="text-left p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Ordre
+                </th>
+                <th className="text-left p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Statut
+                </th>
+                <th className="text-left p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               <AnimatePresence mode="popLayout">
-                {paginatedCategories.length > 0 ? (
+                {fetching ? (
+                  <tr>
+                    <td colSpan={5} className="p-12 text-center">
+                      <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-3" />
+                      <p className="text-muted-foreground">Chargement...</p>
+                    </td>
+                  </tr>
+                ) : paginatedCategories.length > 0 ? (
                   paginatedCategories.map((category, index) => (
                     <CategoryRow
                       key={category._id}
@@ -882,53 +937,41 @@ export default function DashboardCategoriesPage() {
                       onDelete={handleOpenDelete}
                       onToggleActive={handleToggleActive}
                       index={index}
+                      isToggling={togglingId === category._id}
                     />
                   ))
                 ) : (
-                  <motion.tr
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="border-b"
-                  >
+                  <tr>
                     <td colSpan={5} className="p-12 text-center">
-                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                        {searchQuery ? (
-                          <>
-                            <Search className="w-8 h-8 opacity-50" />
-                            <div>
-                              <p className="font-medium">Aucun résultat</p>
-                              <p className="text-sm">Aucune catégorie ne correspond à "{searchQuery}"</p>
-                            </div>
-                            <Button variant="link" onClick={() => setSearchQuery('')} className="text-sm">
-                              Effacer la recherche
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="w-8 h-8 opacity-50" />
-                            <div>
-                              <p className="font-medium">Aucune catégorie</p>
-                              <p className="text-sm">Commencez par créer votre première catégorie</p>
-                            </div>
-                            <Button variant="default" size="sm" onClick={handleOpenCreate}>
-                              <Plus className="w-4 h-4 mr-2" />
-                              Créer une catégorie
-                            </Button>
-                          </>
-                        )}
+                      <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                        <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
+                          <FolderTree className="w-8 h-8 text-accent opacity-50" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-medium">Aucune catégorie</p>
+                          <p className="text-sm">Commencez par créer votre première catégorie</p>
+                        </div>
+                        <Button onClick={handleOpenCreate} className="gap-2">
+                          <Plus className="w-4 h-4" />
+                          Créer une catégorie
+                        </Button>
                       </div>
                     </td>
-                  </motion.tr>
+                  </tr>
                 )}
               </AnimatePresence>
             </tbody>
           </table>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Pagination */}
+      {/* ═══════ PAGINATION ═══════ */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-center justify-between gap-4 p-4 bg-card border border-border rounded-xl"
+        >
           <p className="text-sm text-muted-foreground">
             Page {currentPage} sur {totalPages} • {filteredAndSortedCategories.length} résultat{filteredAndSortedCategories.length > 1 ? 's' : ''}
           </p>
@@ -950,10 +993,10 @@ export default function DashboardCategoriesPage() {
               Suivant
             </Button>
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* Modals */}
+      {/* ═══════ MODALS ═══════ */}
       <CategoryFormDialog
         open={formDialogOpen}
         onOpenChange={setFormDialogOpen}
@@ -970,13 +1013,6 @@ export default function DashboardCategoriesPage() {
         onConfirm={handleDelete}
         isLoading={deleteMutation.loading}
       />
-
-      {/* Keyboard shortcuts hint (dev only) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-4 right-4 text-xs text-muted-foreground bg-background/80 backdrop-blur px-3 py-2 rounded-lg border">
-          <kbd className="font-mono">⌘N</kbd> Nouvelle catégorie • <kbd className="font-mono">Esc</kbd> Fermer
-        </div>
-      )}
     </div>
   );
 }

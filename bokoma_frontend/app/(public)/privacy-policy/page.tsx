@@ -1,5 +1,14 @@
 "use client";
 
+import { PublicPageHeader } from "@/components/ui/public-page-header";
+import { Shield } from "lucide-react";
+
+<PublicPageHeader
+  title="Politique de Confidentialité"
+  description="Protection de vos données personnelles"
+  icon={<Shield className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+  breadcrumbs={[{ label: 'Confidentialité' }]}
+/>
 export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen px-4 py-12">

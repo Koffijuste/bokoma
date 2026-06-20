@@ -313,16 +313,36 @@ export const orderApi = {
 };
 
 // ============================================================================
-// 🔹 REVIEW SERVICES
+// 🔹 REVIEW SERVICES — Version optimisée
 // ============================================================================
 
 export const reviewApi = {
-  getReviews: (productId: string, params?: { page?: number; limit?: number; approved?: boolean }) =>
-    apiClient.get<PaginatedResponse<Review>>(API_ENDPOINTS.REVIEWS.LIST(productId), { params }),
+  // ✅ Liste TOUS les avis (admin)
+  getAllReviews: (params?: {
+    page?: number;
+    limit?: number;
+    approved?: boolean;
+    sortBy?: 'createdAt' | 'rating' | 'helpful';
+    sortOrder?: 'asc' | 'desc';
+  }) => apiClient.get<any>('/reviews', { params }),
 
-  createReview: (productId: string, data: CreateReviewPayload) => {
+  // ✅ Statistiques des avis (admin)
+  getReviewStats: (productId?: string) =>
+    apiClient.get<any>('/reviews/stats', {
+      params: productId ? { productId } : undefined,
+    }),
+
+  // Avis d'un produit spécifique
+  getReviews: (productId: string, params?: {
+    page?: number;
+    limit?: number;
+    sortBy?: 'createdAt' | 'rating';
+    sortOrder?: 'asc' | 'desc';
+  }) => apiClient.get<any>(`/reviews/product/${productId}`, { params }),
+
+  // Créer un avis
+  createReview: (productId: string, data: any) => {
     const formData = new FormData();
-    
     Object.entries(data).forEach(([key, value]) => {
       if (value == null) return;
       if (key === 'images' && Array.isArray(value)) {
@@ -333,21 +353,24 @@ export const reviewApi = {
         formData.append(key, String(value));
       }
     });
-    
-    return apiClient.upload<ApiResponse<{ review: Review }>>(
-      API_ENDPOINTS.REVIEWS.CREATE(productId), 
-      formData
-    );
+    return apiClient.upload<any>(`/reviews/product/${productId}`, formData);
   },
 
-  deleteReview: (id: string) =>
-    apiClient.delete<ApiResponse>(API_ENDPOINTS.REVIEWS.DELETE(id)),
-
+  // Approuver
   approveReview: (id: string) =>
-    apiClient.patch<ApiResponse<{ review: Review }>>(API_ENDPOINTS.REVIEWS.APPROVE(id)),
+    apiClient.patch<any>(`/reviews/${id}/approve`),
 
+  // Rejeter
+  rejectReview: (id: string) =>
+    apiClient.patch<any>(`/reviews/${id}/reject`),
+
+  // Supprimer
+  deleteReview: (id: string) =>
+    apiClient.delete<any>(`/reviews/${id}`),
+
+  // Marquer comme utile
   markHelpful: (id: string) =>
-    apiClient.post<ApiResponse<{ review: Review }>>(API_ENDPOINTS.REVIEWS.HELPFUL(id)),
+    apiClient.post<any>(`/reviews/${id}/helpful`),
 };
 
 // ============================================================================
@@ -379,6 +402,10 @@ export const couponApi = {
 // ============================================================================
 
 export const userApi = {
+  // ─────────────────────────────────────────────────────────────
+  // 🔹 Profil utilisateur
+  // ─────────────────────────────────────────────────────────────
+  
   getMe: () => apiClient.get<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.ME),
 
   updateMe: (data: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'avatar'>>) =>
@@ -393,13 +420,16 @@ export const userApi = {
   uploadAvatar: (file: File) => {
     const formData = new FormData();
     formData.append('avatar', file);
-    // Backend expects PATCH /users/me/avatar (see user.routes)
     return apiClient.patch<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.UPLOAD_AVATAR, formData);
   },
 
   deleteAvatar: () =>
     apiClient.delete<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.DELETE_AVATAR),
 
+  // ─────────────────────────────────────────────────────────────
+  // 🔹 Adresses
+  // ─────────────────────────────────────────────────────────────
+  
   addAddress: (address: Omit<Address, '_id'>) =>
     apiClient.post<ApiResponse<{ address: Address }>>(API_ENDPOINTS.USERS.ADD_ADDRESS, address),
 
@@ -409,8 +439,11 @@ export const userApi = {
   deleteAddress: (id: string) =>
     apiClient.delete<ApiResponse>(API_ENDPOINTS.USERS.DELETE_ADDRESS(id)),
 
-  // Admin only
-  getUsers: (filters?: { page?: number; limit?: number; search?: string }) =>
+  // ─────────────────────────────────────────────────────────────
+  // 🔹 Gestion utilisateurs (admin)
+  // ─────────────────────────────────────────────────────────────
+  
+  getUsers: (filters?: { page?: number; limit?: number; search?: string; role?: string }) =>
     apiClient.get<PaginatedResponse<User>>(API_ENDPOINTS.USERS.LIST, { params: filters }),
 
   getUser: (id: string) => 
@@ -421,6 +454,20 @@ export const userApi = {
 
   deleteUser: (id: string) =>
     apiClient.delete<ApiResponse>(API_ENDPOINTS.USERS.DELETE(id)),
+
+  // ✅ NOUVEAU : Activer/Désactiver un utilisateur (admin)
+  toggleUserStatus: (id: string, isActive: boolean) =>
+    apiClient.patch<ApiResponse<{ user: User; isActive: boolean }>>(
+      `/users/${id}/status`,
+      { isActive }
+    ),
+
+  // ✅ NOUVEAU : Modifier le rôle d'un utilisateur (admin)
+  updateUserRole: (id: string, role: string) =>
+    apiClient.patch<ApiResponse<{ user: User }>>(
+      `/users/${id}/role`,
+      { role }
+    ),
 };
 
 // ============================================================================

@@ -4,11 +4,20 @@
 import React from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Heart, ShoppingCart, Star } from 'lucide-react';
+import { Heart, Search, Settings, ShoppingCart, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatPrice } from '@/utils/helpers';
-import type { Product } from '@/types';
-import { ProductCard } from '@../components/features';
+import { User, type Product } from '@/types';
+import { ProductCard } from '@../components/features/ProductCard';
+import { PublicPageHeader } from '@/components/ui/public-page-header';
+
+
+<PublicPageHeader
+  title="Recherche"
+  description={searchQuery ? `Résultats pour "${searchQuery}"` : "Recherchez des produits"}
+  icon={<Search className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+  breadcrumbs={[{ label: 'Recherche' }]}
+/>
 
 interface ProductCardProps {
   product: Product;

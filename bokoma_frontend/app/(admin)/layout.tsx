@@ -1,79 +1,73 @@
-// app/(admin)/layout.tsx 
+// app/(admin)/layout.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from 'next-themes';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useUiStore } from '@/store';
-
+import { PageLoading } from '@/components/ui/page-loading';
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { sidebarOpen } = useUiStore();
+  const { sidebarOpen, toggleSidebar } = useUiStore();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Loading lors du changement de page
+  useEffect(() => {
+    setIsNavigating(true);
+    const timer = setTimeout(() => setIsNavigating(false), 300);
+    return () => clearTimeout(timer);
+  }, [pathname]);
+
   const isDarkMode = mounted && resolvedTheme === 'dark';
 
-  // 🔍 DEBUG OVERLAY - Supprimer en production
- // 🔍 DEBUG OVERLAY - Supprimer en production
-const DebugBar = () => {
-  if (process.env.NEXT_PUBLIC_DEBUG !== 'true') return null;
-  
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: '#1e293b',
-      color: 'white',
-      padding: '0.5rem 1rem',
-      fontSize: '0.75rem',
-      zIndex: 9999,
-      display: 'flex',
-      gap: '1rem',
-      flexWrap: 'wrap'
-    }}>
-      <span>🔧 Layout monté: ✅</span>
-      
-      {/* ✅ FIX: N'afficher le thème qu'après montage client */}
-      <span>🎨 Theme: {mounted ? resolvedTheme : 'loading...'}</span>
-      
-      <span>📦 Sidebar: {sidebarOpen ? 'open' : 'closed'}</span>
-    </div>
-  );
-};
-  return (
-    <div className="flex h-screen bg-background">
-      {/* Debug bar */}
-      <DebugBar />
-      
+    <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
       <AdminSidebar />
-      
+
       {/* Main content */}
       <main
         className={`flex-1 overflow-auto transition-all duration-300 ${
           sidebarOpen ? 'sm:ml-64' : 'sm:ml-20'
         }`}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-background/95 sticky top-0 z-20">
-          <div>
-            <p className="text-sm text-muted-foreground">Mode de thème</p>
-            <h1 className="text-xl font-semibold">Dashboard Admin</h1>
+        {/* Header sticky */}
+        <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-20">
+          <div className="flex items-center gap-3">
+            {/* Bouton menu mobile */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleSidebar}
+              className="md:hidden"
+              aria-label="Toggle menu"
+            >
+              <Menu className="w-4 h-4" />
+            </Button>
+
+            <div>
+              <p className="text-xs text-muted-foreground hidden sm:block">
+                Administration
+              </p>
+              <h1 className="text-lg font-semibold">Bokoma Store</h1>
+            </div>
           </div>
+
           <Button
             type="button"
             variant="outline"
@@ -82,12 +76,28 @@ const DebugBar = () => {
             className="gap-2"
           >
             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            {isDarkMode ? 'Light' : 'Night'}
+            <span className="hidden sm:inline">{isDarkMode ? 'Light' : 'Night'}</span>
           </Button>
+        </header>
+
+        {/* Page content avec loading */}
+        <div className="p-4 sm:p-6 lg:p-8">
+          <AnimatePresence mode="wait">
+            {isNavigating ? (
+              <PageLoading key="loading" message="Chargement..." />
+            ) : (
+              <motion.div
+                key={pathname}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                {children}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-        
-        {/* ⚠️ TOUJOURS rendre les enfants - pas de condition ici */}
-        {React.Children.toArray(children)}
       </main>
     </div>
   );

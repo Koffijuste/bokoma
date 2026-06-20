@@ -1,5 +1,15 @@
 "use client";
 
+import { PublicPageHeader } from @/components/ui/public-page-header
+
+
+<PublicPageHeader
+  title="Conditions d'Utilisation"
+  description="Règles et conditions du service"
+  icon={<FileText className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+  breadcrumbs={[{ label: 'Conditions' }]}
+/>
+
 export default function TermsPage() {
   return (
     <div className="min-h-screen px-4 py-12">

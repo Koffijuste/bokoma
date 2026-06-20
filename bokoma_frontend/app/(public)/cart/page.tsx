@@ -24,6 +24,20 @@ import { ROUTES, STORAGE_KEYS } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
 import type { Cart, Product } from '@/types';
 
+import { PublicPageHeader } from '@/components/ui/public-page-header';
+
+<PublicPageHeader
+  title="Mon Panier"
+  description={`${cart.items.length} article${cart.items.length > 1 ? 's' : ''}`}
+  icon={<ShoppingCart className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+  showBackButton
+  backHref="/products"
+  breadcrumbs={[
+    { label: 'Produits', href: '/products' },
+    { label: 'Panier' }
+  ]}
+/>
+
 // ============================================================================
 // 🔹 DONNÉES GÉOGRAPHIQUES
 // ============================================================================

@@ -12,7 +12,23 @@ import NextImage from 'next/image'; // ✅ Renommé pour éviter conflit avec ne
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants';
 
+import { PublicPageHeader } from '@/components/ui/public-page-header';
 
+// app/(public)/page.tsx
+<PublicPageHeader
+  title="Bokoma Store"
+  description="Découvrez notre collection exclusive de produits de qualité"
+  icon={<ShoppingBag className="w-8 h-8 text-accent" />}
+  hero
+  actions={
+    <Button asChild size="lg" className="gap-2">
+      <Link href="/products">
+        Voir les produits
+        <ArrowRight className="w-4 h-4" />
+      </Link>
+    </Button>
+  }
+/>
 
 // 🎯 CONFIGURATION CENTRALE DES IMAGES
 export const IMAGE_CONFIG = {

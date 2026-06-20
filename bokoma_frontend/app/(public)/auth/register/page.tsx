@@ -12,6 +12,15 @@ import { ROUTES } from '@/constants';
 import { validEmail, validPassword } from '@/utils/helpers';
 import { toast } from 'sonner';
 
+import { PublicPageHeader } from @/components/ui/public-page-header
+
+<PublicPageHeader
+  title="Créer un compte"
+  description="Rejoignez la communauté Bokoma"
+  icon={<UserPlus className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+  breadcrumbs={[{ label: 'Inscription' }]}
+/>
+
 // 🌍 Liste des pays (personnalisable selon votre cible)
 const COUNTRIES = [
   { value: 'CD', label: '🇨🇩 RDC' },

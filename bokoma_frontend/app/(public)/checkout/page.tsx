@@ -11,6 +11,20 @@ import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
 
+import { PublicPageHeader } from '@/components/ui/public-page-header';
+import { CreditCard } from 'lucide-react';
+
+<PublicPageHeader
+  title="Finaliser la commande"
+  description="Complétez vos informations"
+  icon={<CreditCard className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+  showBackButton
+  backHref="/cart"
+  breadcrumbs={[
+    { label: 'Panier', href: '/cart' },
+    { label: 'Commande' }
+  ]}
+/>
 export default function CheckoutPage() {
   const { data: cart, loading, error, refetch } = useFetch(() => cartApi.getCart(), []);
   

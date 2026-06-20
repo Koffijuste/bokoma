@@ -19,6 +19,23 @@ import { useRequireAdmin } from '@/hooks/useAuth';
 import { formatPrice, formatDate } from '@/utils/helpers';
 import { ROUTES } from '@/constants';
 
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+
+// app/(admin)/dashboard/page.tsx
+<PageHeader
+  title="Tableau de Bord"
+  description={`Bienvenue, ${user?.firstName || 'Admin'}`}
+  icon={<LayoutDashboard className="w-5 h-5 text-accent" />}
+  showBackButton
+  breadcrumbs={[{ label: 'Dashboard' }]}
+  actions={
+    <Button onClick={handleRefresh} variant="outline" disabled={isRefreshing} className="gap-2">
+      <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+      Actualiser
+    </Button>
+  }
+/>
 // ============================================================================
 // 🔹 TYPES
 // ============================================================================

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { orderApi } from '@/services';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { formatPrice } from '@/utils/helpers';
+import { BackButton } from '@/components/ui/back-button';
 
 type StatusStat = {
   _id: string;
@@ -287,17 +288,17 @@ export default function AnalyticsAdminPage() {
                   
                   {/* Légende */}
                   <div className="mt-6 grid grid-cols-2 gap-3">
-                    {statusChartData.map((status) => (
-                      <div key={status.name} className="flex items-center gap-2 text-sm">
-                        <span 
-                          className="block h-3 w-3 rounded-full flex-shrink-0" 
-                          style={{ backgroundColor: status.color }} 
-                        />
-                        <span className="font-medium">{status.name}</span>
-                        <span className="text-muted-foreground ml-auto">{status.value}</span>
-                      </div>
-                    ))}
-                  </div>
+  {statusChartData.map((status, index) => (
+    <div key={`status-${status.name}-${index}`} className="flex items-center gap-2 text-sm">
+      <span 
+        className="block h-3 w-3 rounded-full flex-shrink-0" 
+        style={{ backgroundColor: status.color }} 
+      />
+      <span className="font-medium">{status.name}</span>
+      <span className="text-muted-foreground ml-auto">{status.value}</span>
+    </div>
+  ))}
+</div>
                 </>
               )}
             </motion.div>
@@ -346,17 +347,17 @@ export default function AnalyticsAdminPage() {
                   
                   {/* Légende */}
                   <div className="mt-6 grid grid-cols-2 gap-3">
-                    {paymentChartData.map((payment, index) => (
-                      <div key={payment.name} className="flex items-center gap-2 text-sm">
-                        <span 
-                          className="block h-3 w-3 rounded-full flex-shrink-0" 
-                          style={{ backgroundColor: PAYMENT_COLORS[index % PAYMENT_COLORS.length] }} 
-                        />
-                        <span className="font-medium">{payment.name}</span>
-                        <span className="text-muted-foreground ml-auto">{payment.value}</span>
-                      </div>
-                    ))}
-                  </div>
+  {paymentChartData.map((payment, index) => (
+    <div key={`payment-${payment.name}-${index}`} className="flex items-center gap-2 text-sm">
+      <span 
+        className="block h-3 w-3 rounded-full flex-shrink-0" 
+        style={{ backgroundColor: PAYMENT_COLORS[index % PAYMENT_COLORS.length] }} 
+      />
+      <span className="font-medium">{payment.name}</span>
+      <span className="text-muted-foreground ml-auto">{payment.value}</span>
+    </div>
+  ))}
+</div>
                 </>
               )}
             </motion.div>

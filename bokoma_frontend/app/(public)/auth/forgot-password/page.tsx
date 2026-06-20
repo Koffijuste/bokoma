@@ -12,6 +12,17 @@ import { ROUTES } from '@/constants';
 import { validEmail } from '@/utils/helpers';
 import { toast } from 'sonner';
 
+import { PublicPageHeader } from @/components/ui/public-page-header
+// app/(public)/auth/login/page.tsx
+<PublicPageHeader
+  title="Mot de passe oublie ?"
+  description="Récupérer votre compte Bokoma"
+  icon={<LogIn className="w-6 h-6 text-accent" />}
+  breadcrumbs={[
+    { label: 'Accueil', href: '/' },
+    { label: 'Mot de passe oublie' }
+  ]}
+/>
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');

@@ -19,6 +19,15 @@ import { formatPrice } from '@/utils/helpers';
 import { toast } from 'sonner';
 import type { Product } from '@/types';
 
+import { PublicPageHeader } from '@/components/ui/public-page-header';
+
+<PublicPageHeader
+  title="Ma Liste de Souhaits"
+  description={`${wishlist.length} produit${wishlist.length > 1 ? 's' : ''} sauvegardé${wishlist.length > 1 ? 's' : ''}`}
+  icon={<Heart className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+  breadcrumbs={[{ label: 'Wishlist' }]}
+/>
+
 // ============================================================================
 // 🔹 HELPERS
 // ============================================================================

@@ -11,8 +11,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useWishlist } from '@/hooks/useWishlist';
 import { apiClient } from '@/services/api';
-import { formatPrice } from '@/utils/helpers';
-import { cn } from '@/utils/helpers';
+import { formatPrice, cn } from '@/utils/helpers';
 import type { Product } from '@/types';
 
 // ============================================================================
@@ -23,7 +22,7 @@ interface ProductCardProps {
   product: Product;
   variant?: 'default' | 'compact' | 'featured';
   showQuickActions?: boolean;
-  onAddToCart?: (productId: string) => void;
+  onAddToCart?: (product: Product) => void;
 }
 
 // ============================================================================
@@ -59,11 +58,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onAddToCart,
 }) => {
   const [addingToCart, setAddingToCart] = useState(false);
-  
-  // ✅ Hook wishlist intégré
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const router = useRouter();
 
-  // ✅ Guard clause
+  // Guard clause
   if (!product) {
     return (
       <div className="bg-card border border-border rounded-2xl overflow-hidden p-4 text-center text-muted-foreground">
@@ -72,7 +70,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     );
   }
 
-  // ✅ Données produit
+  // Données produit
   const productId = product._id || (product as any).id;
   const productSlug = product.slug || productId;
   const imageUrl = getProductImage(product);
@@ -89,7 +87,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const categoryName = typeof category === 'object' ? category?.name : category;
   
   const isWishlisted = isInWishlist(productId);
-  const router = useRouter();
 
   // ============================================================================
   // 🔹 HANDLERS
@@ -111,7 +108,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     } else {
       toast.error('Action impossible. Veuillez vous connecter.');
     }
-  }, [productId, product.name, isWishlisted, toggleWishlist]);
+  }, [productId, product.name, isWishlisted, toggleWishlist, product]);
 
   const handleAddToCart = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -119,7 +116,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
     if (!productId || !inStock) return;
 
-    // ✅ Callback custom si fourni (passer l'objet produit pour cohérence)
+    // Callback custom si fourni
     if (onAddToCart) {
       onAddToCart(product);
       return;
@@ -134,12 +131,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       });
       toast.success(`${product.name} ajouté au panier`);
     } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || 'Erreur lors de l\'ajout au panier';
+      const message = err?.response?.data?.message || err?.message || "Erreur lors de l'ajout au panier";
       toast.error(message);
     } finally {
       setAddingToCart(false);
     }
-  }, [productId, product.name, inStock, onAddToCart]);
+  }, [productId, product.name, inStock, onAddToCart, product]);
 
   // ============================================================================
   // 🔹 VARIANTS STYLES
@@ -191,7 +188,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           />
         </Link>
 
-        {/* Badges (positioned relative to the image wrapper) */}
+        {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           {(product as any).isNewProduct && (
             <span className="px-2 py-1 text-xs font-medium bg-accent text-accent-foreground rounded-full shadow-sm">
@@ -210,7 +207,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
-        {/* ✅ Bouton cœur (wishlist) - toujours visible (moved outside the link) */}
+        {/* Bouton wishlist */}
         {showQuickActions && (
           <button
             onClick={handleToggleWishlist}
@@ -226,7 +223,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </button>
         )}
 
-        {/* Actions rapides au hover (moved outside the link, use router.push) */}
+        {/* Actions rapides au hover */}
         {showQuickActions && (
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
             <Button
@@ -309,7 +306,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <p className="text-xs text-destructive font-medium">Rupture de stock</p>
         )}
 
-        {/* ✅ Bouton Ajouter au panier (visible) */}
+        {/* Bouton Ajouter au panier */}
         {variant !== 'compact' && (
           <Button
             size="sm"

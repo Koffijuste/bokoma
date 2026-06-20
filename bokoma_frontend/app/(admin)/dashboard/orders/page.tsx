@@ -23,6 +23,25 @@ import { formatPrice, formatDate } from '@/utils/helpers';
 import type { Order } from '@/types';
 import { toast } from 'sonner';
 
+
+// app/(admin)/dashboard/orders/page.tsx
+<PageHeader
+  title="Commandes"
+  description="Suivez et gérez les commandes clients"
+  icon={<ShoppingCart className="w-5 h-5 text-accent" />}
+  showBackButton
+  breadcrumbs={[{ label: 'Commandes' }]}
+  actions={
+    <>
+      <Badge variant="secondary">{orders.length} commandes</Badge>
+      <Button onClick={fetchOrders} variant="outline" className="gap-2">
+        <RefreshCw className="w-4 h-4" />
+        Actualiser
+      </Button>
+    </>
+  }
+/>
+
 const statusOptions = [
   { value: 'pending', label: 'En attente', icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-500/10' },
   { value: 'confirmed', label: 'Confirmée', icon: CheckCircle, color: 'text-blue-600', bg: 'bg-blue-500/10' },

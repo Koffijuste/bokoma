@@ -14,6 +14,14 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/constants';
 
+import { PublicPageHeader } from @/components/ui/public-page-header
+
+<PublicPageHeader
+  title="Connexion"
+  description="Connectez-vous à votre compte"
+  icon={<LogIn className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+  breadcrumbs={[{ label: 'Connexion' }]}
+/>
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();

@@ -20,6 +20,24 @@ import { apiClient } from '@/services/api';
 import { ROUTES } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
 import type { Order, Product } from '@/types';
+import { PublicPageHeader } from '@/components/ui/public-page-header';
+
+
+<PublicPageHeader
+  title="Mon Profil"
+  description="Gérez vos informations personnelles"
+  icon={<User className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+  breadcrumbs={[{ label: 'Profil' }]}
+  actions={
+    <Button asChild variant="outline" className="gap-2">
+      <Link href="/profile/settings">
+        <Settings className="w-4 h-4" />
+        Paramètres
+      </Link>
+    </Button>
+  }
+/>
+
 
 // ============================================================================
 // 🔹 HELPERS

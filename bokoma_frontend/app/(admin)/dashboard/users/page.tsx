@@ -27,8 +27,7 @@ import { userApi } from '@/services';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { formatDate } from '@/utils/helpers';
 import { toast } from 'sonner';
-import type { User, ApiResponse } from '@/types';
-
+import type { User, ApiResponse, UserRole } from '@/types';
 // ──────────────────────────────────────────────────────────────────────────
 // 🔹 CONSTANTS & CONFIG
 // ──────────────────────────────────────────────────────────────────────────

@@ -13,6 +13,17 @@ import { Label } from '@/components/ui/label';
 import { authApi } from '@/services';
 import { ROUTES } from '@/constants';
 
+import { PublicPageHeader } from @/components/ui/public-page-header
+// app/(public)/auth/login/page.tsx
+<PublicPageHeader
+  title="Reset-Password"
+  description="Réinitialiser votre mot de passe Bokoma"
+  icon={<LogIn className="w-6 h-6 text-accent" />}
+  breadcrumbs={[
+    { label: 'Accueil', href: '/' },
+    { label: 'Reset-Password' }
+  ]}
+/>
 // ============================================================================
 // 🔹 COMPOSANT PRINCIPAL (enveloppé dans Suspense)
 // ============================================================================

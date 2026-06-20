@@ -6,7 +6,24 @@ import { useFetch } from '@/hooks';
 import { orderApi } from '@/services';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatPrice } from '@/utils/helpers';
+import { Badge } from '@/components/ui/badge';
+import { RefreshCw, ShoppingCart } from 'lucide-react';
+import { PageHeader } from '@/components/ui/page-header';
 
+<PageHeader
+  title="Commandes"
+  description="Suivez et gérez les commandes clients"
+  icon={<ShoppingCart className="w-5 h-5 text-accent" />}
+  showBackButton
+  actions={
+    <>
+      <Badge variant="secondary">{orders.length} commandes</Badge>
+      <Button onClick={refreshOrders}>
+        <RefreshCw className="w-4 h-4" />
+      </Button>
+    </>
+  }
+/>
 export default function OrdersPage() {
   const { data, loading, error, refetch } = useFetch(
     () => orderApi.getMyOrders({ page: 1, limit: 10 }),

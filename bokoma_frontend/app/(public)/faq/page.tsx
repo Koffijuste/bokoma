@@ -1,8 +1,21 @@
 "use client";
 
+import React from 'react';
+import { PublicPageHeader } from '@/components/ui/public-page-header';
+import { HelpCircle } from 'lucide-react';
+
 export default function FaqPage() {
   return (
     <div className="min-h-screen px-4 py-12">
+      <PublicPageHeader
+        title="Questions Fréquentes"
+        description="Trouvez rapidement les réponses à vos questions"
+        icon={<HelpCircle className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
+        hero
+        breadcrumbs={[
+          { label: 'FAQ' }
+        ]}
+      />
       <div className="max-w-5xl mx-auto space-y-8">
         <div className="rounded-3xl border border-border bg-card p-10 shadow-sm"
         >

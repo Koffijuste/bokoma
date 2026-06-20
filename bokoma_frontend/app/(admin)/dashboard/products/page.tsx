@@ -18,6 +18,27 @@ import imageCompression from 'browser-image-compression';
 import { toast } from 'sonner';
 import type { Category, Product } from '@/types';
 
+
+// app/(admin)/dashboard/products/page.tsx
+<PageHeader
+  title="Produits"
+  description="Gérez votre catalogue de produits"
+  icon={<Package className="w-5 h-5 text-accent" />}
+  showBackButton
+  breadcrumbs={[
+    { label: 'Catalogue', href: '/dashboard/catalog' },
+    { label: 'Produits' }
+  ]}
+  actions={
+    <>
+      <Badge variant="secondary">{products.length} produits</Badge>
+      <Button onClick={() => { resetForm(); setModalOpen(true); }} className="gap-2">
+        <Plus className="w-4 h-4" />
+        Nouveau Produit
+      </Button>
+    </>
+  }
+/>
 // ============================================================================
 // 🔹 CONSTANTS
 // ============================================================================
