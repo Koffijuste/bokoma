@@ -27,7 +27,6 @@ const orderItemSchema = new mongoose.Schema(
   { _id: true }
 );
 
-// Calcul automatique du subtotal
 orderItemSchema.pre('validate', async function() {
   if (this.price && this.quantity) {
     this.subtotal = this.price * this.quantity;
@@ -66,7 +65,7 @@ const shippingSchema = new mongoose.Schema(
 
 
 // ─────────────────────────────
-// PAYMENT
+// PAYMENT (MIS À JOUR avec champs de vérification)
 // ─────────────────────────────
 const paymentSchema = new mongoose.Schema(
   {
@@ -77,42 +76,62 @@ const paymentSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'paid', 'failed', 'refunded', 'partially_refunded'],
+      enum: ['pending', 'paid', 'failed', 'expired', 'refunded', 'partially_refunded', 'partial'],
       default: 'pending'
     },
     transactionId: { type: String, trim: true, index: true },
     provider: { type: String, trim: true },
+    amountPaid: { type: Number, default: 0, min: 0 },
+    remainingAmount: { type: Number, default: 0, min: 0 },
+    rejectionReason: { type: String, trim: true },
     details: {
-      // Carte bancaire (ne JAMAIS stocker le CVV en clair en production !)
-      cardLast4: { type: String }, // Seulement les 4 derniers chiffres
+      cardLast4: { type: String },
       cardName: { type: String },
       cardExpiry: { type: String },
-      
-      // Mobile Money
       phoneNumber: { type: String },
       operator: { type: String },
-      
-      // Virement bancaire
       bankName: { type: String },
       bankReference: { type: String },
     },
     paidAt: { type: Date },
+    failedAt: { type: Date },
+    expiredAt: { type: Date },
     refundedAt: { type: Date },
-    refundAmount: { type: Number, min: 0 }
+    refundAmount: { type: Number, min: 0 },
+    
+    // ✅ NOUVEAUX CHAMPS : Suivi des vérifications API
+    verificationAttempts: { 
+      type: Number, 
+      default: 0,
+      min: 0,
+    },
+    lastVerificationAt: { 
+      type: Date,
+    },
+    verificationBlocked: { 
+      type: Boolean, 
+      default: false,
+    },
+    verificationBlockedReason: { 
+      type: String, 
+      trim: true,
+    },
   },
   { _id: false }
 );
 
-// Mettre à jour paidAt automatiquement
 paymentSchema.pre('save', async function() {
-  if (this.isModified('status') && this.status === 'paid' && !this.paidAt) {
-    this.paidAt = new Date();
+  if (this.isModified('status')) {
+    const now = new Date();
+    if (this.status === 'paid' && !this.paidAt) this.paidAt = now;
+    if (this.status === 'failed' && !this.failedAt) this.failedAt = now;
+    if (this.status === 'expired' && !this.expiredAt) this.expiredAt = now;
   }
 });
 
 
 // ─────────────────────────────
-// ORDER
+// ORDER (MIS À JOUR)
 // ─────────────────────────────
 const orderSchema = new mongoose.Schema(
   {
@@ -149,6 +168,29 @@ const orderSchema = new mongoose.Schema(
     },
     notes: { type: String, trim: true },
     cancelReason: { type: String, trim: true },
+    
+    // ✅ Gestion de l'expiration du paiement
+    paymentExpiresAt: { 
+      type: Date, 
+      default: function() {
+        return new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+      }
+    },
+    paymentNotified: {
+      reminder: { type: Boolean, default: false },
+      expired: { type: Boolean, default: false },
+    },
+    
+    // ✅ NOUVEAU : Archivage par le client
+    archivedByUser: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    archivedAt: {
+      type: Date,
+    },
+    
     statusHistory: [
       {
         status: { type: String, required: true },
@@ -172,7 +214,20 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ 'payment.status': 1, createdAt: -1 });
-// orderSchema.index({ orderNumber: 1 }, { unique: true });
+orderSchema.index({ 
+  'payment.status': 1, 
+  paymentExpiresAt: 1, 
+  'paymentNotified.expired': 1 
+});
+// ✅ Index pour filtrer les commandes à vérifier
+orderSchema.index({
+  'payment.status': 1,
+  'payment.verificationAttempts': 1,
+  'payment.lastVerificationAt': 1,
+  'payment.verificationBlocked': 1,
+});
+// ✅ NOUVEAU : Index pour les commandes archivées
+orderSchema.index({ user: 1, archivedByUser: 1, createdAt: -1 });
 
 
 // ─────────────────────────────
@@ -192,6 +247,20 @@ orderSchema.virtual('isDelivered').get(function() {
 
 orderSchema.virtual('isCancelled').get(function() {
   return this.status === 'cancelled';
+});
+
+orderSchema.virtual('isPaymentExpired').get(function() {
+  if (this.payment?.status !== 'pending') return false;
+  return new Date() > this.paymentExpiresAt;
+});
+
+orderSchema.virtual('paymentTimeRemainingMs').get(function() {
+  if (this.payment?.status !== 'pending') return 0;
+  return Math.max(0, this.paymentExpiresAt - new Date());
+});
+
+orderSchema.virtual('isArchived').get(function() {
+  return this.archivedByUser === true;
 });
 
 
@@ -221,18 +290,50 @@ orderSchema.methods.markAsPaid = function(transactionId, provider) {
   this.addStatusHistory('processing', 'Paiement confirmé');
 };
 
+orderSchema.methods.markAsFailed = function(reason) {
+  this.payment.status = 'failed';
+  this.payment.failedAt = new Date();
+  this.payment.rejectionReason = reason || 'Paiement échoué';
+  this.status = 'cancelled';
+  this.cancelReason = reason || 'Paiement échoué';
+  this.addStatusHistory('cancelled', reason || 'Paiement échoué');
+};
+
+orderSchema.methods.markAsExpired = function() {
+  this.payment.status = 'expired';
+  this.payment.expiredAt = new Date();
+  this.payment.rejectionReason = 'Délai de paiement dépassé (5 minutes)';
+  this.status = 'cancelled';
+  this.cancelReason = 'Paiement expiré';
+  this.paymentNotified.expired = true;
+  this.addStatusHistory('cancelled', 'Paiement expiré - Commande annulée automatiquement');
+};
+
+orderSchema.methods.rejectPayment = function(reason, adminId) {
+  this.payment.status = 'failed';
+  this.payment.failedAt = new Date();
+  this.payment.rejectionReason = reason || 'Paiement rejeté par l\'administrateur';
+  this.status = 'cancelled';
+  this.cancelReason = reason || 'Paiement rejeté';
+  this.addStatusHistory('cancelled', reason || 'Paiement rejeté par admin', adminId);
+};
+
 orderSchema.methods.cancel = function(reason) {
   this.status = 'cancelled';
   this.cancelReason = reason || 'Annulé par l\'utilisateur';
   this.addStatusHistory('cancelled', reason || 'Commande annulée');
 };
 
+// ✅ NOUVEAU : Archiver la commande (masquer du profil client)
+orderSchema.methods.archiveByUser = function() {
+  this.archivedByUser = true;
+  this.archivedAt = new Date();
+};
+
 
 // ─────────────────────────────
 // HOOKS
 // ─────────────────────────────
-
-// Générer orderNumber automatiquement
 orderSchema.pre('save', async function() {
   if (!this.orderNumber) {
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -241,14 +342,12 @@ orderSchema.pre('save', async function() {
   }
 });
 
-// Calculer le total avant sauvegarde
 orderSchema.pre('save', async function() {
   if (this.isModified('items') || this.isModified('shippingCost') || this.isModified('discount') || this.isModified('tax')) {
     this.calculateTotal();
   }
 });
 
-// Ajouter au statusHistory quand le statut change
 orderSchema.pre('save', async function() {
   if (this.isModified('status')) {
     const lastHistory = this.statusHistory[this.statusHistory.length - 1];
@@ -262,6 +361,12 @@ orderSchema.pre('save', async function() {
   }
 });
 
+orderSchema.pre('save', async function() {
+  if (this.isNew && !this.paymentExpiresAt) {
+    this.paymentExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+  }
+});
+
 
 // ─────────────────────────────
 // STATIC METHODS
@@ -272,7 +377,10 @@ orderSchema.statics.findByOrderNumber = function(orderNumber) {
 
 orderSchema.statics.getUserOrders = function(userId, options = {}) {
   const { page = 1, limit = 10, status } = options;
-  const query = { user: userId };
+  const query = { 
+    user: userId,
+    archivedByUser: { $ne: true } // ✅ Exclure les commandes archivées
+  };
   if (status) query.status = status;
   
   return this.find(query)
@@ -280,6 +388,26 @@ orderSchema.statics.getUserOrders = function(userId, options = {}) {
     .skip((page - 1) * limit)
     .limit(limit)
     .populate('items.product', 'name slug images');
+};
+
+orderSchema.statics.getExpiredPendingPayments = function() {
+  const now = new Date();
+  return this.find({
+    'payment.status': 'pending',
+    paymentExpiresAt: { $lt: now },
+    'paymentNotified.expired': { $ne: true },
+  }).populate('user', 'firstName lastName email phone');
+};
+
+orderSchema.statics.getPaymentsToRemind = function() {
+  const now = new Date();
+  const reminderThreshold = new Date(now.getTime() + 2 * 60 * 1000); // 2 min avant
+  
+  return this.find({
+    'payment.status': 'pending',
+    paymentExpiresAt: { $gt: now, $lt: reminderThreshold },
+    'paymentNotified.reminder': { $ne: true },
+  }).populate('user', 'firstName lastName email phone');
 };
 
 

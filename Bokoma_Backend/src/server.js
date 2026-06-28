@@ -1,168 +1,136 @@
 // src/server.js
 require('dotenv').config();
 
-// ─── 🔍 ENV CHECK (temporaire — retirer après validation) ──────────────
-if (process.env.NODE_ENV !== 'production') {
-  const apiKey = process.env.CINETPAY_API_KEY;
-  const apiPassword = process.env.CINETPAY_API_PASSWORD_CI;
-  const apiUrl = process.env.CINETPAY_API_URL;
-  console.log('🔑 [ENV] CinetPay config:', {
-    apiKey: apiKey
-      ? `${apiKey.slice(0, 8)}... (${apiKey.length} chars)`
-      : '❌ MISSING',
-    apiPassword: apiPassword
-      ? `******* (${apiPassword.length} chars)`
-      : '❌ MISSING',
-    apiUrl: apiUrl || '❌ MISSING',
-  });
-}
-
-const express = require('express');
-const path = require('path');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
+const express    = require('express');
+const path       = require('path');
+const cors       = require('cors');
+const helmet     = require('helmet');
+const morgan     = require('morgan');
+const rateLimit  = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
-const dns = require("dns");
-const connectDB = require('./config/db');
-// const hpp = require('hpp'); // Optionnel
+const connectDB  = require('./config/db');
 
 const app = express();
 
-// ─── Configuration de base ─────────────────────────────────────────────
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
+// ─── Configuration de base ────────────────────────────────────────────────────
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
-// ─── Middlewares de sécurité et parsing ────────────────────────────────
-app.use(helmet());
-
-// ✅ helmet() configuré UNE SEULE FOIS avec options explicites
+// ─── Sécurité ─────────────────────────────────────────────────────────────────
+// ✅ Un seul appel helmet() avec toutes les options
 app.use(helmet({
-  // Content Security Policy personnalisé
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
-      "default-src": ["'self'"],
-      "script-src": ["'self'", "'unsafe-inline'", 'https:'],
-      "img-src": ["'self'", 'data:', 'blob:', 'https:', 'res.cloudinary.com'], // ✅ Ajout Cloudinary
-      "style-src": ["'self'", "'unsafe-inline'", 'https:'],
-      "connect-src": ["'self'", 'https:', 'http://localhost:*'], // ✅ Autoriser localhost en dev
+      'default-src': ["'self'"],
+      'script-src':  ["'self'", "'unsafe-inline'", 'https:'],
+      'img-src':     ["'self'", 'data:', 'blob:', 'https:', 'res.cloudinary.com'],
+      'style-src':   ["'self'", "'unsafe-inline'", 'https:'],
+      'connect-src': ["'self'", 'https:', 'http://localhost:*'],
     },
   },
-  // ✅ Désactiver COOP/COEP qui peuvent bloquer les cookies cross-origin en dev
-  crossOriginOpenerPolicy: process.env.NODE_ENV === 'production' ? { policy: 'same-origin' } : false,
+  crossOriginOpenerPolicy:  process.env.NODE_ENV === 'production' ? { policy: 'same-origin' } : false,
   crossOriginEmbedderPolicy: process.env.NODE_ENV === 'production' ? { policy: 'require-corp' } : false,
 }));
 
+// ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true,
-  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+  origin:         process.env.CLIENT_URL || 'http://localhost:3000',
+  credentials:    true,
+  methods:        ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+// ─── Parsers ──────────────────────────────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }));           // ✅ 100mb → 10mb (sécurité)
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-
-// Data sanitization
+// ─── Sanitization & logging ───────────────────────────────────────────────────
 app.use(require('./middlewares/sanitize'));
-
-// Prevent HTTP parameter pollution (optionnel)
-// app.use(hpp());
-
 app.use(morgan('dev'));
 
-// ─── ✅ HEALTH CHECK - PLACÉ AVANT LE RATE LIMITER ─────────────────────
-
-app.use('/api/v1/health', require('./routes/health.routes'));
-
-
-// ✅ Servir les fichiers statiques du dossier uploads
+// ─── Fichiers statiques ───────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// ─── Rate Limiters ─────────────────────────────────────────────────────
+// ─── Rate Limiters ────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 500,
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders:   false,
   message: { success: false, message: 'Trop de requêtes, réessayez plus tard.' },
 });
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20, // Plus restrictif pour l'authentification
+  max: 20,
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders:   false,
   message: { success: false, message: 'Trop de tentatives, réessayez dans quelques minutes.' },
 });
 
-// Appliquer le rate limiter global (NE s'applique PAS à /health)
+// ─── Health check (avant rate limiter global) ─────────────────────────────────
+app.use('/api/v1/health', require('./routes/health.routes'));
+
+// ─── Rate limiter global ──────────────────────────────────────────────────────
 app.use(apiLimiter);
 
-// AVANT les routes, pour logger TOUS les bodies reçus
-app.use((req, res, next) => {
-  if (process.env.NODE_ENV === 'development' && req.path.includes('/auth')) {
-    console.log('📦 Raw body received:', {
-      path: req.path,
-      method: req.method,
-      contentType: req.headers['content-type'],
-      body: req.body,
-      raw: req.rawBody, // Si vous utilisez raw-body middleware
-    });
-  }
-  next();
-});
+// ─── Routes API ───────────────────────────────────────────────────────────────
 
-// ─── Routes API ────────────────────────────────────────────────────────
+// Webhook (pas de rate limiter — appelé par CinetPay)
+app.use('/api/v1/webhook', require('./routes/webhook.routes'));
 
+// Auth
 app.use('/api/v1/auth', authLimiter, require('./routes/auth.routes'));
 
-// Autres routes (déjà protégées par apiLimiter global)
-app.use('/api/v1/users', require('./routes/user.routes'));
-app.use('/api/v1/products', require('./routes/product.routes'));
+// Ressources
+app.use('/api/v1/users',      require('./routes/user.routes'));
+app.use('/api/v1/products',   require('./routes/product.routes'));
 app.use('/api/v1/categories', require('./routes/category.routes'));
-app.use('/api/v1/cart', require('./routes/cart.routes'));
-app.use('/api/v1/orders', require('./routes/order.routes'));
-app.use('/api/v1/reviews', require('./routes/review.routes'));
-app.use('/api/v1/coupons', require('./routes/coupon.routes'));
+app.use('/api/v1/cart',       require('./routes/cart.routes'));
 
-// ─── Gestion des routes non trouvées (404) ─────────────────────────────
-app.use((req, res, next) => {
+// ✅ Orders — order.routes gère TOUTES les routes /orders (clients + admin)
+app.use('/api/v1/orders',     require('./routes/order.routes'));
+
+// ✅ Payments admin — préfixe dédié, plus de conflit avec /orders
+// Anciennes URLs :                     Nouvelles URLs :
+//   GET /api/v1/orders/payments/...  →  GET /api/v1/payments/pending
+//   GET /api/v1/orders/notifications →  GET /api/v1/payments/notifications
+app.use('/api/v1/payments',   require('./routes/payment.routes'));
+
+app.use('/api/v1/reviews',    require('./routes/review.routes'));
+app.use('/api/v1/coupons',    require('./routes/coupon.routes'));
+
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/v1/test/cinetpay', require('./routes/test.cinetpay.routes'));
+}
+
+// ─── 404 ──────────────────────────────────────────────────────────────────────
+app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route non trouvée: ${req.originalUrl}` });
 });
 
-// ─── Error Handler Global (DOIT être le dernier middleware) ────────────
+// ─── Error handler global ─────────────────────────────────────────────────────
 app.use(require('./middlewares/errorHandler'));
 
-// ─── Connexion MongoDB + Démarrage du serveur ──────────────────────────
+// ─── Démarrage ────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-
-
-// Forcer des DNS publics fonctionnels
-// dns.setServers([
-//   "8.8.8.8",
-//   "1.1.1.1"
-// ]);
-
-// console.log("DNS utilisés :", dns.getServers());
+const { startPaymentExpiryJob }       = require('./jobs/paymentExpiry.job');
+const { startPaymentVerificationJob } = require('./jobs/paymentVerification.job');
 
 connectDB()
   .then(() => {
     console.log('✅ MongoDB connecté');
+    startPaymentExpiryJob();
+    startPaymentVerificationJob();
     app.listen(PORT, () => {
-      console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
-      console.log(`🏥 Health check: http://localhost:${PORT}/api/v1/health`);
+      console.log(`🚀 Serveur : http://localhost:${PORT}`);
+      console.log(`🏥 Health  : http://localhost:${PORT}/api/v1/health`);
     });
   })
   .catch((err) => {
-    console.error('❌ Erreur MongoDB:', err.message);
+    console.error('❌ MongoDB erreur:', err.message);
     process.exit(1);
   });
 

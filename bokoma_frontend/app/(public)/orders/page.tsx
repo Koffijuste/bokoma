@@ -1,29 +1,13 @@
+// app/(public)/orders/page.tsx
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
 import { useFetch } from '@/hooks';
 import { orderApi } from '@/services';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatPrice } from '@/utils/helpers';
-import { Badge } from '@/components/ui/badge';
-import { RefreshCw, ShoppingCart } from 'lucide-react';
-import { PageHeader } from '@/components/ui/page-header';
+import NextImage from 'next/image';
 
-<PageHeader
-  title="Commandes"
-  description="Suivez et gérez les commandes clients"
-  icon={<ShoppingCart className="w-5 h-5 text-accent" />}
-  showBackButton
-  actions={
-    <>
-      <Badge variant="secondary">{orders.length} commandes</Badge>
-      <Button onClick={refreshOrders}>
-        <RefreshCw className="w-4 h-4" />
-      </Button>
-    </>
-  }
-/>
 export default function OrdersPage() {
   const { data, loading, error, refetch } = useFetch(
     () => orderApi.getMyOrders({ page: 1, limit: 10 }),
@@ -33,14 +17,11 @@ export default function OrdersPage() {
   return (
     <div className="min-h-screen px-4 py-12">
       <div className="max-w-7xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
+        {/* ✅ Animation CSS au lieu de framer-motion */}
+        <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
           <h1 className="text-4xl font-bold mb-2">Mes Commandes</h1>
           <p className="text-muted-foreground">Suivez l'état de vos achats.</p>
-        </motion.div>
+        </div>
 
         {loading ? (
           <div className="space-y-4">
@@ -52,18 +33,17 @@ export default function OrdersPage() {
             ))}
           </div>
         ) : error ? (
-          <div className="rounded-3xl border border-destructive bg-destructive/10 p-8 text-center text-destructive">
+          <div className="rounded-3xl border border-destructive bg-destructive/10 p-8 text-center text-destructive animate-in fade-in zoom-in duration-300">
             <p className="mb-4">Erreur: {error.message}</p>
             <Button onClick={() => refetch()}>Réessayer</Button>
           </div>
         ) : data?.data?.length ? (
           <div className="space-y-4">
-            {data.data.map((order) => (
-              <motion.div
+            {data.data.map((order, index) => (
+              <div
                 key={order._id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-3xl border border-border bg-card p-6"
+                className="rounded-3xl border border-border bg-card p-6 hover:shadow-lg transition-shadow duration-300 animate-in fade-in slide-in-from-bottom-4 duration-500"
+                style={{ animationDelay: `${index * 100}ms` }}
               >
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -91,11 +71,11 @@ export default function OrdersPage() {
                     <p className="font-medium">{order.shipping.city}</p>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         ) : (
-          <div className="rounded-3xl border border-border bg-card p-12 text-center">
+          <div className="rounded-3xl border border-border bg-card p-12 text-center animate-in fade-in zoom-in duration-300">
             <h2 className="text-2xl font-semibold mb-3">Aucune commande trouvée</h2>
             <p className="text-muted-foreground mb-6">
               Vous n'avez pas encore passé de commande.

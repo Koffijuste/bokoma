@@ -26,17 +26,12 @@ const nextConfig = {
         hostname: 'placehold.co',
         pathname: '/**',
       },
-      // 🎯 Ajoutez d'autres domaines ici si besoin
-      // { protocol: 'https', hostname: 'votre-cdn.com', pathname: '/**' },
     ],
-    formats: ['image/webp', 'image/avif'], // ✅ Ajout AVIF pour meilleure compression
-    minimumCacheTTL: 60, // ✅ Cache minimum 60 secondes
+    formats: ['image/avif', 'image/webp'], // ✅ AVIF en premier (meilleure compression)
+    minimumCacheTTL: 60 * 60 * 24 * 30, // ✅ 30 jours de cache (au lieu de 60s)
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
-  
-  // 📦 Output standalone pour déploiement Docker/VM optimisé
-  //output: 'standalone',
   
   // 🗜️ Compression activée
   compress: true,
@@ -44,9 +39,9 @@ const nextConfig = {
   // 🔍 Source maps désactivées en prod pour réduire la taille
   productionBrowserSourceMaps: false,
   
-  // ⚡ Expérimental : optimisation des imports lucide-react
+  // ⚡ Expérimental : optimisation des imports
   experimental: {
-    //optimizePackageImports: ['lucide-react', 'framer-motion'],
+    optimizePackageImports: ['lucide-react', 'recharts', 'date-fns', 'framer-motion'],
   },
   
   // 🛣️ Typed routes (désactivé pour flexibilité)

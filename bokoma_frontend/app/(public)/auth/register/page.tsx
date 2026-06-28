@@ -4,7 +4,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { Mail, Lock, Eye, EyeOff, User, Phone, MapPin, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { authApi } from '@/services';
@@ -12,16 +11,6 @@ import { ROUTES } from '@/constants';
 import { validEmail, validPassword } from '@/utils/helpers';
 import { toast } from 'sonner';
 
-import { PublicPageHeader } from @/components/ui/public-page-header
-
-<PublicPageHeader
-  title="Créer un compte"
-  description="Rejoignez la communauté Bokoma"
-  icon={<UserPlus className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
-  breadcrumbs={[{ label: 'Inscription' }]}
-/>
-
-// 🌍 Liste des pays (personnalisable selon votre cible)
 const COUNTRIES = [
   { value: 'CD', label: '🇨🇩 RDC' },
   { value: 'CG', label: '🇨🇬 Congo-Brazzaville' },
@@ -114,12 +103,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-lg"
-      >
+      <div className="w-full max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-sm">
           <div className="text-center mb-6">
             <h1 className="text-3xl font-bold mb-2">Créer un Compte</h1>
@@ -127,40 +111,61 @@ export default function RegisterPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Nom & Prénom */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Prénom</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <input type="text" placeholder="Votre prénom" value={formData.firstName} onChange={handleChange('firstName')} className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.firstName ? 'border-destructive' : 'border-border'}`} />
+                  <input 
+                    type="text" 
+                    placeholder="Votre prénom" 
+                    value={formData.firstName} 
+                    onChange={handleChange('firstName')} 
+                    className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.firstName ? 'border-destructive' : 'border-border'}`} 
+                  />
                 </div>
                 {errors.firstName && <p className="text-xs text-destructive mt-1">{errors.firstName}</p>}
               </div>
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Nom</label>
-                <input type="text" placeholder="Votre nom" value={formData.lastName} onChange={handleChange('lastName')} className={`w-full bg-background border-2 rounded-lg px-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.lastName ? 'border-destructive' : 'border-border'}`} />
+                <input 
+                  type="text" 
+                  placeholder="Votre nom" 
+                  value={formData.lastName} 
+                  onChange={handleChange('lastName')} 
+                  className={`w-full bg-background border-2 rounded-lg px-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.lastName ? 'border-destructive' : 'border-border'}`} 
+                />
                 {errors.lastName && <p className="text-xs text-destructive mt-1">{errors.lastName}</p>}
               </div>
             </div>
 
-            {/* Email */}
             <div>
               <label className="text-sm font-medium mb-1.5 block">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                <input type="email" placeholder="vous@exemple.com" value={formData.email} onChange={handleChange('email')} className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.email ? 'border-destructive' : 'border-border'}`} />
+                <input 
+                  type="email" 
+                  placeholder="vous@exemple.com" 
+                  value={formData.email} 
+                  onChange={handleChange('email')} 
+                  className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.email ? 'border-destructive' : 'border-border'}`} 
+                />
               </div>
               {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
             </div>
 
-            {/* Téléphone & Pays */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Téléphone</label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <input type="tel" placeholder="+243 000 000 000" value={formData.phone} onChange={handleChange('phone')} className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.phone ? 'border-destructive' : 'border-border'}`} />
+                  <input 
+                    type="tel" 
+                    placeholder="+243 000 000 000" 
+                    value={formData.phone} 
+                    onChange={handleChange('phone')} 
+                    className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.phone ? 'border-destructive' : 'border-border'}`} 
+                  />
                 </div>
                 {errors.phone && <p className="text-xs text-destructive mt-1">{errors.phone}</p>}
               </div>
@@ -168,7 +173,11 @@ export default function RegisterPage() {
                 <label className="text-sm font-medium mb-1.5 block">Pays</label>
                 <div className="relative">
                   <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
-                  <select value={formData.country} onChange={handleChange('country')} className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition appearance-none ${errors.country ? 'border-destructive' : 'border-border'}`}>
+                  <select 
+                    value={formData.country} 
+                    onChange={handleChange('country')} 
+                    className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition appearance-none ${errors.country ? 'border-destructive' : 'border-border'}`}
+                  >
                     <option value="">Sélectionner</option>
                     {COUNTRIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
@@ -177,24 +186,38 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* Adresse */}
             <div>
               <label className="text-sm font-medium mb-1.5 block">Adresse</label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-3 w-4 h-4 text-muted-foreground pointer-events-none" />
-                <input type="text" placeholder="Quartier, Avenue, Commune..." value={formData.address} onChange={handleChange('address')} className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.address ? 'border-destructive' : 'border-border'}`} />
+                <input 
+                  type="text" 
+                  placeholder="Quartier, Avenue, Commune..." 
+                  value={formData.address} 
+                  onChange={handleChange('address')} 
+                  className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.address ? 'border-destructive' : 'border-border'}`} 
+                />
               </div>
               {errors.address && <p className="text-xs text-destructive mt-1">{errors.address}</p>}
             </div>
 
-            {/* Mots de passe */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Mot de passe</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={formData.password} onChange={handleChange('password')} className={`w-full bg-background border-2 rounded-lg pl-10 pr-10 py-2.5 focus:outline-none focus:border-accent transition ${errors.password ? 'border-destructive' : 'border-border'}`} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <input 
+                    type={showPassword ? 'text' : 'password'} 
+                    placeholder="••••••••" 
+                    value={formData.password} 
+                    onChange={handleChange('password')} 
+                    className={`w-full bg-background border-2 rounded-lg pl-10 pr-10 py-2.5 focus:outline-none focus:border-accent transition ${errors.password ? 'border-destructive' : 'border-border'}`} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -204,8 +227,18 @@ export default function RegisterPage() {
                 <label className="text-sm font-medium mb-1.5 block">Confirmation</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <input type={showConfirmPassword ? 'text' : 'password'} placeholder="••••••••" value={formData.confirmPassword} onChange={handleChange('confirmPassword')} className={`w-full bg-background border-2 rounded-lg pl-10 pr-10 py-2.5 focus:outline-none focus:border-accent transition ${errors.confirmPassword ? 'border-destructive' : 'border-border'}`} />
-                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <input 
+                    type={showConfirmPassword ? 'text' : 'password'} 
+                    placeholder="••••••••" 
+                    value={formData.confirmPassword} 
+                    onChange={handleChange('confirmPassword')} 
+                    className={`w-full bg-background border-2 rounded-lg pl-10 pr-10 py-2.5 focus:outline-none focus:border-accent transition ${errors.confirmPassword ? 'border-destructive' : 'border-border'}`} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)} 
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
                     {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -213,8 +246,15 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <Button type="submit" size="lg" variant="primary" isLoading={isLoading} className="w-full mt-2">
-              S'inscrire
+            <Button type="submit" size="lg" variant="primary" className="w-full mt-2" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                  Inscription...
+                </>
+              ) : (
+                'S\'inscrire'
+              )}
             </Button>
           </form>
 
@@ -225,7 +265,7 @@ export default function RegisterPage() {
             </Link>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

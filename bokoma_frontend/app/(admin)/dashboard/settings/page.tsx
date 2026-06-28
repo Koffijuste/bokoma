@@ -2,10 +2,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { 
   Save, User, Bell, Shield, Palette, Loader2, 
-  Lock, Eye, EyeOff, CheckCircle, AlertCircle
+  Lock, Eye, EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +43,6 @@ export default function SettingsPage() {
     orderNotifications: true,
   });
 
-  // ✅ Initialiser les données quand user est chargé
   useEffect(() => {
     if (user) {
       setFormData({
@@ -64,7 +62,6 @@ export default function SettingsPage() {
     );
   }
 
-  // ✅ Sauvegarder le profil
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -85,7 +82,6 @@ export default function SettingsPage() {
     }
   };
 
-  // ✅ Changer le mot de passe
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -135,7 +131,6 @@ export default function SettingsPage() {
   };
 
   const handleThemeChange = (newTheme: string) => {
-    // ✅ Appliquer le thème via le store
     if (newTheme === 'dark' && theme !== 'dark') {
       toggleTheme();
     } else if (newTheme === 'light' && theme === 'dark') {
@@ -146,23 +141,13 @@ export default function SettingsPage() {
 
   return (
     <div className="p-4 sm:p-8 min-h-screen bg-background">
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
+      <header className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
         <h1 className="text-3xl font-bold">Paramètres</h1>
         <p className="text-muted-foreground">Gérez votre profil et vos préférences</p>
-      </motion.header>
+      </header>
 
       <div className="max-w-2xl space-y-6">
-        
-        {/* ═══════ PROFIL ═══════ */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-border rounded-xl p-6"
-        >
+        <section className="bg-card border border-border rounded-xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <User className="w-5 h-5" /> Profil
           </h2>
@@ -223,15 +208,9 @@ export default function SettingsPage() {
               </Button>
             </div>
           </form>
-        </motion.section>
+        </section>
 
-        {/* ═══════ SÉCURITÉ ═══════ */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-card border border-border rounded-xl p-6"
-        >
+        <section className="bg-card border border-border rounded-xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Shield className="w-5 h-5" /> Sécurité
           </h2>
@@ -326,15 +305,9 @@ export default function SettingsPage() {
               </Button>
             </div>
           </form>
-        </motion.section>
+        </section>
 
-        {/* ═══════ NOTIFICATIONS ═══════ */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-card border border-border rounded-xl p-6"
-        >
+        <section className="bg-card border border-border rounded-xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Bell className="w-5 h-5" /> Notifications
           </h2>
@@ -376,15 +349,9 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
-        </motion.section>
+        </section>
 
-        {/* ═══════ APPARENCE ═══════ */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-card border border-border rounded-xl p-6"
-        >
+        <section className="bg-card border border-border rounded-xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-400">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Palette className="w-5 h-5" /> Apparence
           </h2>
@@ -401,8 +368,7 @@ export default function SettingsPage() {
               <option value="dark">Sombre</option>
             </select>
           </div>
-        </motion.section>
-
+        </section>
       </div>
     </div>
   );

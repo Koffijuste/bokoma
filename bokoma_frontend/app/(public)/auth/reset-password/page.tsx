@@ -4,7 +4,6 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -12,21 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authApi } from '@/services';
 import { ROUTES } from '@/constants';
-
-import { PublicPageHeader } from @/components/ui/public-page-header
-// app/(public)/auth/login/page.tsx
-<PublicPageHeader
-  title="Reset-Password"
-  description="Réinitialiser votre mot de passe Bokoma"
-  icon={<LogIn className="w-6 h-6 text-accent" />}
-  breadcrumbs={[
-    { label: 'Accueil', href: '/' },
-    { label: 'Reset-Password' }
-  ]}
-/>
-// ============================================================================
-// 🔹 COMPOSANT PRINCIPAL (enveloppé dans Suspense)
-// ============================================================================
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -44,14 +28,12 @@ function ResetPasswordContent() {
   const [success, setSuccess] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
 
-  // ✅ Vérifier que le token est présent
   useEffect(() => {
     if (!token) {
       setError('Lien de réinitialisation invalide ou expiré.');
     }
   }, [token]);
 
-  // ✅ Calculer la force du mot de passe
   useEffect(() => {
     const password = formData.password;
     let strength = 0;
@@ -110,13 +92,11 @@ function ResetPasswordContent() {
       await authApi.resetPassword(token, formData.password);
       setSuccess(true);
       
-      // Redirection après 3 secondes
       setTimeout(() => {
         router.push(ROUTES.AUTH.LOGIN);
       }, 3000);
       
     } catch (err: any) {
-      console.error('❌ Reset password error:', err);
       setError(
         err?.response?.data?.message || 
         err?.message || 
@@ -127,26 +107,16 @@ function ResetPasswordContent() {
     }
   };
 
-  // ✅ État de succès
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-background to-muted/30">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full text-center"
-        >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 200 }}
-            className="mb-6"
-          >
+        <div className="max-w-md w-full text-center animate-in fade-in zoom-in duration-500">
+          <div className="mb-6">
             <div className="relative inline-block">
               <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-2xl animate-pulse" />
               <CheckCircle className="relative w-20 h-20 text-emerald-500 mx-auto" />
             </div>
-          </motion.div>
+          </div>
           
           <h2 className="text-2xl font-bold mb-3">Mot de passe réinitialisé !</h2>
           <p className="text-muted-foreground mb-6">
@@ -160,20 +130,15 @@ function ResetPasswordContent() {
               Aller à la connexion
             </Button>
           </Link>
-        </motion.div>
+        </div>
       </div>
     );
   }
 
-  // ✅ État sans token
   if (!token) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-background to-muted/30">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full text-center"
-        >
+        <div className="max-w-md w-full text-center animate-in fade-in zoom-in duration-500">
           <AlertCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-3">Lien invalide</h2>
           <p className="text-muted-foreground mb-6">
@@ -183,33 +148,21 @@ function ResetPasswordContent() {
           <Link href={ROUTES.AUTH.FORGOT_PASSWORD}>
             <Button variant="primary">Demander un nouveau lien</Button>
           </Link>
-        </motion.div>
+        </div>
       </div>
     );
   }
 
-  // ✅ Formulaire principal
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-background to-muted/30">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="max-w-md w-full"
-      >
-        {/* En-tête */}
+      <div className="max-w-md w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="text-center mb-8">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="mb-6"
-          >
+          <div className="mb-6">
             <div className="relative inline-block">
               <div className="absolute inset-0 bg-accent/20 rounded-full blur-2xl animate-pulse" />
               <Lock className="relative w-16 h-16 text-accent mx-auto" />
             </div>
-          </motion.div>
+          </div>
           
           <h1 className="text-3xl font-bold mb-2">Nouveau mot de passe</h1>
           <p className="text-muted-foreground">
@@ -217,15 +170,7 @@ function ResetPasswordContent() {
           </p>
         </div>
 
-        {/* Formulaire */}
-        <motion.form
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          onSubmit={handleSubmit}
-          className="bg-card border border-border rounded-2xl p-6 space-y-5"
-        >
-          {/* Mot de passe */}
+        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-6 space-y-5">
           <div className="space-y-2">
             <Label htmlFor="password">Nouveau mot de passe</Label>
             <div className="relative">
@@ -248,7 +193,6 @@ function ResetPasswordContent() {
               </button>
             </div>
             
-            {/* Indicateur de force */}
             {formData.password && (
               <div className="space-y-1">
                 <div className="flex gap-1">
@@ -268,7 +212,6 @@ function ResetPasswordContent() {
             )}
           </div>
 
-          {/* Confirmation */}
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
             <div className="relative">
@@ -291,7 +234,6 @@ function ResetPasswordContent() {
               </button>
             </div>
             
-            {/* Indicateur de correspondance */}
             {formData.confirmPassword && (
               <p className={`text-xs ${
                 formData.password === formData.confirmPassword 
@@ -305,7 +247,6 @@ function ResetPasswordContent() {
             )}
           </div>
 
-          {/* Exigences */}
           <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t border-border">
             <p className="font-medium">Exigences :</p>
             <ul className="space-y-0.5">
@@ -321,19 +262,13 @@ function ResetPasswordContent() {
             </ul>
           </div>
 
-          {/* Erreur */}
           {error && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive flex items-start gap-2"
-            >
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive flex items-start gap-2 animate-in fade-in duration-300">
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>{error}</span>
-            </motion.div>
+            </div>
           )}
 
-          {/* Bouton submit */}
           <Button
             type="submit"
             variant="primary"
@@ -352,15 +287,9 @@ function ResetPasswordContent() {
               </>
             )}
           </Button>
-        </motion.form>
+        </form>
 
-        {/* Lien retour */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-          className="text-center mt-6"
-        >
+        <div className="text-center mt-6">
           <Link 
             href={ROUTES.AUTH.LOGIN} 
             className="text-sm text-muted-foreground hover:text-accent inline-flex items-center gap-1"
@@ -368,15 +297,11 @@ function ResetPasswordContent() {
             <ArrowLeft className="w-4 h-4" />
             Retour à la connexion
           </Link>
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </div>
   );
 }
-
-// ============================================================================
-// 🔹 EXPORT AVEC SUSPENSE (requis pour useSearchParams)
-// ============================================================================
 
 export default function ResetPasswordPage() {
   return (

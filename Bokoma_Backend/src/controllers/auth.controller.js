@@ -4,30 +4,32 @@
 // ============================================================================
 
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto'); // ✅ AJOUT : Import crypto
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/email.service');
-const jwtConfig = require('../config/jwt'); // ✅ Import config JWT centralisée
+const jwtConfig = require('../config/jwt');
 
 // ============================================================================
 // POST /api/v1/auth/register — Inscription utilisateur
 // ============================================================================
 exports.register = async (req, res, next) => {
   try {
+    console.log('\n📝 [Auth] ═══════════════════════════════════════');
+    console.log('📝 [Auth] REGISTER - Début');
+    console.log('📝 [Auth] Body reçu:', req.body);
+    
     const { firstName, lastName, email, password, phone } = req.body;
 
-    // ✅ Validation
     if (!firstName || !lastName || !email || !password) {
       return next(new AppError('Tous les champs sont requis', 400));
     }
 
-    // ✅ Vérifier si utilisateur existe déjà
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return next(new AppError('Cet email est déjà utilisé', 409));
     }
 
-    // ✅ Créer l'utilisateur (le password sera hashé par le middleware pre-save)
     const user = await User.create({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
@@ -38,15 +40,12 @@ exports.register = async (req, res, next) => {
       isVerified: false,
     });
 
-    // ✅ Générer tokens
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
-    // ✅ Mettre à jour le refresh token (un seul save)
     user.refreshToken = refreshToken;
     await user.save();
 
-    // ✅ Définir cookies sécurisés
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -64,7 +63,9 @@ exports.register = async (req, res, next) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // ✅ Réponse
+    console.log('✅ [Auth] Register réussi pour:', user.email);
+    console.log('📝 [Auth] ═══════════════════════════════════════\n');
+
     res.status(201).json({
       success: true,
       message: 'Compte créé avec succès',
@@ -93,34 +94,28 @@ exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // ✅ Validation
     if (!email || !password) {
       return next(new AppError('Email et mot de passe requis', 400));
     }
 
-    // ✅ Trouver l'utilisateur (inclure password pour comparaison)
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     
     if (!user || !user.isActive) {
       return next(new AppError('Identifiants invalides', 401));
     }
 
-    // ✅ Vérifier le mot de passe
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return next(new AppError('Identifiants invalides', 401));
     }
 
-    // ✅ Générer tokens
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
-    // ✅ Mettre à jour TOUT en une seule fois (un seul save)
     user.refreshToken = refreshToken;
     user.lastLogin = new Date();
     await user.save();
 
-    // ✅ Définir cookies sécurisés
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -130,21 +125,20 @@ exports.login = async (req, res, next) => {
 
     res.cookie('bokoma_access_token', accessToken, {
       ...cookieOptions,
-      maxAge: 60 * 60 * 1000, // 1h
+      maxAge: 60 * 60 * 1000,
     });
     
     res.cookie('bokoma_refresh_token', refreshToken, {
       ...cookieOptions,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7j
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // ✅ Réponse
     res.json({
       success: true,
       message: 'Connexion réussie',
       data: {
         user: user.toJSON(),
-        accessToken, // Pour compatibilité frontend
+        accessToken,
       },
     });
 
@@ -155,186 +149,92 @@ exports.login = async (req, res, next) => {
 };
 
 // ============================================================================
-// POST /api/v1/auth/refresh — Rafraîchir le token d'accès
+// POST /auth/refresh — Rafraîchir le token
 // ============================================================================
 exports.refreshToken = async (req, res, next) => {
   try {
-    // ✅ 1. Chercher le refresh token
-    let refreshToken = 
-      req.cookies?.bokoma_refresh_token ||
-      req.cookies?.refresh_token ||
-      req.body?.refreshToken ||
-      null;
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 [refreshToken] Debug:', {
-        hasCookies: !!req.cookies,
-        cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
-        hasBokomaRefreshToken: !!req.cookies?.bokoma_refresh_token,
-      });
-    }
+    const refreshToken = req.cookies?.bokoma_refresh_token;
 
     if (!refreshToken) {
-      return next(new AppError('Refresh token requis. Veuillez vous reconnecter.', 401));
+      return res.status(401).json({ success: false, message: 'Refresh token manquant' });
     }
 
-    // ✅ 2. Vérifier le token
-    let decoded;
-    try {
-      decoded = jwt.verify(refreshToken, jwtConfig.refresh.secret, {
-        issuer: jwtConfig.refresh.issuer,
-        audience: jwtConfig.refresh.audience,
-        ...jwtConfig.options,
-      });
-    } catch (err) {
-      res.clearCookie('bokoma_refresh_token', { 
-        httpOnly: true, 
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        path: '/' 
-      });
-      res.clearCookie('bokoma_access_token', { path: '/' });
+    const decoded = jwt.verify(refreshToken, jwtConfig.refresh.secret, {
+      issuer: jwtConfig.refresh.issuer,
+      audience: jwtConfig.refresh.audience,
+    });
 
-      if (err.name === 'TokenExpiredError') {
-        return next(new AppError('Refresh token expiré, veuillez vous reconnecter', 401));
-      }
-      return next(new AppError('Refresh token invalide', 401));
-    }
-
-    // ✅ 3. Trouver l'utilisateur
-    const user = await User.findById(decoded.userId).select('+refreshToken');
-
+    const user = await User.findById(decoded.userId).select('-password');
     if (!user || !user.isActive) {
-      return next(new AppError('Utilisateur introuvable ou inactif', 401));
+      return res.status(401).json({ success: false, message: 'Utilisateur non trouvé ou inactif' });
     }
 
-    // ✅ 4. VÉRIFICATION CORRIGÉE : Rejeter si déconnecté OU token révoqué
-    if (!user.refreshToken || user.refreshToken !== refreshToken) {
-      console.log('⚠️ [refreshToken] Session invalide:', {
-        userId: user._id,
-        hasStoredToken: !!user.refreshToken,
-        tokenMatch: user.refreshToken === refreshToken,
-      });
-      
-      res.clearCookie('bokoma_refresh_token', { 
-        httpOnly: true, 
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        path: '/' 
-      });
-      res.clearCookie('bokoma_access_token', { path: '/' });
-      
-      return next(new AppError('Session invalide, veuillez vous reconnecter', 401));
-    }
+    // ✅ Inclure le rôle dans le nouveau token
+    const newAccessToken = jwt.sign(
+      { userId: user._id, role: user.role },
+      jwtConfig.access.secret,
+      {
+        expiresIn: jwtConfig.access.expiresIn,
+        issuer: jwtConfig.access.issuer,
+        audience: jwtConfig.access.audience,
+      }
+    );
 
-    // ✅ 5. Générer NOUVEAUX tokens
-    const newAccessToken = user.generateAccessToken();
-    const newRefreshToken = user.generateRefreshToken();
-
-    // ✅ 6. Mettre à jour le refresh token
-    user.refreshToken = newRefreshToken;
-    await user.save();
-
-    // ✅ 7. Définir cookies
-    const cookieOptions = {
+    res.cookie('bokoma_access_token', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/',
-    };
-
-    res.cookie('bokoma_access_token', newAccessToken, {
-      ...cookieOptions,
       maxAge: 60 * 60 * 1000,
     });
-    
-    res.cookie('bokoma_refresh_token', newRefreshToken, {
-      ...cookieOptions,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
 
-    console.log('✅ [refreshToken] Token refreshed for user:', user._id);
-
-    // ✅ 8. Réponse
-    res.json({
-      success: true,
-      message: 'Token rafraîchi avec succès',
-      data: {
-        accessToken: newAccessToken,
-        user: {
-          _id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          avatar: user.avatar,
-        },
-      },
-    });
+    res.json({ success: true, message: 'Token rafraîchi', accessToken: newAccessToken });
 
   } catch (err) {
-    console.error('❌ [AuthController] refreshToken error:', err);
-    res.clearCookie('bokoma_access_token', { path: '/' });
-    res.clearCookie('bokoma_refresh_token', { path: '/' });
-    next(err);
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ success: false, message: 'Refresh token expiré' });
+    }
+    res.status(401).json({ success: false, message: 'Refresh token invalide' });
   }
 };
 
 // ============================================================================
-// POST /api/v1/auth/logout — Déconnexion
+// POST /auth/logout — Déconnexion
 // ============================================================================
 exports.logout = async (req, res, next) => {
   try {
-    // ✅ Nettoyer les cookies
-    res.clearCookie('bokoma_access_token', { path: '/' });
-    res.clearCookie('bokoma_refresh_token', { 
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-    });
-
-    // ✅ Optionnel: Révoquer le refresh token en base
-    if (req.user?.userId) {
-      await User.findByIdAndUpdate(req.user.userId, { refreshToken: null });
-    }
+    res.clearCookie('bokoma_access_token');
+    res.clearCookie('bokoma_refresh_token');
 
     res.json({
       success: true,
       message: 'Déconnexion réussie',
     });
-
   } catch (err) {
-    console.error('❌ [AuthController] logout error:', err);
+    console.error('❌ [Auth] logout error:', err);
     next(err);
   }
 };
 
 // ============================================================================
-// GET /api/v1/auth/me — Profil utilisateur connecté
+// GET /auth/me — Récupérer ses infos
 // ============================================================================
 exports.getMe = async (req, res, next) => {
   try {
-    // ✅ req.user est attaché par le middleware protect()
-    if (!req.user) {
-      return next(new AppError('Utilisateur non authentifié', 401));
-    }
-
-    // ✅ Re-fetch user pour données à jour (optionnel)
-    const user = await User.findById(req.user.userId)
-      .select('-password -refreshToken -resetPasswordToken -resetPasswordExpires');
+    const user = await User.findById(req.user.userId).select('-password -refreshToken -resetPasswordToken -resetPasswordExpires');
 
     if (!user) {
-      return next(new AppError('Utilisateur introuvable', 404));
+      return res.status(404).json({
+        success: false,
+        message: 'Utilisateur non trouvé',
+      });
     }
 
     res.json({
       success: true,
-      data: { user: user.toJSON() },
+      user,
     });
-
   } catch (err) {
-    console.error('❌ [AuthController] getMe error:', err);
+    console.error('❌ [Auth] getMe error:', err);
     next(err);
   }
 };
@@ -403,23 +303,17 @@ exports.updatePassword = async (req, res, next) => {
       return next(new AppError('Le nouveau mot de passe doit contenir au moins 8 caractères', 400));
     }
 
-    // ✅ Trouver user avec password pour vérification
     const user = await User.findById(req.user.userId).select('+password');
     if (!user) {
       return next(new AppError('Utilisateur introuvable', 404));
     }
 
-    // ✅ Vérifier mot de passe actuel
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
       return next(new AppError('Mot de passe actuel incorrect', 401));
     }
 
-    // ✅ Mettre à jour password (hashé par pre-save middleware)
     user.password = newPassword;
-    await user.save();
-
-    // ✅ Optionnel: Révoquer tous les refresh tokens (déconnexion des autres appareils)
     user.refreshToken = null;
     await user.save();
 
@@ -435,72 +329,68 @@ exports.updatePassword = async (req, res, next) => {
 };
 
 // ============================================================================
-// POST /api/v1/auth/forgot-password — Demande de réinitialisation
+// POST /auth/forgot-password — Mot de passe oublié
 // ============================================================================
 exports.forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
 
-    if (!email) {
-      return next(new AppError('Email requis', 400));
-    }
-
-    // ✅ Trouver l'utilisateur (ne pas révéler s'il existe ou non pour sécurité)
-    const user = await User.findOne({ email: email.toLowerCase() });
-    
-    // ✅ Toujours répondre 200 pour éviter l'énumération d'emails
-    if (!user || !user.isActive) {
-      return res.json({
-        success: true,
-        message: 'Si cet email existe, vous recevrez un lien de réinitialisation',
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Aucun compte trouvé avec cet email',
       });
     }
 
-    // ✅ Générer token de réinitialisation
     const resetToken = crypto.randomBytes(32).toString('hex');
-    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 heure
-    await user.save();
+    const resetTokenHash = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
 
-    // ✅ Envoyer email (non bloquant)
-    const resetUrl = `${process.env.CLIENT_URL}/auth/reset-password?token=${resetToken}`;
-    sendPasswordResetEmail(user, resetUrl).catch(err => 
-      console.error('❌ Password reset email failed:', err)
-    );
+    user.resetPasswordToken = resetTokenHash;
+    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+    await user.save({ validateBeforeSave: false });
+
+    const resetUrl = `${process.env.CLIENT_URL}/auth/reset-password/${resetToken}`;
+    console.log('📧 [Auth] Reset URL:', resetUrl);
 
     res.json({
       success: true,
-      message: 'Si cet email existe, vous recevrez un lien de réinitialisation',
+      message: 'Email de réinitialisation envoyé',
+      resetUrl,
     });
-
   } catch (err) {
-    console.error('❌ [AuthController] forgotPassword error:', err);
+    console.error('❌ [Auth] forgotPassword error:', err);
     next(err);
   }
 };
 
 // ============================================================================
-// PATCH /api/v1/auth/reset-password/:token — Réinitialiser le mot de passe
+// PATCH /auth/reset-password/:token — Réinitialiser le mot de passe
+// ✅ UNE SEULE DÉFINITION (la duplication a été supprimée)
 // ============================================================================
 exports.resetPassword = async (req, res, next) => {
   try {
     const { token } = req.params;
-    const { newPassword } = req.body;
+    const { password } = req.body;
 
-    if (!token || !newPassword) {
-      return next(new AppError('Token et nouveau mot de passe requis', 400));
+    if (!token || !password) {
+      return next(new AppError('Token et mot de passe requis', 400));
     }
 
-    if (newPassword.length < 8) {
+    if (password.length < 8) {
       return next(new AppError('Le mot de passe doit contenir au moins 8 caractères', 400));
     }
 
-    // ✅ Hasher le token pour comparaison (stocké en base sous forme hashée)
-    const resetToken = crypto.createHash('sha256').update(token).digest('hex');
+    const resetTokenHash = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
 
-    // ✅ Trouver l'utilisateur avec token valide et non expiré
     const user = await User.findOne({
-      resetPasswordToken: resetToken,
+      resetPasswordToken: resetTokenHash,
       resetPasswordExpires: { $gt: Date.now() },
     });
 
@@ -508,29 +398,26 @@ exports.resetPassword = async (req, res, next) => {
       return next(new AppError('Token invalide ou expiré', 400));
     }
 
-    // ✅ Mettre à jour le mot de passe
-    user.password = newPassword;
+    user.password = password;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
-    await user.save();
-
-    // ✅ Optionnel: Révoquer tous les refresh tokens
     user.refreshToken = null;
     await user.save();
+
+    console.log('✅ [Auth] Password reset successful for:', user.email);
 
     res.json({
       success: true,
       message: 'Mot de passe réinitialisé avec succès',
     });
-
   } catch (err) {
-    console.error('❌ [AuthController] resetPassword error:', err);
+    console.error('❌ [Auth] resetPassword error:', err);
     next(err);
   }
 };
 
 // ============================================================================
-// POST /api/v1/auth/verify-email — Vérifier l'email (optionnel)
+// POST /api/v1/auth/verify-email — Vérifier l'email
 // ============================================================================
 exports.verifyEmail = async (req, res, next) => {
   try {
@@ -540,7 +427,6 @@ exports.verifyEmail = async (req, res, next) => {
       return next(new AppError('Token de vérification requis', 400));
     }
 
-    // ✅ Trouver l'utilisateur par token (implémentation à adapter selon votre flow)
     const user = await User.findOne({ 
       emailVerificationToken: token,
       emailVerificationExpires: { $gt: Date.now() }
@@ -550,7 +436,6 @@ exports.verifyEmail = async (req, res, next) => {
       return next(new AppError('Token de vérification invalide ou expiré', 400));
     }
 
-    // ✅ Marquer comme vérifié
     user.isVerified = true;
     user.emailVerificationToken = undefined;
     user.emailVerificationExpires = undefined;
@@ -568,51 +453,4 @@ exports.verifyEmail = async (req, res, next) => {
   }
 };
 
-
-exports.resetPassword = async (req, res, next) => {
-  try {
-    const { token } = req.params;
-    const { password } = req.body;
-
-    if (!token || !password) {
-      return next(new AppError('Token et mot de passe requis', 400));
-    }
-
-    if (password.length < 8) {
-      return next(new AppError('Le mot de passe doit contenir au moins 8 caractères', 400));
-    }
-
-    // Hasher le token pour comparaison
-    const crypto = require('crypto');
-    const resetToken = crypto.createHash('sha256').update(token).digest('hex');
-
-    // Trouver l'utilisateur avec token valide et non expiré
-    const user = await User.findOne({
-      resetPasswordToken: resetToken,
-      resetPasswordExpires: { $gt: Date.now() },
-    });
-
-    if (!user) {
-      return next(new AppError('Token invalide ou expiré', 400));
-    }
-
-    // Mettre à jour le mot de passe (hashé par le pre-save middleware)
-    user.password = password;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
-    await user.save();
-
-    // Optionnel: Révoquer tous les refresh tokens
-    user.refreshToken = null;
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Mot de passe réinitialisé avec succès',
-    });
-
-  } catch (err) {
-    console.error('❌ [AuthController] resetPassword error:', err);
-    next(err);
-  }
-};
+// console.log('✅ [Auth] resetPassword exporté:', typeof exports.resetPassword);

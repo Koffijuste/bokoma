@@ -1,77 +1,68 @@
 // src/routes/order.routes.js
 // ============================================================================
-// 📦 ORDER ROUTES — ORDRE CRITIQUE : spécifique avant paramétré
+// 📦 ORDER ROUTES
+// RÈGLE D'OR : routes spécifiques AVANT routes paramétrées (/:id)
 // ============================================================================
 
 const router = require('express').Router();
-const orderController = require('../controllers/order.controller');
+const ctrl   = require('../controllers/order.controller');
 const { protect, authorize } = require('../middlewares/auth');
-const validate = require('../middlewares/validate');
+const validate         = require('../middlewares/validate');
 const validateObjectId = require('../middlewares/validateObjectId');
-const { orderRules } = require('../validators/order.validator');
-
-// ✅ Log de vérification au démarrage
-console.log('✅ [order.routes] Checking handlers...');
-const handlers = [
-  'createOrder', 'getMyOrders', 'getOrder', 'updateOrderStatus',
-  'getAllOrders', 'getOrderStats', 'deleteOrder', 'verifyOrderPublic', 'cinetpayWebhook'
-];
-handlers.forEach(h => {
-  const type = typeof orderController[h];
-  if (type !== 'function') {
-    console.error(`❌ [order.routes] ${h} is ${type} (expected function)`);
-  } else {
-    console.log(`  ✅ ${h}`);
-  }
-});
-
+const { orderRules }   = require('../validators/order.validator');
+const orderController = require('../controllers/order.controller');
 // ============================================================================
-// 🔹 1. ROUTES PUBLIQUES (AVANT protect global)
+// 🔹 1. PUBLIQUES — Aucune authentification requise
 // ============================================================================
 
-// ✅ Webhook CinetPay — SANS authentification
-router.post('/webhook/cinetpay', orderController.cinetpayWebhook);
+// Webhook CinetPay (appelé par le serveur CinetPay, pas par le client)
+router.post('/webhook/cinetpay', ctrl.cinetpayWebhook);
 
-// ✅ Vérification publique de commande — SANS authentification
-router.get('/verify/:orderId', orderController.verifyOrderPublic);
+// Vérification publique après paiement (page /payment/success)
+router.get('/verify/:orderId', ctrl.verifyOrderPublic);
 
 // ============================================================================
-// 🔹 2. MIDDLEWARE D'AUTHENTIFICATION
+// 🔹 2. Appliquer protect à TOUTES les routes suivantes
 // ============================================================================
 router.use(protect);
 
 // ============================================================================
-// 🔹 3. ROUTES PROTÉGÉES — ORDRE : spécifique avant paramétré
+// 🔹 3. SPÉCIFIQUES — Avant /:id (sinon Express interprète /my, /stats comme des IDs)
 // ============================================================================
 
-// ✅ Création de commande
-router.post('/', orderRules, validate, orderController.createOrder);
+// GET /my — Mes commandes (client)
+router.get('/my', ctrl.getMyOrders);
 
-// ✅ Mes commandes — avant /:id
-router.get('/my', orderController.getMyOrders);
+// GET /stats — Statistiques (admin/manager)
+router.get('/stats', authorize('admin', 'manager'), ctrl.getOrderStats);
 
-// ✅ Stats commandes — admin/manager — avant /:id
-router.get('/stats', authorize('admin', 'manager'), orderController.getOrderStats);
+// GET / — Toutes les commandes (admin/manager)
+router.get('/', authorize('admin', 'manager'), ctrl.getAllOrders);
 
-// ✅ Toutes les commandes — admin/manager
-router.get('/', authorize('admin', 'manager'), orderController.getAllOrders);
-
-// ✅ Mise à jour statut — admin/manager — avant /:id générique
-router.patch('/:id/status', authorize('admin', 'manager'), validateObjectId('id'), orderController.updateOrderStatus);
+// POST / — Créer une commande ← PAS de authorize ici, customer autorisé
+router.post('/', orderRules, validate, ctrl.createOrder);
 
 // ============================================================================
-// 🔹 4. ROUTES AVEC PARAMÈTRES (EN DERNIER)
+// 🔹 4. PARAMÉTRÉES — Après les routes spécifiques
 // ============================================================================
 
-// ✅ Détails d'une commande
-router.get('/:id', validateObjectId('id'), orderController.getOrder);
+// PATCH /:id/status — Mettre à jour statut (admin/manager)
+// ⚠️ Doit être avant GET /:id
+router.patch('/:id/status', authorize('admin', 'manager'), validateObjectId('id'), ctrl.updateOrderStatus);
 
-// ✅ Suppression commande — admin uniquement
-router.delete('/:id', authorize('admin'), validateObjectId('id'), orderController.deleteOrder);
+// PATCH /:id/cancel — Annuler ma commande (client, ownership vérifié dans le ctrl)
+router.patch('/:id/cancel', validateObjectId('id'), ctrl.cancelOrder);
 
-// ❌ SUPPRIMÉ : ligne dupliquée qui causait l'erreur
-// router.get('/verify/:orderId', ctrl.verifyOrderPublic);
+// GET /:id — Détails commande (ownership vérifié dans le ctrl)
+router.get('/:id', validateObjectId('id'), ctrl.getOrder);
 
-console.log('✅ [order.routes] All routes configured');
+// DELETE /:id — Supprimer (admin uniquement)
+router.delete('/:id', authorize('admin'), validateObjectId('id'), ctrl.deleteOrder);
+
+// ✅ Confirmer réception (client)
+router.patch('/:id/delivered', protect, validateObjectId('id'), orderController.markAsDelivered);
+
+// Dans la section "ROUTES CLIENT", ajouter :
+router.patch('/:id/archive', validateObjectId('id'), ctrl.archiveOrder);
 
 module.exports = router;

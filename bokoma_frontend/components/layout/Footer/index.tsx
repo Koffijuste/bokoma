@@ -3,7 +3,6 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 import { 
   Mail, Phone, MapPin, Facebook, Twitter, Instagram, Linkedin, 
   Sparkles, CreditCard, Truck, Shield, Headphones, ArrowRight
@@ -13,8 +12,6 @@ import { ROUTES } from '@/constants';
 export function Footer() {
   return (
     <footer className="bg-gradient-to-b from-background to-muted/30 border-t border-border/50 mt-auto">
-      
-      {/* Features Bar */}
       <div className="border-b border-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -24,13 +21,10 @@ export function Footer() {
               { icon: CreditCard, title: 'Multi-paiements', desc: 'Mobile Money, CB, Cash' },
               { icon: Headphones, title: 'Support 24/7', desc: 'Assistance dédiée' },
             ].map((feature, i) => (
-              <motion.div
+              <div
                 key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="flex items-center gap-3"
+                className="flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500"
+                style={{ animationDelay: `${i * 100}ms` }}
               >
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent/10 to-purple-500/10 flex items-center justify-center flex-shrink-0">
                   <feature.icon className="w-6 h-6 text-accent" />
@@ -39,18 +33,15 @@ export function Footer() {
                   <p className="font-semibold text-sm">{feature.title}</p>
                   <p className="text-xs text-muted-foreground">{feature.desc}</p>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Main Footer */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-          
-          {/* Company */}
-          <div>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-accent/30">
                 <Sparkles className="w-5 h-5 text-white" />
@@ -88,8 +79,7 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Products */}
-          <div>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
             <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">Boutique</h4>
             <ul className="space-y-2 text-sm">
               {[
@@ -109,8 +99,7 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Account */}
-          <div>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
             <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">Mon Compte</h4>
             <ul className="space-y-2 text-sm">
               {[
@@ -130,8 +119,7 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Contact */}
-          <div>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
             <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">Contact</h4>
             <ul className="space-y-3 text-sm">
               <li className="flex items-start gap-3">
@@ -189,6 +177,5 @@ export function Footer() {
     </footer>
   );
 }
-
 
 export default Footer;

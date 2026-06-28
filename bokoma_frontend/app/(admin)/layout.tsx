@@ -3,7 +3,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import { Moon, Sun, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,7 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { sidebarOpen, toggleSidebar } = useUiStore();
+  const { sidebarOpen, setSidebarOpen } = useUiStore();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -26,7 +25,6 @@ export default function AdminLayout({
     setMounted(true);
   }, []);
 
-  // Loading lors du changement de page
   useEffect(() => {
     setIsNavigating(true);
     const timer = setTimeout(() => setIsNavigating(false), 300);
@@ -35,27 +33,31 @@ export default function AdminLayout({
 
   const isDarkMode = mounted && resolvedTheme === 'dark';
 
+  // ✅ Main : margin seulement sur desktop
+  // Sur mobile, le sidebar est en overlay donc pas de margin
+  const mainClasses = `flex-1 overflow-auto transition-all duration-300 ease-in-out sm:${
+    sidebarOpen ? 'ml-64' : 'ml-20'
+  }`;
+
+  const handleMobileToggle = () => {
+    console.log('📱 [LAYOUT] Mobile menu toggle clicked');
+    setSidebarOpen(!sidebarOpen);
+  };
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Sidebar */}
       <AdminSidebar />
 
-      {/* Main content */}
-      <main
-        className={`flex-1 overflow-auto transition-all duration-300 ${
-          sidebarOpen ? 'sm:ml-64' : 'sm:ml-20'
-        }`}
-      >
-        {/* Header sticky */}
+      <main className={mainClasses}>
         <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-20">
           <div className="flex items-center gap-3">
-            {/* Bouton menu mobile */}
+            {/* ✅ Bouton menu mobile : visible seulement sur mobile */}
             <Button
               variant="outline"
               size="icon"
-              onClick={toggleSidebar}
-              className="md:hidden"
-              aria-label="Toggle menu"
+              onClick={handleMobileToggle}
+              className="sm:hidden"
+              aria-label="Ouvrir le menu admin"
             >
               <Menu className="w-4 h-4" />
             </Button>
@@ -80,23 +82,14 @@ export default function AdminLayout({
           </Button>
         </header>
 
-        {/* Page content avec loading */}
         <div className="p-4 sm:p-6 lg:p-8">
-          <AnimatePresence mode="wait">
-            {isNavigating ? (
-              <PageLoading key="loading" message="Chargement..." />
-            ) : (
-              <motion.div
-                key={pathname}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-              >
-                {children}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {isNavigating ? (
+            <PageLoading key="loading" message="Chargement..." />
+          ) : (
+            <div key={pathname} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {children}
+            </div>
+          )}
         </div>
       </main>
     </div>

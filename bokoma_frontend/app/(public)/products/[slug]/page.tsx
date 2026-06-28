@@ -4,7 +4,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Heart, ShoppingCart, Star, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { useFetch } from '@/hooks';
 import { productApi } from '@/services';
@@ -17,9 +16,6 @@ import { formatPrice } from '@/utils/helpers';
 import { toast } from 'sonner';
 import type { Product } from '@/types';
 
-// ─────────────────────────────
-// 🔁 HELPER : Extrait le produit de n'importe quelle réponse API
-// ─────────────────────────────
 const extractProduct = (data: any): Product | null => {
   if (!data) return null;
   if (data.product && typeof data.product === 'object') return data.product;
@@ -28,9 +24,6 @@ const extractProduct = (data: any): Product | null => {
   return null;
 };
 
-// ─────────────────────────────
-// CONFIGURATION
-// ─────────────────────────────
 const AVAILABLE_SIZES = Array.from({ length: 21 }, (_, i) => (25 + i).toString());
 const PLACEHOLDER_IMAGE = 'https://placehold.co/800x800/e2e8f0/64748b?text=Produit&font=montserrat';
 
@@ -43,45 +36,24 @@ export default function ProductDetailsPage() {
   const { isAuthenticated } = useAuth();
   const { isInWishlist, toggleWishlist } = useWishlist();
   
-  // États
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
 
-  // Fetch produit
   const { data: apiResponse, loading, error, refetch } = useFetch<any>(
     () => productApi.getProduct(slug),
     [slug]
   );
 
-  // ✅ Extraction robuste du produit
   const product = useMemo(() => extractProduct(apiResponse), [apiResponse]);
-
-  // ✅ Récupérer l'ID du produit
   const productId = product?._id || (product as any)?.id;
 
-  // ✅ Vérifier si le produit est dans la wishlist
   const wishlisted = useMemo(() => {
     if (!productId) return false;
     return isInWishlist(productId);
   }, [productId, isInWishlist]);
 
-  // 🔍 Debug en dev
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && product) {
-      console.group('✅ [PRODUCT DETAILS] Produit chargé');
-      console.log('📦 ID:', productId);
-      console.log('📝 Nom:', product.name);
-      console.log('💰 Prix:', product.basePrice);
-      console.log('🖼️ Images:', product.images?.length || 0);
-      console.log('❤️ Dans wishlist:', wishlisted);
-      console.log('👤 Authentifié:', isAuthenticated);
-      console.groupEnd();
-    }
-  }, [product, productId, wishlisted, isAuthenticated]);
-
-  // Image principale optimisée Cloudinary
   const currentImage = useMemo(() => {
     if (!product?.images?.length) return null;
     const img = product.images[selectedImage] || product.images[0];
@@ -92,124 +64,72 @@ export default function ProductDetailsPage() {
     return img.url;
   }, [product?.images, selectedImage]);
 
-  // ───────── ACTIONS ─────────
-
   const handleAddToCart = useCallback(async () => {
-    console.group('🛒 [PRODUCT DETAILS] Ajout au panier');
-    console.log('📦 Produit:', product?.name);
-    console.log('🆔 ID:', productId);
-    console.log('📏 Taille:', selectedSize);
-    console.log('🔢 Quantité:', quantity);
-    
     if (!productId) {
-      console.error('❌ Product ID missing:', { product, apiResponse });
       toast.error('Produit non chargé correctement');
-      console.groupEnd();
       return;
     }
 
-    // ✅ Validation pointure
     const hasSizeVariants = product.variants?.some((v: any) => v.size);
     if (hasSizeVariants && !selectedSize) {
       toast.error('Veuillez sélectionner une pointure');
-      console.log('⚠️ Pointure non sélectionnée');
-      console.groupEnd();
       return;
     }
 
     setIsAdding(true);
     try {
-      console.log('🔄 Appel de addItem...');
       await addItem({
         product: productId,
         size: selectedSize || undefined,
         quantity,
       });
-      console.log('✅ Produit ajouté au panier');
       toast.success('Produit ajouté au panier 🛒');
     } catch (err: any) {
-      console.error('❌ Add to cart error:', err);
       const message = err?.response?.data?.message || err?.message || 'Impossible d\'ajouter au panier';
       
-      // Vérifier si c'est une erreur "produit déjà existant"
       if (message.includes('déjà') || message.includes('exist')) {
-        console.log('ℹ️ Produit déjà dans le panier, quantité augmentée');
         toast.info('Quantité augmentée dans le panier');
       } else {
         toast.error(message);
       }
     } finally {
       setIsAdding(false);
-      console.groupEnd();
     }
-  }, [product, productId, selectedSize, quantity, addItem, apiResponse]);
+  }, [product, productId, selectedSize, quantity, addItem]);
 
-  // ✅ CORRECTION CRITIQUE : Utiliser le hook useWishlist avec gestion authentification
   const handleWishlist = useCallback(async () => {
-    console.group('❤️ [PRODUCT DETAILS] Toggle wishlist');
-    console.log('📦 Produit:', product?.name);
-    console.log('🆔 ID:', productId);
-    console.log('👤 isAuthenticated:', isAuthenticated);
-    
     if (!productId) {
-      console.error('❌ Product ID manquant');
       toast.error('Produit non chargé');
-      console.groupEnd();
       return;
     }
 
     if (!isAuthenticated) {
-      console.log('🔒 Utilisateur non authentifié');
       toast.error('Veuillez vous connecter pour ajouter aux favoris');
       router.push(`/auth/login?from=/products/${slug}`);
-      console.groupEnd();
       return;
     }
 
-    const wasInWishlist = isInWishlist(productId);
-    console.log('📊 État actuel:', wasInWishlist);
-    console.log('🎯 Action prévue:', wasInWishlist ? 'RETIRER' : 'AJOUTER');
-    
     try {
-      console.log('🔄 Appel de toggleWishlist...');
       const success = await toggleWishlist(productId, product || undefined);
-      console.log('✅ toggleWishlist terminé, succès:', success);
       
       if (success) {
-        // ✅ Message basé sur l'état AVANT le toggle
-        if (wasInWishlist) {
-          toast.success('Retiré des favoris');
-          console.log('✅ Message: Retiré des favoris');
-        } else {
-          toast.success('Ajouté aux favoris ❤️');
-          console.log('✅ Message: Ajouté aux favoris');
-        }
+        const wasInWishlist = isInWishlist(productId);
+        toast.success(wasInWishlist ? 'Retiré des favoris' : 'Ajouté aux favoris ❤️');
       } else {
-        console.error('❌ Échec du toggle');
         toast.error('Erreur lors de la mise à jour des favoris');
       }
     } catch (error) {
-      console.error('❌ Erreur toggleWishlist:', error);
       toast.error('Erreur lors de la mise à jour des favoris');
     }
-    
-    console.groupEnd();
   }, [productId, product, isAuthenticated, toggleWishlist, isInWishlist, router, slug]);
 
   const handleQuantityChange = useCallback((delta: number) => {
-    setQuantity((prev) => {
-      const newQty = Math.max(1, Math.min(prev + delta, product?.totalStock || 10));
-      console.log('🔢 Quantité changée:', prev, '->', newQty);
-      return newQty;
-    });
+    setQuantity((prev) => Math.max(1, Math.min(prev + delta, product?.totalStock || 10)));
   }, [product?.totalStock]);
 
   const handleBack = useCallback(() => {
-    console.log('⬅️ Retour aux produits');
     router.push(ROUTES.PRODUCTS);
   }, [router]);
-
-  // ───────── RENDER STATES ─────────
 
   if (loading) {
     return (
@@ -223,10 +143,9 @@ export default function ProductDetailsPage() {
   }
 
   if (error) {
-    console.error('❌ Erreur de chargement:', error);
     return (
       <div className="min-h-screen px-4 py-12 flex items-center justify-center">
-        <div className="max-w-md w-full rounded-3xl border border-destructive/50 bg-destructive/10 p-8 text-center space-y-4">
+        <div className="max-w-md w-full rounded-3xl border border-destructive/50 bg-destructive/10 p-8 text-center space-y-4 animate-in fade-in zoom-in duration-300">
           <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
           <h2 className="text-xl font-bold text-destructive">Erreur de chargement</h2>
           <p className="text-muted-foreground">{error.message}</p>
@@ -243,10 +162,9 @@ export default function ProductDetailsPage() {
   }
 
   if (!product) {
-    console.warn('⚠️ Produit introuvable après chargement');
     return (
       <div className="min-h-screen px-4 py-12 flex items-center justify-center">
-        <div className="max-w-md w-full rounded-3xl border border-border bg-card p-12 text-center space-y-4">
+        <div className="max-w-md w-full rounded-3xl border border-border bg-card p-12 text-center space-y-4 animate-in fade-in zoom-in duration-300">
           <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto" />
           <h2 className="text-xl font-bold">Produit introuvable</h2>
           <p className="text-muted-foreground">Ce produit n'existe pas ou a été supprimé.</p>
@@ -256,22 +174,13 @@ export default function ProductDetailsPage() {
     );
   }
 
-  // ───────── MAIN RENDER ─────────
   const hasSizeVariants = product.variants?.some((v: any) => v.size);
   const categoryName = typeof product.category === 'object' ? product.category?.name : 'Catégorie';
-
-  console.log('🎨 [PRODUCT DETAILS] Rendu de la page pour:', product.name);
 
   return (
     <div className="min-h-screen px-4 py-12">
       <div className="max-w-7xl mx-auto">
-        
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8 flex items-center justify-between gap-4"
-        >
+        <div className="mb-8 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
           <button
             onClick={handleBack}
             className="text-sm font-medium text-accent hover:text-accent/80 inline-flex items-center transition"
@@ -279,37 +188,24 @@ export default function ProductDetailsPage() {
             <ArrowLeft className="mr-2 h-4 w-4" /> Retour aux produits
           </button>
           <span className="text-sm text-muted-foreground">{categoryName}</span>
-        </motion.div>
+        </div>
 
         <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-          
-          {/* ───────── IMAGE GALLERY ───────── */}
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-500">
             <div className="rounded-3xl border border-border bg-card p-6">
-              {/* Image principale */}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={selectedImage}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="relative aspect-square overflow-hidden rounded-3xl bg-muted"
-                >
-                  <img
-                    src={currentImage || PLACEHOLDER_IMAGE}
-                    alt={product.name}
-                    className="w-full h-full object-cover transition-transform hover:scale-105"
-                    loading="eager"
-                    onError={(e) => {
-                      console.warn('⚠️ Erreur chargement image:', currentImage);
-                      const t = e.target as HTMLImageElement;
-                      if (t.src !== PLACEHOLDER_IMAGE) t.src = PLACEHOLDER_IMAGE;
-                    }}
-                  />
-                </motion.div>
-              </AnimatePresence>
+              <div className="relative aspect-square overflow-hidden rounded-3xl bg-muted">
+                <img
+                  src={currentImage || PLACEHOLDER_IMAGE}
+                  alt={product.name}
+                  className="w-full h-full object-cover transition-transform hover:scale-105"
+                  loading="eager"
+                  onError={(e) => {
+                    const t = e.target as HTMLImageElement;
+                    if (t.src !== PLACEHOLDER_IMAGE) t.src = PLACEHOLDER_IMAGE;
+                  }}
+                />
+              </div>
 
-              {/* Miniatures */}
               {product.images && product.images.length > 1 && (
                 <div className="mt-4 grid grid-cols-4 gap-3">
                   {product.images.map((img, idx) => {
@@ -319,16 +215,11 @@ export default function ProductDetailsPage() {
                     const isSelected = idx === selectedImage;
                     
                     return (
-                      <motion.button
+                      <button
                         key={img.url || idx}
                         type="button"
-                        onClick={() => {
-                          console.log('🖼️ Sélection image:', idx);
-                          setSelectedImage(idx);
-                        }}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className={`overflow-hidden rounded-3xl border p-1 transition ${
+                        onClick={() => setSelectedImage(idx)}
+                        className={`overflow-hidden rounded-3xl border p-1 transition hover:scale-105 ${
                           isSelected 
                             ? 'border-accent ring-2 ring-accent/20' 
                             : 'border-border hover:border-accent/50'
@@ -341,7 +232,7 @@ export default function ProductDetailsPage() {
                             className="w-full h-full object-cover"
                           />
                         </div>
-                      </motion.button>
+                      </button>
                     );
                   })}
                 </div>
@@ -349,11 +240,8 @@ export default function ProductDetailsPage() {
             </div>
           </div>
 
-          {/* ───────── PRODUCT INFO ───────── */}
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500 delay-200">
             <div className="rounded-3xl border border-border bg-card p-6 space-y-4">
-              
-              {/* Titre & Wishlist */}
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h1 className="text-3xl font-bold">{product.name}</h1>
@@ -361,10 +249,9 @@ export default function ProductDetailsPage() {
                     {product.type} · {product.brand || 'Marque premium'}
                   </p>
                 </div>
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
+                <button
                   onClick={handleWishlist}
-                  className={`rounded-full border p-3 transition ${
+                  className={`rounded-full border p-3 transition hover:scale-110 ${
                     wishlisted 
                       ? 'border-pink-500 bg-pink-500 text-white hover:bg-pink-600' 
                       : 'border-border bg-background text-accent hover:border-accent'
@@ -372,10 +259,9 @@ export default function ProductDetailsPage() {
                   aria-label={wishlisted ? 'Retirer des favoris' : 'Ajouter aux favoris'}
                 >
                   <Heart className="h-5 w-5" fill={wishlisted ? 'currentColor' : 'none'} />
-                </motion.button>
+                </button>
               </div>
 
-              {/* Rating */}
               <div className="flex items-center gap-2 text-sm">
                 <div className="flex items-center gap-0.5">
                   {[...Array(5)].map((_, i) => {
@@ -396,7 +282,6 @@ export default function ProductDetailsPage() {
                 </span>
               </div>
 
-              {/* Prix */}
               <div className="space-y-1">
                 <p className="text-3xl font-bold text-accent">
                   {formatPrice(Number(product.basePrice) || 0)}
@@ -408,10 +293,7 @@ export default function ProductDetailsPage() {
                 )}
               </div>
 
-              {/* Stock */}
-              <motion.span 
-                initial={{ scale: 0.95 }}
-                animate={{ scale: 1 }}
+              <span 
                 className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm ${
                   product.totalStock > 0 
                     ? 'bg-emerald-500/10 text-emerald-600' 
@@ -420,15 +302,10 @@ export default function ProductDetailsPage() {
               >
                 <div className={`w-2 h-2 rounded-full ${product.totalStock > 0 ? 'bg-emerald-600' : 'bg-destructive'}`} />
                 {product.totalStock > 0 ? `${product.totalStock} en stock` : 'Rupture de stock'}
-              </motion.span>
+              </span>
 
-              {/* Pointures */}
               {hasSizeVariants && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-3"
-                >
+                <div className="space-y-3">
                   <label className="text-sm font-medium">
                     Pointure <span className="text-destructive">*</span>
                   </label>
@@ -439,20 +316,15 @@ export default function ProductDetailsPage() {
                       const isSelected = selectedSize === size;
                       
                       return (
-                        <motion.button
+                        <button
                           key={size}
                           type="button"
-                          whileHover={inStock ? { scale: 1.05 } : {}}
-                          whileTap={inStock ? { scale: 0.95 } : {}}
                           onClick={() => {
-                            if (inStock) {
-                              console.log('📏 Pointure sélectionnée:', size);
-                              setSelectedSize(size);
-                            }
+                            if (inStock) setSelectedSize(size);
                           }}
                           disabled={!inStock}
                           className={`
-                            relative h-10 rounded-lg border text-sm font-medium transition
+                            relative h-10 rounded-lg border text-sm font-medium transition hover:scale-105
                             ${isSelected 
                               ? 'border-accent bg-accent/10 text-accent ring-2 ring-accent/20' 
                               : inStock
@@ -462,25 +334,16 @@ export default function ProductDetailsPage() {
                           `}
                         >
                           {size}
-                          <AnimatePresence>
-                            {isSelected && (
-                              <motion.div
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                exit={{ scale: 0 }}
-                              >
-                                <Check className="absolute -top-1 -right-1 h-4 w-4 text-accent bg-background rounded-full" />
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </motion.button>
+                          {isSelected && (
+                            <Check className="absolute -top-1 -right-1 h-4 w-4 text-accent bg-background rounded-full" />
+                          )}
+                        </button>
                       );
                     })}
                   </div>
-                </motion.div>
+                </div>
               )}
 
-              {/* Quantité */}
               <div className="flex items-center gap-4">
                 <label className="text-sm font-medium">Quantité</label>
                 <div className="flex items-center gap-2">
@@ -508,7 +371,6 @@ export default function ProductDetailsPage() {
                 </div>
               </div>
 
-              {/* Description */}
               <div className="pt-4 border-t border-border">
                 <p className="text-sm font-medium mb-2">Description</p>
                 <p className="text-sm text-muted-foreground whitespace-pre-line">
@@ -516,33 +378,29 @@ export default function ProductDetailsPage() {
                 </p>
               </div>
 
-              {/* Boutons */}
               <div className="flex flex-col gap-3 pt-4 border-t border-border">
-                <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-                  <Button
-                    onClick={handleAddToCart}
-                    className="w-full h-12 text-base"
-                    disabled={product.totalStock === 0 || (hasSizeVariants && !selectedSize) || isAdding}
-                  >
-                    {isAdding ? (
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    ) : (
-                      <ShoppingCart className="mr-2 h-5 w-5" />
-                    )}
-                    {product.totalStock === 0 
-                      ? 'Rupture de stock' 
-                      : hasSizeVariants && !selectedSize 
-                        ? 'Sélectionnez une pointure' 
-                        : isAdding
-                          ? 'Ajout en cours...'
-                          : `Ajouter au panier — ${formatPrice((product.basePrice || 0) * quantity)}`
-                    }
-                  </Button>
-                </motion.div>
+                <Button
+                  onClick={handleAddToCart}
+                  className="w-full h-12 text-base hover:scale-105 transition-transform"
+                  disabled={product.totalStock === 0 || (hasSizeVariants && !selectedSize) || isAdding}
+                >
+                  {isAdding ? (
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  ) : (
+                    <ShoppingCart className="mr-2 h-5 w-5" />
+                  )}
+                  {product.totalStock === 0 
+                    ? 'Rupture de stock' 
+                    : hasSizeVariants && !selectedSize 
+                      ? 'Sélectionnez une pointure' 
+                      : isAdding
+                        ? 'Ajout en cours...'
+                        : `Ajouter au panier — ${formatPrice((product.basePrice || 0) * quantity)}`
+                  }
+                </Button>
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>

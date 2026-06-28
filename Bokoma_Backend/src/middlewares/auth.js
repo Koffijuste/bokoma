@@ -6,7 +6,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
-const jwtConfig = require('../config/jwt'); // ✅ Import config centralisée
+const jwtConfig = require('../config/jwt');
 
 /**
  * Middleware protect — Vérifie le token avec config centralisée
@@ -14,33 +14,24 @@ const jwtConfig = require('../config/jwt'); // ✅ Import config centralisée
 const protect = async (req, res, next) => {
   let token;
 
-  // Extraire depuis header: Authorization: Bearer <token>
   if (req.headers.authorization?.startsWith('Bearer ')) {
     token = req.headers.authorization.split(' ')[1];
   }
-
- // ✅ AJOUT : Fallback vers cookie si pas de header (pour compatibilité)
-if (!token && req.cookies?.bokoma_access_token) {
-  token = req.cookies.bokoma_access_token;
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🍪 [protect] Token found in cookie');
+  if (!token && req.cookies?.bokoma_access_token) {
+    token = req.cookies.bokoma_access_token;
   }
-}
 
-  // Pas de token → continuer (routes publiques)
+  // ✅ Hard fail si pas de token
   if (!token) {
-    return next();
+    return next(new AppError('Authentification requise. Veuillez vous connecter.', 401));
   }
 
   try {
-    // ✅ Vérifier avec config centralisée (MÊMES options que la signature)
     const decoded = jwt.verify(token, jwtConfig.access.secret, {
       issuer: jwtConfig.access.issuer,
       audience: jwtConfig.access.audience,
-      ...jwtConfig.options,
     });
 
-    // Trouver l'utilisateur
     const user = await User.findById(decoded.userId)
       .select('-password -refreshToken -resetPasswordToken -resetPasswordExpires');
 
@@ -48,42 +39,24 @@ if (!token && req.cookies?.bokoma_access_token) {
       return next(new AppError('Utilisateur introuvable ou inactif', 401));
     }
 
-    // Attacher user à la requête
     req.user = {
       userId: user._id.toString(),
       _id: user._id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      phone: user.phone,         // ✅ Ajout phone (utilisé dans createOrder)
       role: user.role || 'customer',
-      phone: user.phone,
-      isVerified: user.isVerified,
-      avatar: user.avatar,
     };
 
     next();
-
   } catch (err) {
-    // Debug erreur JWT en dev
-    if (process.env.NODE_ENV === 'development') {
-      console.error('❌ [protect] JWT verification failed:', {
-        errorName: err.name,
-        errorMessage: err.message,
-        expectedIssuer: jwtConfig.access.issuer,
-        expectedAudience: jwtConfig.access.audience,
-        tokenPreview: token?.slice(0, 30) + '...',
-      });
-    }
-
-    // Gestion propre des erreurs
     if (err.name === 'TokenExpiredError') {
-      return next(new AppError('Session expirée, veuillez vous reconnecter', 401));
+      return next(new AppError('Session expirée', 401));
     }
-    if (err.name === 'JsonWebTokenError' || err.name === 'NotBeforeError') {
+    if (err.name === 'JsonWebTokenError') {
       return next(new AppError('Token invalide', 401));
     }
-    
-    console.error('❌ [protect] Unexpected error:', err.message);
     return next(new AppError('Erreur d\'authentification', 500));
   }
 };
@@ -121,4 +94,28 @@ const requireAuth = (req, res, next) => {
   });
 };
 
-module.exports = { protect, authorize, requireAuth };
+/**
+ * Restreint l'accès à certains rôles
+ * Usage: restrictTo('admin', 'manager')
+ */
+const restrictTo = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Non authentifié. Veuillez vous connecter.',
+      });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: `Accès refusé. Rôle requis: ${roles.join(' ou ')}. Votre rôle: ${req.user.role}`,
+      });
+    }
+
+    next();
+  };
+};
+
+module.exports = { protect, restrictTo, authorize, requireAuth };

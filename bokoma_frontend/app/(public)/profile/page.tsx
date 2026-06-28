@@ -1,16 +1,15 @@
 // app/(public)/profile/page.tsx
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { 
-  User, Package, Heart, Settings, LogOut, Edit2, MapPin, Phone, Mail, 
+  User, Package, Heart, Settings, LogOut, Edit2, Phone, Mail, 
   Calendar, CreditCard, Loader2, ShoppingBag, TrendingUp, Clock, 
-  CheckCircle, Truck, XCircle, AlertCircle, Trash2, ExternalLink
+  CheckCircle, Truck, XCircle, AlertCircle, Trash2, ExternalLink, 
+  Check, RefreshCw, Archive, MoreVertical
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/helpers';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,34 +18,31 @@ import { useWishlist } from '@/hooks/useWishlist';
 import { apiClient } from '@/services/api';
 import { ROUTES } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
-import type { Order, Product } from '@/types';
-import { PublicPageHeader } from '@/components/ui/public-page-header';
+import { toast } from 'sonner';
+import type { Order } from '@/types';
 
+// ✅ Hook pour détecter quand la page reprend le focus
+function usePageFocus(callback: () => void) {
+  useEffect(() => {
+    const handleFocus = () => callback();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        callback();
+      }
+    };
 
-<PublicPageHeader
-  title="Mon Profil"
-  description="Gérez vos informations personnelles"
-  icon={<User className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
-  breadcrumbs={[{ label: 'Profil' }]}
-  actions={
-    <Button asChild variant="outline" className="gap-2">
-      <Link href="/profile/settings">
-        <Settings className="w-4 h-4" />
-        Paramètres
-      </Link>
-    </Button>
-  }
-/>
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [callback]);
+}
 
-// ============================================================================
-// 🔹 HELPERS
-// ============================================================================
-
-/**
- * Avatar avec initiales (pas de service externe)
- */
-const Avatar = ({ user, size = 80 }: { user: any; size?: number }) => {
+// ✅ Avatar mémorisé
+const Avatar = memo(({ user, size = 80 }: { user: any; size?: number }) => {
   const initials = useMemo(() => {
     if (!user) return 'U';
     const first = user.firstName?.[0]?.toUpperCase() || '';
@@ -74,6 +70,7 @@ const Avatar = ({ user, size = 80 }: { user: any; size?: number }) => {
         alt="Avatar" 
         className="rounded-full object-cover ring-4 ring-accent/20"
         style={{ width: size, height: size }}
+        loading="lazy"
       />
     );
   }
@@ -89,37 +86,21 @@ const Avatar = ({ user, size = 80 }: { user: any; size?: number }) => {
       {initials}
     </div>
   );
-};
+});
+Avatar.displayName = 'Avatar';
 
-/**
- * Parsing défensif de la réponse API pour extraire les commandes
- */
+// ✅ extractOrders
 const extractOrders = (response: any): Order[] => {
   if (!response) return [];
-  
-  // Format 1: Array direct
-  if (Array.isArray(response)) return response;
-  
-  // Format 2: { orders: [...] }
   if (Array.isArray(response.orders)) return response.orders;
-  
-  // Format 3: { results: [...] }
-  if (Array.isArray(response.results)) return response.results;
-  
-  // Format 4: { data: { orders: [...] } }
-  if (response.data && Array.isArray(response.data.orders)) return response.data.orders;
-  
-  // Format 5: { data: [...] }
+  if (Array.isArray(response.data?.orders)) return response.data.orders;
+  if (Array.isArray(response)) return response;
   if (Array.isArray(response.data)) return response.data;
-  
-  console.warn('⚠️ [Profile] Unexpected orders response format:', response);
   return [];
 };
 
-/**
- * Configuration des statuts de commande
- */
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+// ✅ Configuration des statuts
+const STATUS_CONFIG = {
   pending: { label: 'En attente', color: 'bg-amber-500/10 text-amber-600 border-amber-500/20', icon: Clock },
   confirmed: { label: 'Confirmée', color: 'bg-blue-500/10 text-blue-600 border-blue-500/20', icon: CheckCircle },
   processing: { label: 'En préparation', color: 'bg-purple-500/10 text-purple-600 border-purple-500/20', icon: Package },
@@ -127,11 +108,190 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }>
   delivered: { label: 'Livrée', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', icon: CheckCircle },
   cancelled: { label: 'Annulée', color: 'bg-red-500/10 text-red-600 border-red-500/20', icon: XCircle },
   refunded: { label: 'Remboursée', color: 'bg-slate-500/10 text-slate-600 border-slate-500/20', icon: AlertCircle },
-};
+} as const;
 
-// ============================================================================
-// 🔹 COMPOSANT PRINCIPAL
-// ============================================================================
+// ✅ OrderCard amélioré avec menu d'actions
+const OrderCard = memo(({ 
+  order, 
+  index, 
+  onMarkDelivered,
+  onArchiveOrder,
+  isMarkingDelivered,
+  isArchiving,
+}: { 
+  order: Order; 
+  index: number;
+  onMarkDelivered: (orderId: string) => void;
+  onArchiveOrder: (orderId: string) => void;
+  isMarkingDelivered: boolean;
+  isArchiving: boolean;
+}) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const statusConfig = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.pending;
+  const StatusIcon = statusConfig.icon;
+  const canMarkDelivered = order.status === 'confirmed';
+  
+  return (
+    <div
+      className="relative flex items-center justify-between p-4 rounded-xl border border-border hover:bg-muted/50 hover:border-accent/50 hover:shadow-md transition-all group animate-in fade-in slide-in-from-left-2 duration-300"
+      style={{ animationDelay: `${index * 50}ms` }}
+    >
+      <Link href={`/orders/${order._id}`} className="flex items-center gap-4 flex-1 min-w-0">
+        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-accent/10 to-purple-500/10 flex items-center justify-center group-hover:from-accent/20 group-hover:to-purple-500/20 transition-all flex-shrink-0">
+          <Package className="w-7 h-7 text-accent" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-semibold text-base">
+            #{order.orderNumber?.slice(-6) || order._id?.slice(-6)}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {new Date(order.createdAt).toLocaleDateString('fr-FR', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric'
+            })}
+          </p>
+        </div>
+      </Link>
+      
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="text-right">
+          <p className="font-bold text-lg">{formatPrice(order.total)}</p>
+          <span className={cn(
+            "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border",
+            statusConfig.color
+          )}>
+            <StatusIcon className="w-3 h-3" />
+            {statusConfig.label}
+          </span>
+        </div>
+        
+        {/* Menu d'actions */}
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+            className="p-2 rounded-lg hover:bg-muted transition-colors"
+            title="Plus d'options"
+          >
+            <MoreVertical className="w-5 h-5 text-muted-foreground" />
+          </button>
+          
+          {showMenu && (
+            <>
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setShowMenu(false)}
+              />
+              <div className="absolute right-0 top-full mt-2 w-52 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                {canMarkDelivered && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowMenu(false);
+                      onMarkDelivered(order._id);
+                    }}
+                    disabled={isMarkingDelivered}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-emerald-500/10 text-emerald-600 transition-colors disabled:opacity-50"
+                  >
+                    {isMarkingDelivered ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Check className="w-4 h-4" />
+                    )}
+                    <span>Marquer comme livré</span>
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    onArchiveOrder(order._id);
+                  }}
+                  disabled={isArchiving}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-destructive/10 text-destructive transition-colors disabled:opacity-50"
+                >
+                  {isArchiving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Archive className="w-4 h-4" />
+                  )}
+                  <span>Archiver la commande</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+OrderCard.displayName = 'OrderCard';
+
+// ✅ Modal de confirmation
+const ConfirmModal = memo(({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message, 
+  confirmText = "Confirmer",
+  cancelText = "Annuler",
+  isLoading = false,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  isLoading?: boolean;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex items-start gap-4 mb-6">
+          <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+            <AlertCircle className="w-6 h-6 text-destructive" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-bold mb-2">{title}</h3>
+            <p className="text-sm text-muted-foreground">{message}</p>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={isLoading}
+            className="flex-1"
+          >
+            {cancelText}
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="flex-1"
+          >
+            {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {confirmText}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+});
+ConfirmModal.displayName = 'ConfirmModal';
 
 export default function ProfilePage() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
@@ -144,11 +304,14 @@ export default function ProfilePage() {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [loadingAllOrders, setLoadingAllOrders] = useState(false);
+  const [markingDeliveredId, setMarkingDeliveredId] = useState<string | null>(null);
+  const [archivingOrderId, setArchivingOrderId] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    orderId: string | null;
+  }>({ isOpen: false, orderId: null });
 
-  // ============================================================================
-  // 🔹 FETCH DATA
-  // ============================================================================
-
+  // ✅ fetchRecentOrders
   const fetchRecentOrders = useCallback(async () => {
     if (!mounted || !isAuthenticated || !user?._id) return;
     
@@ -160,17 +323,21 @@ export default function ProfilePage() {
       });
       
       const orders = extractOrders(response);
-      console.log('📦 [Profile] Recent orders loaded:', orders.length);
+      console.log('✅ [Profile] Recent orders loaded:', orders.length);
       setRecentOrders(orders);
-      
-    } catch (err) {
-      console.error('❌ [Profile] Failed to fetch recent orders:', err);
+    } catch (err: any) {
+      console.error('❌ [Profile] fetchRecentOrders error:', {
+        message: err?.message,
+        status: err?.response?.status,
+        data: err?.response?.data,
+      });
       setRecentOrders([]);
     } finally {
       setLoadingOrders(false);
     }
   }, [mounted, isAuthenticated, user?._id]);
 
+  // ✅ fetchAllOrders
   const fetchAllOrders = useCallback(async () => {
     if (!mounted || !isAuthenticated || !user?._id) return;
     
@@ -182,28 +349,93 @@ export default function ProfilePage() {
       });
       
       const orders = extractOrders(response);
-      console.log('📦 [Profile] All orders loaded:', orders.length);
+      console.log('✅ [Profile] All orders loaded:', orders.length);
       setAllOrders(orders);
-      
-    } catch (err) {
-      console.error('❌ [Profile] Failed to fetch all orders:', err);
+    } catch (err: any) {
+      console.error('❌ [Profile] fetchAllOrders error:', {
+        message: err?.message,
+        status: err?.response?.status,
+        data: err?.response?.data,
+      });
       setAllOrders([]);
     } finally {
       setLoadingAllOrders(false);
     }
   }, [mounted, isAuthenticated, user?._id]);
 
-  useEffect(() => {
-    if (activeTab === 'overview') fetchRecentOrders();
-  }, [activeTab, fetchRecentOrders]);
+  // ✅ Marquer comme livré
+  const handleMarkAsDelivered = useCallback(async (orderId: string) => {
+    try {
+      setMarkingDeliveredId(orderId);
+      
+      const response = await apiClient.patch(`/orders/${orderId}/delivered`);
+      const updatedOrder = response?.data?.order || response?.order;
+      
+      if (updatedOrder) {
+        toast.success(`Commande #${updatedOrder.orderNumber?.slice(-6)} marquée comme livrée ✅`);
+        
+        setAllOrders(prev => prev.map(o => 
+          o._id === orderId ? { ...o, status: 'delivered' } : o
+        ));
+        setRecentOrders(prev => prev.map(o => 
+          o._id === orderId ? { ...o, status: 'delivered' } : o
+        ));
+      }
+    } catch (err: any) {
+      console.error('❌ [Profile] markAsDelivered error:', err);
+      toast.error(err?.response?.data?.message || 'Erreur lors de la confirmation');
+    } finally {
+      setMarkingDeliveredId(null);
+    }
+  }, []);
 
-  useEffect(() => {
-    if (activeTab === 'orders') fetchAllOrders();
-  }, [activeTab, fetchAllOrders]);
+  // ✅ Archiver une commande
+  const handleArchiveOrder = useCallback((orderId: string) => {
+    setConfirmModal({ isOpen: true, orderId });
+  }, []);
 
-  // ============================================================================
-  // 🔹 HANDLERS
-  // ============================================================================
+  const confirmArchiveOrder = useCallback(async () => {
+    if (!confirmModal.orderId) return;
+
+    try {
+      setArchivingOrderId(confirmModal.orderId);
+      
+      const response = await apiClient.patch(`/orders/${confirmModal.orderId}/archive`);
+      
+      if (response?.success) {
+        toast.success('Commande archivée avec succès');
+        
+        // Retirer de la liste locale
+        setAllOrders(prev => prev.filter(o => o._id !== confirmModal.orderId));
+        setRecentOrders(prev => prev.filter(o => o._id !== confirmModal.orderId));
+      }
+      
+      setConfirmModal({ isOpen: false, orderId: null });
+    } catch (err: any) {
+      console.error('❌ [Profile] archiveOrder error:', err);
+      toast.error(err?.response?.data?.message || 'Erreur lors de l\'archivage');
+    } finally {
+      setArchivingOrderId(null);
+    }
+  }, [confirmModal.orderId]);
+
+  // ✅ Refetch à chaque changement d'onglet
+  useEffect(() => {
+    if (activeTab === 'overview') {
+      fetchRecentOrders();
+    } else if (activeTab === 'orders') {
+      fetchAllOrders();
+    }
+  }, [activeTab]);
+
+  // ✅ Refetch quand on revient sur la page (focus)
+  usePageFocus(() => {
+    if (activeTab === 'overview') {
+      fetchRecentOrders();
+    } else if (activeTab === 'orders') {
+      fetchAllOrders();
+    }
+  });
 
   const handleLogout = useCallback(() => {
     logout();
@@ -211,22 +443,21 @@ export default function ProfilePage() {
   }, [logout, router]);
 
   const handleRemoveFromWishlist = useCallback(async (productId: string) => {
-    const success = await removeFromWishlist(productId);
-    if (success) {
-      console.log('✅ [Profile] Removed from wishlist:', productId);
-    }
+    await removeFromWishlist(productId);
   }, [removeFromWishlist]);
 
-  // ============================================================================
-  // 🔹 COMPUTED VALUES
-  // ============================================================================
-
-  const stats = useMemo(() => ({
-    totalOrders: allOrders.length,
-    totalSpent: allOrders.reduce((sum, order) => sum + (order.total || 0), 0),
-    pendingOrders: allOrders.filter(o => o.status === 'pending' || o.status === 'processing').length,
-    deliveredOrders: allOrders.filter(o => o.status === 'delivered').length,
-  }), [allOrders]);
+  // ✅ Stats
+  const stats = useMemo(() => {
+    const confirmedOrders = allOrders.filter(o => o.status === 'confirmed' || o.status === 'delivered');
+    
+    return {
+      totalOrders: allOrders.length,
+      totalSpent: confirmedOrders.reduce((sum, order) => sum + (order.total || 0), 0),
+      pendingOrders: allOrders.filter(o => o.status === 'pending' || o.status === 'processing').length,
+      deliveredOrders: allOrders.filter(o => o.status === 'delivered').length,
+      confirmedOrders: allOrders.filter(o => o.status === 'confirmed').length,
+    };
+  }, [allOrders]);
 
   const memberSince = useMemo(() => {
     if (!user?.createdAt) return 'N/A';
@@ -235,10 +466,6 @@ export default function ProfilePage() {
       month: 'long',
     });
   }, [user?.createdAt]);
-
-  // ============================================================================
-  // 🔹 LOADING STATES
-  // ============================================================================
 
   if (!mounted || isLoading) {
     return (
@@ -254,11 +481,7 @@ export default function ProfilePage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 py-12">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center max-w-md"
-        >
+        <div className="text-center max-w-md animate-in fade-in zoom-in duration-300">
           <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
             <User className="w-10 h-10 text-muted-foreground" />
           </div>
@@ -271,14 +494,10 @@ export default function ProfilePage() {
               Se connecter
             </Link>
           </Button>
-        </motion.div>
+        </div>
       </div>
     );
   }
-
-  // ============================================================================
-  // 🔹 TABS CONFIG
-  // ============================================================================
 
   const tabs = [
     { id: 'overview' as const, label: 'Vue d\'ensemble', icon: User },
@@ -287,37 +506,19 @@ export default function ProfilePage() {
     { id: 'settings' as const, label: 'Paramètres', icon: Settings },
   ];
 
-  // ============================================================================
-  // 🔹 RENDER
-  // ============================================================================
-
   return (
     <div className="min-h-screen bg-background px-4 py-8">
       <div className="max-w-6xl mx-auto">
-        
-        {/* Header */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          className="mb-8"
-        >
+        <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
           <h1 className="text-3xl font-bold">Mon Profil</h1>
           <p className="text-muted-foreground">
             Gérez vos informations personnelles et vos préférences
           </p>
-        </motion.div>
+        </div>
 
         <div className="grid lg:grid-cols-4 gap-6">
-          
-          {/* Sidebar */}
-          <motion.aside 
-            initial={{ opacity: 0, x: -20 }} 
-            animate={{ opacity: 1, x: 0 }} 
-            className="lg:col-span-1"
-          >
+          <aside className="lg:col-span-1 animate-in fade-in slide-in-from-left-4 duration-500">
             <div className="bg-card border border-border rounded-xl p-4 space-y-2 sticky top-4">
-              
-              {/* User info in sidebar */}
               <div className="flex items-center gap-3 p-3 mb-4">
                 <Avatar user={user} size={48} />
                 <div className="flex-1 min-w-0">
@@ -330,7 +531,6 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Tabs */}
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
@@ -362,7 +562,6 @@ export default function ProfilePage() {
               
               <hr className="border-border my-2" />
               
-              {/* Logout */}
               <button 
                 onClick={handleLogout} 
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-destructive hover:bg-destructive/10 transition-colors"
@@ -371,130 +570,111 @@ export default function ProfilePage() {
                 <span className="font-medium">Déconnexion</span>
               </button>
             </div>
-          </motion.aside>
+          </aside>
 
-          {/* Main Content */}
-          <motion.main 
-            initial={{ opacity: 0, x: 20 }} 
-            animate={{ opacity: 1, x: 0 }} 
-            className="lg:col-span-3 space-y-6"
-          >
-            <AnimatePresence mode="wait">
-              
-              {/* ============================================================ */}
-              {/* OVERVIEW TAB */}
-              {/* ============================================================ */}
-              {activeTab === 'overview' && (
-                <motion.div
-                  key="overview"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6"
-                >
-                  {/* User Card */}
-                  <div className="bg-card border border-border rounded-xl p-6">
-                    <div className="flex flex-col sm:flex-row items-start gap-6">
-                      <Avatar user={user} size={100} />
-                      
-                      <div className="flex-1 w-full">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                          <div>
-                            <h2 className="text-2xl font-bold">
-                              {user?.firstName} {user?.lastName}
-                            </h2>
-                            <p className="text-muted-foreground mt-1">{user?.email}</p>
-                            {user?.role && (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent mt-3">
-                                {user.role === 'admin' ? '👑 Administrateur' : 
-                                 user.role === 'manager' ? '⭐ Gestionnaire' : 
-                                 '👤 Client'}
-                              </span>
-                            )}
-                          </div>
-                          
-                          <Link href={ROUTES?.USER?.SETTINGS || '/profile?tab=settings'}>
-                            <Button variant="outline" size="sm" className="gap-2">
-                              <Edit2 className="w-4 h-4" /> Modifier
-                            </Button>
-                          </Link>
+          <main className="lg:col-span-3 space-y-6 animate-in fade-in slide-in-from-right-4 duration-500 delay-200">
+            {activeTab === 'overview' && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="bg-card border border-border rounded-xl p-6">
+                  <div className="flex flex-col sm:flex-row items-start gap-6">
+                    <Avatar user={user} size={100} />
+                    
+                    <div className="flex-1 w-full">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                        <div>
+                          <h2 className="text-2xl font-bold">
+                            {user?.firstName} {user?.lastName}
+                          </h2>
+                          <p className="text-muted-foreground mt-1">{user?.email}</p>
+                          {user?.role && (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent mt-3">
+                              {user.role === 'admin' ? '👑 Administrateur' : 
+                               user.role === 'manager' ? '⭐ Gestionnaire' : 
+                               '👤 Client'}
+                            </span>
+                          )}
                         </div>
                         
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+                        <Link href="/profile/settings">
+                          <Button variant="outline" size="sm" className="gap-2">
+                            <Edit2 className="w-4 h-4" /> Modifier
+                          </Button>
+                        </Link>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+                        <div className="flex items-center gap-3 text-sm">
+                          <Mail className="w-4 h-4 text-muted-foreground" />
+                          <span className="truncate">{user?.email}</span>
+                        </div>
+                        {user?.phone && (
                           <div className="flex items-center gap-3 text-sm">
-                            <Mail className="w-4 h-4 text-muted-foreground" />
-                            <span className="truncate">{user?.email}</span>
+                            <Phone className="w-4 h-4 text-muted-foreground" />
+                            <span>{user.phone}</span>
                           </div>
-                          {user?.phone && (
-                            <div className="flex items-center gap-3 text-sm">
-                              <Phone className="w-4 h-4 text-muted-foreground" />
-                              <span>{user.phone}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-3 text-sm">
-                            <Calendar className="w-4 h-4 text-muted-foreground" />
-                            <span>Membre depuis {memberSince}</span>
-                          </div>
+                        )}
+                        <div className="flex items-center gap-3 text-sm">
+                          <Calendar className="w-4 h-4 text-muted-foreground" />
+                          <span>Membre depuis {memberSince}</span>
                         </div>
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* Stats Cards */}
-                  <div className="grid sm:grid-cols-3 gap-4">
-                    <motion.div 
-                      whileHover={{ scale: 1.02 }}
-                      className="bg-card border border-border rounded-xl p-5"
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-blue-500/10 rounded-lg">
-                          <Package className="w-5 h-5 text-blue-500" />
-                        </div>
-                        <span className="text-sm text-muted-foreground">Commandes</span>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <div className="bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-blue-500/10 rounded-lg">
+                        <Package className="w-5 h-5 text-blue-500" />
                       </div>
-                      <p className="text-3xl font-bold">{stats.totalOrders}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {stats.deliveredOrders} livrées
-                      </p>
-                    </motion.div>
-
-                    <motion.div 
-                      whileHover={{ scale: 1.02 }}
-                      className="bg-card border border-border rounded-xl p-5"
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-green-500/10 rounded-lg">
-                          <TrendingUp className="w-5 h-5 text-green-500" />
-                        </div>
-                        <span className="text-sm text-muted-foreground">Total dépensé</span>
-                      </div>
-                      <p className="text-3xl font-bold">{formatPrice(stats.totalSpent)}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {stats.pendingOrders} en cours
-                      </p>
-                    </motion.div>
-
-                    <motion.div 
-                      whileHover={{ scale: 1.02 }}
-                      className="bg-card border border-border rounded-xl p-5"
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-pink-500/10 rounded-lg">
-                          <Heart className="w-5 h-5 text-pink-500" />
-                        </div>
-                        <span className="text-sm text-muted-foreground">Favoris</span>
-                      </div>
-                      <p className="text-3xl font-bold">{wishlist.length}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Produits sauvegardés
-                      </p>
-                    </motion.div>
+                      <span className="text-sm text-muted-foreground">Commandes</span>
+                    </div>
+                    <p className="text-3xl font-bold">{stats.totalOrders}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {stats.deliveredOrders} livrées · {stats.confirmedOrders} confirmées
+                    </p>
                   </div>
 
-                  {/* Recent Orders */}
-                  <div className="bg-card border border-border rounded-xl p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold text-lg">Commandes Récentes</h3>
+                  <div className="bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-green-500/10 rounded-lg">
+                        <TrendingUp className="w-5 h-5 text-green-500" />
+                      </div>
+                      <span className="text-sm text-muted-foreground">Total dépensé</span>
+                    </div>
+                    <p className="text-3xl font-bold">{formatPrice(stats.totalSpent)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Commandes confirmées uniquement
+                    </p>
+                  </div>
+
+                  <div className="bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-pink-500/10 rounded-lg">
+                        <Heart className="w-5 h-5 text-pink-500" />
+                      </div>
+                      <span className="text-sm text-muted-foreground">Favoris</span>
+                    </div>
+                    <p className="text-3xl font-bold">{wishlist.length}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Produits sauvegardés
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-card border border-border rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-lg">Commandes Récentes</h3>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => fetchRecentOrders()}
+                        disabled={loadingOrders}
+                        className="text-sm text-accent hover:underline flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <RefreshCw className={cn("w-4 h-4", loadingOrders && "animate-spin")} />
+                        <span className="hidden sm:inline">Rafraîchir</span>
+                      </button>
                       <button
                         onClick={() => setActiveTab('orders')}
                         className="text-sm text-accent hover:underline flex items-center gap-1"
@@ -503,304 +683,229 @@ export default function ProfilePage() {
                         <ExternalLink className="w-4 h-4" />
                       </button>
                     </div>
-                    
-                    {loadingOrders ? (
-                      <div className="flex flex-col items-center justify-center py-12 gap-3">
-                        <Loader2 className="w-8 h-8 animate-spin text-accent" />
-                        <p className="text-sm text-muted-foreground">Chargement...</p>
-                      </div>
-                    ) : !Array.isArray(recentOrders) || recentOrders.length === 0 ? (
-                      <div className="text-center py-12">
-                        <ShoppingBag className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
-                        <p className="text-muted-foreground">Aucune commande pour le moment</p>
-                        <Link 
-                          href={ROUTES?.PRODUCTS || '/products'} 
-                          className="text-accent hover:underline text-sm mt-2 inline-block"
-                        >
-                          Découvrir nos produits
-                        </Link>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {recentOrders.map((order, index) => {
-                          const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
-                          const StatusIcon = statusConfig.icon;
-                          
-                          return (
-                            <motion.div
-                              key={order._id}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.05 }}
-                            >
-                              <Link 
-                                href={`/orders/${order._id}`}
-                                className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 hover:border-accent/50 transition-all group"
-                              >
-                                <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 rounded-lg bg-muted/50 flex items-center justify-center group-hover:bg-accent/10 transition-colors">
-                                    <Package className="w-6 h-6 text-muted-foreground group-hover:text-accent transition-colors" />
-                                  </div>
-                                  <div>
-                                    <p className="font-medium">
-                                      #{order.orderNumber?.slice(-6) || order._id?.slice(-6)}
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">
-                                      {new Date(order.createdAt).toLocaleDateString('fr-FR', {
-                                        day: 'numeric',
-                                        month: 'short',
-                                        year: 'numeric'
-                                      })}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <p className="font-semibold">{formatPrice(order.total)}</p>
-                                  <span className={cn(
-                                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border",
-                                    statusConfig.color
-                                  )}>
-                                    <StatusIcon className="w-3 h-3" />
-                                    {statusConfig.label}
-                                  </span>
-                                </div>
-                              </Link>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
-                </motion.div>
-              )}
-
-              {/* ============================================================ */}
-              {/* ORDERS TAB */}
-              {/* ============================================================ */}
-              {activeTab === 'orders' && (
-                <motion.div
-                  key="orders"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-card border border-border rounded-xl p-6"
-                >
-                  <h3 className="font-semibold text-lg mb-4">
-                    Historique des Commandes ({allOrders.length})
-                  </h3>
                   
-                  {loadingAllOrders ? (
+                  {loadingOrders ? (
                     <div className="flex flex-col items-center justify-center py-12 gap-3">
                       <Loader2 className="w-8 h-8 animate-spin text-accent" />
                       <p className="text-sm text-muted-foreground">Chargement...</p>
                     </div>
-                  ) : !Array.isArray(allOrders) || allOrders.length === 0 ? (
+                  ) : recentOrders.length === 0 ? (
                     <div className="text-center py-12">
                       <ShoppingBag className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
-                      <p className="text-muted-foreground">Aucune commande</p>
+                      <p className="text-muted-foreground">Aucune commande pour le moment</p>
                       <Link 
-                        href={ROUTES?.PRODUCTS || '/products'} 
+                        href="/products" 
                         className="text-accent hover:underline text-sm mt-2 inline-block"
-                      >
-                        Commencer vos achats
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {allOrders.map((order, index) => {
-                        const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
-                        const StatusIcon = statusConfig.icon;
-                        
-                        return (
-                          <motion.div
-                            key={order._id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.03 }}
-                          >
-                            <Link 
-                              href={`/orders/${order._id}`}
-                              className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 hover:border-accent/50 transition-all group"
-                            >
-                              <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-lg bg-muted/50 flex items-center justify-center group-hover:bg-accent/10 transition-colors">
-                                  <Package className="w-6 h-6 text-muted-foreground group-hover:text-accent transition-colors" />
-                                </div>
-                                <div>
-                                  <p className="font-medium">
-                                    #{order.orderNumber?.slice(-6) || order._id?.slice(-6)}
-                                  </p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {new Date(order.createdAt).toLocaleDateString('fr-FR', {
-                                      day: 'numeric',
-                                      month: 'short',
-                                      year: 'numeric'
-                                    })}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <p className="font-semibold">{formatPrice(order.total)}</p>
-                                <span className={cn(
-                                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border",
-                                  statusConfig.color
-                                )}>
-                                  <StatusIcon className="w-3 h-3" />
-                                  {statusConfig.label}
-                                </span>
-                              </div>
-                            </Link>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </motion.div>
-              )}
-
-              {/* ============================================================ */}
-              {/* WISHLIST TAB */}
-              {/* ============================================================ */}
-              {activeTab === 'wishlist' && (
-                <motion.div
-                  key="wishlist"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-card border border-border rounded-xl p-6"
-                >
-                  <h3 className="font-semibold text-lg mb-4">
-                    Mes Favoris ({wishlist.length})
-                  </h3>
-                  
-                  {wishlistLoading ? (
-                    <div className="flex flex-col items-center justify-center py-12 gap-3">
-                      <Loader2 className="w-8 h-8 animate-spin text-accent" />
-                      <p className="text-sm text-muted-foreground">Chargement...</p>
-                    </div>
-                  ) : !Array.isArray(wishlist) || wishlist.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Heart className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
-                      <p className="text-muted-foreground mb-4">
-                        Votre liste de favoris est vide
-                      </p>
-                      <Link 
-                        href={ROUTES?.PRODUCTS || '/products'} 
-                        className="text-accent hover:underline text-sm"
                       >
                         Découvrir nos produits
                       </Link>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {wishlist.map((product, index) => (
-                        <motion.div
-                          key={product._id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="flex gap-4 p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
-                        >
-                          <Link href={`/products/${product.slug || product._id}`} className="flex-shrink-0">
-                            <img
-                              src={product.images?.[0]?.url || product.images?.[0] || 'https://placehold.co/100x100'}
-                              alt={product.name}
-                              className="w-20 h-20 object-cover rounded-lg"
-                            />
-                          </Link>
-                          <div className="flex-1 min-w-0">
-                            <Link href={`/products/${product.slug || product._id}`}>
-                              <h4 className="font-medium line-clamp-2 hover:text-accent transition">
-                                {product.name}
-                              </h4>
-                            </Link>
-                            {product.brand && (
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {product.brand}
-                              </p>
-                            )}
-                            <p className="text-lg font-bold text-accent mt-2">
-                              {formatPrice(product.basePrice || 0)}
-                            </p>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveFromWishlist(product._id)}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-                            title="Retirer des favoris"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </motion.div>
+                    <div className="space-y-3">
+                      {recentOrders.map((order, index) => (
+                        <OrderCard 
+                          key={order._id} 
+                          order={order} 
+                          index={index}
+                          onMarkDelivered={handleMarkAsDelivered}
+                          onArchiveOrder={handleArchiveOrder}
+                          isMarkingDelivered={markingDeliveredId === order._id}
+                          isArchiving={archivingOrderId === order._id}
+                        />
                       ))}
                     </div>
                   )}
-                </motion.div>
-              )}
+                </div>
+              </div>
+            )}
 
-              {/* ============================================================ */}
-              {/* SETTINGS TAB */}
-              {/* ============================================================ */}
-              {activeTab === 'settings' && (
-                <motion.div
-                  key="settings"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-card border border-border rounded-xl p-6"
-                >
-                  <h3 className="font-semibold text-lg mb-4">Paramètres du Compte</h3>
-                  
-                  <div className="space-y-6">
-                    {/* Personal Info */}
-                    <div>
-                      <h4 className="font-medium mb-3">Informations personnelles</h4>
-                      <div className="space-y-3">
-                        <div className="grid sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-sm text-muted-foreground">Prénom</label>
-                            <p className="font-medium">{user?.firstName || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm text-muted-foreground">Nom</label>
-                            <p className="font-medium">{user?.lastName || 'N/A'}</p>
-                          </div>
+            {activeTab === 'orders' && (
+              <div className="bg-card border border-border rounded-xl p-6 animate-in fade-in duration-300">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-lg">
+                    Historique des Commandes ({allOrders.length})
+                  </h3>
+                  <button
+                    onClick={() => fetchAllOrders()}
+                    disabled={loadingAllOrders}
+                    className="text-sm text-accent hover:underline flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn("w-4 h-4", loadingAllOrders && "animate-spin")} />
+                    <span className="hidden sm:inline">Rafraîchir</span>
+                  </button>
+                </div>
+                
+                {loadingAllOrders ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                    <p className="text-sm text-muted-foreground">Chargement...</p>
+                  </div>
+                ) : allOrders.length === 0 ? (
+                  <div className="text-center py-12">
+                    <ShoppingBag className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
+                    <p className="text-muted-foreground">Aucune commande</p>
+                    <Link 
+                      href="/products" 
+                      className="text-accent hover:underline text-sm mt-2 inline-block"
+                    >
+                      Commencer vos achats
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {allOrders.map((order, index) => (
+                      <OrderCard 
+                        key={order._id} 
+                        order={order} 
+                        index={index}
+                        onMarkDelivered={handleMarkAsDelivered}
+                        onArchiveOrder={handleArchiveOrder}
+                        isMarkingDelivered={markingDeliveredId === order._id}
+                        isArchiving={archivingOrderId === order._id}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'wishlist' && (
+              <div className="bg-card border border-border rounded-xl p-6 animate-in fade-in duration-300">
+                <h3 className="font-semibold text-lg mb-4">
+                  Mes Favoris ({wishlist.length})
+                </h3>
+                
+                {wishlistLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                    <p className="text-sm text-muted-foreground">Chargement...</p>
+                  </div>
+                ) : wishlist.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Heart className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
+                    <p className="text-muted-foreground mb-4">
+                      Votre liste de favoris est vide
+                    </p>
+                    <Link 
+                      href="/products" 
+                      className="text-accent hover:underline text-sm"
+                    >
+                      Découvrir nos produits
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {wishlist.map((product, index) => (
+                      <div
+                        key={product._id}
+                        className="flex gap-4 p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors animate-in fade-in slide-in-from-bottom-2 duration-300"
+                        style={{ animationDelay: `${index * 50}ms` }}
+                      >
+                        <Link href={`/products/${product.slug || product._id}`} className="flex-shrink-0">
+                          <img
+                            src={product.images?.[0]?.url || product.images?.[0] || 'https://placehold.co/100x100'}
+                            alt={product.name}
+                            className="w-20 h-20 object-cover rounded-lg"
+                            loading="lazy"
+                          />
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <Link href={`/products/${product.slug || product._id}`}>
+                            <h4 className="font-medium line-clamp-2 hover:text-accent transition">
+                              {product.name}
+                            </h4>
+                          </Link>
+                          {product.brand && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {product.brand}
+                            </p>
+                          )}
+                          <p className="text-lg font-bold text-accent mt-2">
+                            {formatPrice(product.basePrice || 0)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveFromWishlist(product._id)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+                          title="Retirer des favoris"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'settings' && (
+              <div className="bg-card border border-border rounded-xl p-6 animate-in fade-in duration-300">
+                <h3 className="font-semibold text-lg mb-4">Paramètres du Compte</h3>
+                
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium mb-3">Informations personnelles</h4>
+                    <div className="space-y-3">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-sm text-muted-foreground">Prénom</label>
+                          <p className="font-medium">{user?.firstName || 'N/A'}</p>
                         </div>
                         <div>
-                          <label className="text-sm text-muted-foreground">Email</label>
-                          <p className="font-medium">{user?.email || 'N/A'}</p>
+                          <label className="text-sm text-muted-foreground">Nom</label>
+                          <p className="font-medium">{user?.lastName || 'N/A'}</p>
                         </div>
-                        {user?.phone && (
-                          <div>
-                            <label className="text-sm text-muted-foreground">Téléphone</label>
-                            <p className="font-medium">{user.phone}</p>
-                          </div>
-                        )}
                       </div>
+                      <div>
+                        <label className="text-sm text-muted-foreground">Email</label>
+                        <p className="font-medium">{user?.email || 'N/A'}</p>
+                      </div>
+                      {user?.phone && (
+                        <div>
+                          <label className="text-sm text-muted-foreground">Téléphone</label>
+                          <p className="font-medium">{user.phone}</p>
+                        </div>
+                      )}
                     </div>
+                  </div>
 
-                    <hr className="border-border" />
+                  <hr className="border-border" />
 
-                    {/* Actions */}
-                    <div className="space-y-3">
+                  <div className="space-y-3">
+                    <Link href="/profile/settings">
                       <Button variant="outline" className="w-full gap-2">
                         <Edit2 className="w-4 h-4" />
                         Modifier mes informations
                       </Button>
+                    </Link>
+                    <Link href="/profile/settings">
                       <Button variant="outline" className="w-full gap-2">
                         <CreditCard className="w-4 h-4" />
                         Changer mon mot de passe
                       </Button>
-                    </div>
+                    </Link>
                   </div>
-                </motion.div>
-              )}
-
-            </AnimatePresence>
-          </motion.main>
+                </div>
+              </div>
+            )}
+          </main>
         </div>
       </div>
+
+      {/* ✅ Modal de confirmation pour l'archivage */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, orderId: null })}
+        onConfirm={confirmArchiveOrder}
+        title="Archiver la commande ?"
+        message="Cette commande sera masquée de votre profil. Vous ne pourrez plus la voir dans votre historique. Cette action est irréversible."
+        confirmText="Archiver"
+        cancelText="Annuler"
+        isLoading={archivingOrderId !== null}
+      />
     </div>
   );
 }

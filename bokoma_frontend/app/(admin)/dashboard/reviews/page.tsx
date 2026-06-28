@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   Star, Trash2, CheckCircle2, XCircle, MessageSquare,
   Loader2, AlertCircle, RefreshCw, User as UserIcon,
@@ -15,10 +14,6 @@ import { reviewApi } from '@/services';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { formatDate } from '@/utils/helpers';
 import { toast } from 'sonner';
-
-// ─────────────────────────────────────────────────────────────
-// 🔹 TYPES
-// ─────────────────────────────────────────────────────────────
 
 interface Review {
   _id: string;
@@ -54,12 +49,6 @@ interface ReviewStats {
 
 type FilterType = 'all' | 'pending' | 'approved';
 
-type ActionType = 'approve' | 'reject' | 'delete';
-
-// ─────────────────────────────────────────────────────────────
-// 🔹 COMPOSANT : StarRating
-// ─────────────────────────────────────────────────────────────
-
 const StarRating = React.memo(({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md' | 'lg' }) => {
   const sizeClasses = {
     sm: 'w-3.5 h-3.5',
@@ -84,53 +73,44 @@ const StarRating = React.memo(({ rating, size = 'sm' }: { rating: number; size?:
 });
 StarRating.displayName = 'StarRating';
 
-// ─────────────────────────────────────────────────────────────
-// 🔹 COMPOSANT : ReviewCard
-// ─────────────────────────────────────────────────────────────
-
 const ReviewCard = React.memo(({
   review,
   onApprove,
   onReject,
   onDelete,
   updating,
+  index,
 }: {
   review: Review;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   onDelete: (id: string) => void;
   updating: string | null;
+  index: number;
 }) => {
   const isUpdating = updating === review._id;
 
-  // ✅ Helper pour extraire l'URL de l'image produit
   const getProductImage = useMemo((): string | null => {
     if (!review.product?.images || review.product.images.length === 0) return null;
     const img = review.product.images[0];
     return typeof img === 'string' ? img : img?.url || null;
   }, [review.product?.images]);
 
-  // ✅ Helper pour extraire l'URL des images de l'avis
   const getReviewImageUrl = (img: { url: string } | string): string => {
     return typeof img === 'string' ? img : img.url;
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.2 }}
-      className={`bg-card border rounded-xl p-5 transition-all hover:shadow-md ${
+    <div
+      className={`bg-card border rounded-xl p-5 transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 ${
         review.isApproved
           ? 'border-border hover:border-green-500/30'
           : 'border-amber-500/30 bg-amber-500/5'
       }`}
+      style={{ animationDelay: `${index * 50}ms` }}
     >
-      {/* Header : Produit + Note */}
       <div className="flex items-start justify-between mb-4 gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          {/* Image produit */}
           <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0">
             {getProductImage ? (
               <img
@@ -149,7 +129,6 @@ const ReviewCard = React.memo(({
             )}
           </div>
 
-          {/* Infos produit */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-semibold truncate">{review.product.name}</h3>
@@ -174,7 +153,6 @@ const ReviewCard = React.memo(({
           </div>
         </div>
 
-        {/* Badge statut */}
         <span className={`px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
           review.isApproved
             ? 'bg-green-500/10 text-green-600 dark:text-green-400'
@@ -184,7 +162,6 @@ const ReviewCard = React.memo(({
         </span>
       </div>
 
-      {/* Contenu de l'avis */}
       <div className="mb-4">
         {review.title && (
           <h4 className="font-medium mb-1">{review.title}</h4>
@@ -194,7 +171,6 @@ const ReviewCard = React.memo(({
         </p>
       </div>
 
-      {/* Images de l'avis */}
       {review.images && review.images.length > 0 && (
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           {review.images.map((img, idx) => (
@@ -213,10 +189,8 @@ const ReviewCard = React.memo(({
         </div>
       )}
 
-      {/* Footer : Auteur + Date + Actions */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-          {/* Auteur */}
           <div className="flex items-center gap-1.5">
             {review.user.avatar ? (
               <img
@@ -234,7 +208,6 @@ const ReviewCard = React.memo(({
             </span>
           </div>
 
-          {/* Email */}
           <span className="hidden sm:inline text-muted-foreground/50">•</span>
           <a
             href={`mailto:${review.user.email}`}
@@ -243,14 +216,12 @@ const ReviewCard = React.memo(({
             {review.user.email}
           </a>
 
-          {/* Date */}
           <span className="text-muted-foreground/50">•</span>
           <span className="flex items-center gap-1">
             <Calendar className="w-3 h-3" />
             {formatDate(review.createdAt)}
           </span>
 
-          {/* Helpful */}
           {review.isHelpful !== undefined && review.isHelpful > 0 && (
             <>
               <span className="text-muted-foreground/50">•</span>
@@ -262,7 +233,6 @@ const ReviewCard = React.memo(({
           )}
         </div>
 
-        {/* Actions */}
         <div className="flex gap-2 flex-wrap">
           {!review.isApproved ? (
             <Button
@@ -311,14 +281,10 @@ const ReviewCard = React.memo(({
           </Button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 });
 ReviewCard.displayName = 'ReviewCard';
-
-// ─────────────────────────────────────────────────────────────
-// 🔹 COMPOSANT : Skeleton Loader
-// ─────────────────────────────────────────────────────────────
 
 const ReviewSkeleton = () => (
   <div className="bg-card border border-border rounded-xl p-5 animate-pulse">
@@ -343,16 +309,9 @@ const ReviewSkeleton = () => (
   </div>
 );
 
-// ─────────────────────────────────────────────────────────────
-// 🔹 PAGE PRINCIPALE
-// ─────────────────────────────────────────────────────────────
-
 export default function ReviewsAdminPage() {
   useRequireAdmin();
 
-  // ─────────────────────────────────────────────────────────
-  // 🔹 ÉTATS
-  // ─────────────────────────────────────────────────────────
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -362,9 +321,6 @@ export default function ReviewsAdminPage() {
   const [stats, setStats] = useState<ReviewStats | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Review | null>(null);
 
-  // ─────────────────────────────────────────────────────────
-  // 🔹 FETCH DES AVIS (optimisé)
-  // ─────────────────────────────────────────────────────────
   const fetchReviews = useCallback(async () => {
     try {
       setLoading(true);
@@ -383,17 +339,14 @@ export default function ReviewsAdminPage() {
         sortOrder: 'desc',
       };
 
-      // Filtre par statut
       if (filter === 'pending') params.approved = false;
       else if (filter === 'approved') params.approved = true;
 
-      // Appels API en parallèle
       const [reviewsResponse, statsResponse] = await Promise.allSettled([
         reviewApi.getAllReviews(params),
         reviewApi.getReviewStats?.(),
       ]);
 
-      // Parsing des avis
       if (reviewsResponse.status === 'fulfilled') {
         const response = reviewsResponse.value;
         const data = (response as any)?.data || response;
@@ -408,7 +361,6 @@ export default function ReviewsAdminPage() {
         throw reviewsResponse.reason;
       }
 
-      // Parsing des statistiques
       if (statsResponse.status === 'fulfilled') {
         const statsData = (statsResponse.value as any)?.data || statsResponse.value;
         const statsRaw = statsData?.data || statsData;
@@ -440,9 +392,6 @@ export default function ReviewsAdminPage() {
     fetchReviews();
   }, [fetchReviews]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🔹 STATISTIQUES (calculées localement en fallback)
-  // ─────────────────────────────────────────────────────────
   const computedStats = useMemo<ReviewStats>(() => {
     if (stats) return stats;
 
@@ -456,9 +405,6 @@ export default function ReviewsAdminPage() {
     return { total, approved, pending, averageRating };
   }, [reviews, stats]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🔹 FILTRAGE LOCAL (recherche)
-  // ─────────────────────────────────────────────────────────
   const filteredReviews = useMemo(() => {
     if (!search.trim()) return reviews;
 
@@ -476,9 +422,6 @@ export default function ReviewsAdminPage() {
     });
   }, [reviews, search]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🔹 ACTIONS
-  // ─────────────────────────────────────────────────────────
   const handleApprove = useCallback(async (id: string) => {
     if (updating) return;
     setUpdating(id);
@@ -500,7 +443,6 @@ export default function ReviewsAdminPage() {
     if (updating) return;
     setUpdating(id);
     try {
-      // Essayer rejectReview d'abord, puis deleteReview en fallback
       if (typeof (reviewApi as any).rejectReview === 'function') {
         await (reviewApi as any).rejectReview(id);
       } else {
@@ -539,12 +481,7 @@ export default function ReviewsAdminPage() {
 
   return (
     <div className="p-4 sm:p-8 min-h-screen">
-      {/* ═══════ HEADER ═══════ */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8"
-      >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
         <div>
           <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
             <MessageSquare className="w-7 h-7 text-accent" />
@@ -563,9 +500,8 @@ export default function ReviewsAdminPage() {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Actualiser
         </Button>
-      </motion.div>
+      </div>
 
-      {/* ═══════ STATS ═══════ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
           {
@@ -594,12 +530,10 @@ export default function ReviewsAdminPage() {
             suffix: <StarRating rating={Math.round(computedStats.averageRating)} size="sm" />,
           },
         ].map((stat, idx) => (
-          <motion.div
+          <div
             key={stat.label}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 * idx }}
-            className="bg-card border border-border rounded-xl p-4"
+            className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-500"
+            style={{ animationDelay: `${idx * 50}ms` }}
           >
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted-foreground">{stat.label}</p>
@@ -609,41 +543,26 @@ export default function ReviewsAdminPage() {
               <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
               {stat.suffix}
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
 
-      {/* ═══════ ERREUR ═══════ */}
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-6 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-3"
+      {error && (
+        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <span className="flex-1">{error}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={fetchReviews}
+            className="text-destructive border-destructive/30"
           >
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <span className="flex-1">{error}</span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={fetchReviews}
-              className="text-destructive border-destructive/30"
-            >
-              Réessayer
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            Réessayer
+          </Button>
+        </div>
+      )}
 
-      {/* ═══════ FILTRES ═══════ */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="flex flex-col sm:flex-row gap-3 mb-6 p-4 bg-card border border-border rounded-xl"
-      >
-        {/* Recherche */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6 p-4 bg-card border border-border rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -663,7 +582,6 @@ export default function ReviewsAdminPage() {
           )}
         </div>
 
-        {/* Filtres par statut */}
         <div className="flex gap-2 flex-wrap">
           <Button
             variant={filter === 'all' ? 'default' : 'outline'}
@@ -689,15 +607,9 @@ export default function ReviewsAdminPage() {
             Approuvés ({computedStats.approved})
           </Button>
         </div>
-      </motion.div>
+      </div>
 
-      {/* ═══════ LISTE DES AVIS ═══════ */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="space-y-4"
-      >
+      <div className="space-y-4">
         {loading ? (
           <>
             {[...Array(3)].map((_, i) => (
@@ -705,7 +617,7 @@ export default function ReviewsAdminPage() {
             ))}
           </>
         ) : filteredReviews.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground bg-card border border-border rounded-xl">
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground bg-card border border-border rounded-xl animate-in fade-in zoom-in duration-300">
             <MessageSquare className="w-12 h-12 opacity-30 mb-3" />
             <p className="font-medium">Aucun avis trouvé</p>
             <p className="text-sm mt-1">
@@ -715,8 +627,8 @@ export default function ReviewsAdminPage() {
             </p>
           </div>
         ) : (
-          <AnimatePresence mode="popLayout">
-            {filteredReviews.map((review) => (
+          <>
+            {filteredReviews.map((review, index) => (
               <ReviewCard
                 key={review._id}
                 review={review}
@@ -724,26 +636,20 @@ export default function ReviewsAdminPage() {
                 onReject={handleReject}
                 onDelete={requestDelete}
                 updating={updating}
+                index={index}
               />
             ))}
-          </AnimatePresence>
+          </>
         )}
-      </motion.div>
+      </div>
 
-      {/* ═══════ FOOTER ═══════ */}
       {!loading && filteredReviews.length > 0 && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="text-center text-sm text-muted-foreground mt-6"
-        >
+        <p className="text-center text-sm text-muted-foreground mt-6 animate-in fade-in duration-500 delay-300">
           {filteredReviews.length} avis affichés sur {computedStats.total}
           {search && ' (filtrés)'}
-        </motion.p>
+        </p>
       )}
 
-      {/* ═══════ MODALE DE CONFIRMATION DE SUPPRESSION ═══════ */}
       <Modal
         isOpen={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}

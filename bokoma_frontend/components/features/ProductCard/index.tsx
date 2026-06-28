@@ -4,7 +4,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { Heart, ShoppingCart, Star, Loader2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -14,20 +13,12 @@ import { apiClient } from '@/services/api';
 import { formatPrice, cn } from '@/utils/helpers';
 import type { Product } from '@/types';
 
-// ============================================================================
-// 🔹 TYPES
-// ============================================================================
-
 interface ProductCardProps {
   product: Product;
   variant?: 'default' | 'compact' | 'featured';
   showQuickActions?: boolean;
   onAddToCart?: (product: Product) => void;
 }
-
-// ============================================================================
-// 🔹 HELPERS
-// ============================================================================
 
 const getOptimizedImageUrl = (url: string | undefined, width = 400): string => {
   if (!url) return '/placeholder-product.jpg';
@@ -47,11 +38,7 @@ const getProductImage = (product: Product): string => {
   return getOptimizedImageUrl(url);
 };
 
-// ============================================================================
-// 🔹 COMPOSANT PRINCIPAL
-// ============================================================================
-
-export const ProductCard: React.FC<ProductCardProps> = ({
+export const ProductCard: React.FC<ProductCardProps> = React.memo(({
   product,
   variant = 'default',
   showQuickActions = true,
@@ -61,7 +48,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const { isInWishlist, toggleWishlist } = useWishlist();
   const router = useRouter();
 
-  // Guard clause
   if (!product) {
     return (
       <div className="bg-card border border-border rounded-2xl overflow-hidden p-4 text-center text-muted-foreground">
@@ -70,7 +56,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     );
   }
 
-  // Données produit
   const productId = product._id || (product as any).id;
   const productSlug = product.slug || productId;
   const imageUrl = getProductImage(product);
@@ -87,10 +72,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const categoryName = typeof category === 'object' ? category?.name : category;
   
   const isWishlisted = isInWishlist(productId);
-
-  // ============================================================================
-  // 🔹 HANDLERS
-  // ============================================================================
 
   const handleToggleWishlist = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -116,7 +97,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
     if (!productId || !inStock) return;
 
-    // Callback custom si fourni
     if (onAddToCart) {
       onAddToCart(product);
       return;
@@ -138,10 +118,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     }
   }, [productId, product.name, inStock, onAddToCart, product]);
 
-  // ============================================================================
-  // 🔹 VARIANTS STYLES
-  // ============================================================================
-
   const variantClasses = useMemo(() => {
     switch (variant) {
       case 'compact':
@@ -153,22 +129,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     }
   }, [variant]);
 
-  // ============================================================================
-  // 🔹 RENDER
-  // ============================================================================
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      whileHover={{ y: -4 }}
+    <div
       className={cn(
-        'group bg-card border border-border rounded-2xl overflow-hidden transition-all hover:shadow-lg hover:border-accent/50',
+        'group bg-card border border-border rounded-2xl overflow-hidden transition-all hover:shadow-lg hover:border-accent/50 hover:-translate-y-1 duration-300 animate-in fade-in slide-in-from-bottom-4',
         variantClasses
       )}
     >
-      {/* ───────── IMAGE ───────── */}
       <div className="relative">
         <Link
           href={`/products/${productSlug}`}
@@ -188,7 +155,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           />
         </Link>
 
-        {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           {(product as any).isNewProduct && (
             <span className="px-2 py-1 text-xs font-medium bg-accent text-accent-foreground rounded-full shadow-sm">
@@ -207,7 +173,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
-        {/* Bouton wishlist */}
         {showQuickActions && (
           <button
             onClick={handleToggleWishlist}
@@ -223,7 +188,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </button>
         )}
 
-        {/* Actions rapides au hover */}
         {showQuickActions && (
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
             <Button
@@ -257,22 +221,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         )}
       </div>
 
-      {/* ───────── CONTENT ───────── */}
       <div className="p-4 space-y-3">
-        {/* Catégorie & Marque */}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="truncate">{categoryName || 'Catégorie'}</span>
           {(product as any).brand && <span className="truncate">{(product as any).brand}</span>}
         </div>
 
-        {/* Nom du produit */}
         <Link href={`/products/${productSlug}`} className="block">
           <h3 className="font-semibold line-clamp-2 hover:text-accent transition min-h-[2.5rem]">
             {product.name || 'Produit sans nom'}
           </h3>
         </Link>
 
-        {/* Rating */}
         {reviewCount > 0 && (
           <div className="flex items-center gap-1">
             {[...Array(5)].map((_, i) => (
@@ -289,7 +249,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         )}
 
-        {/* Prix */}
         <div className="flex items-center gap-2">
           <p className="text-lg font-bold text-accent">
             {formatPrice(product.basePrice || 0)}
@@ -301,12 +260,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
-        {/* Stock */}
         {!inStock && (
           <p className="text-xs text-destructive font-medium">Rupture de stock</p>
         )}
 
-        {/* Bouton Ajouter au panier */}
         {variant !== 'compact' && (
           <Button
             size="sm"
@@ -325,8 +282,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </Button>
         )}
       </div>
-    </motion.div>
+    </div>
   );
-};
+});
 
-export default React.memo(ProductCard);
+ProductCard.displayName = 'ProductCard';
+
+export default ProductCard;

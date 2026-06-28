@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Search, User as UserIcon, Shield, CheckCircle, Ban, MoreVertical, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,10 +26,7 @@ import { userApi } from '@/services';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { formatDate } from '@/utils/helpers';
 import { toast } from 'sonner';
-import type { User, ApiResponse, UserRole } from '@/types';
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 CONSTANTS & CONFIG
-// ──────────────────────────────────────────────────────────────────────────
+import type { User } from '@/types';
 
 const ROLE_OPTIONS = [
   { value: 'all', label: 'Tous les rôles' },
@@ -44,10 +40,6 @@ const ROLE_COLORS: Record<string, string> = {
   manager: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   customer: 'bg-muted text-muted-foreground border-border',
 };
-
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 COMPOSANT AVATAR
-// ──────────────────────────────────────────────────────────────────────────
 
 const UserAvatar = ({ 
   user, 
@@ -73,14 +65,12 @@ const UserAvatar = ({
     return `${first}${last}`.toUpperCase() || '?';
   };
 
-  // ✅ Vérifier si l'URL d'avatar est valide
   const isValidAvatarUrl = user.avatar && 
     typeof user.avatar === 'string' && 
     (user.avatar.startsWith('http://') || 
      user.avatar.startsWith('https://') || 
      user.avatar.startsWith('/'));
 
-  // ✅ Afficher les initiales si pas d'avatar ou erreur
   if (!isValidAvatarUrl || hasError) {
     if (!showFallback) return null;
     
@@ -103,8 +93,7 @@ const UserAvatar = ({
         alt={`${user.firstName} ${user.lastName}`}
         className="w-full h-full object-cover"
         onLoad={() => setIsLoading(false)}
-        onError={(e) => {
-          console.warn('⚠️ Avatar load error:', user.avatar);
+        onError={() => {
           setHasError(true);
           setIsLoading(false);
         }}
@@ -113,33 +102,20 @@ const UserAvatar = ({
   );
 };
 
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 UTILS - ERROR HANDLING
-// ──────────────────────────────────────────────────────────────────────────
-
 const getErrorMessage = (err: any): string => {
   if (!err) return 'Erreur inconnue';
-  
   if (err.response?.data?.message) return err.response.data.message;
   if (err.response?.data?.error) return err.response.data.error;
   if (err.response?.statusText) return `Erreur ${err.response.status}: ${err.response.statusText}`;
-  
   if (err.message) return err.message;
-  
   if (typeof err === 'object' && err.message) return err.message;
-  
   if (typeof err === 'string') return err;
-  
   return 'Erreur lors du chargement des données';
 };
 
 function cn(...classes: (string | undefined | null | false)[]) {
   return classes.filter(Boolean).join(' ');
 }
-
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 COMPOSANT PRINCIPAL
-// ──────────────────────────────────────────────────────────────────────────
 
 export default function UsersAdminPage() {
   useRequireAdmin();
@@ -153,42 +129,20 @@ export default function UsersAdminPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
 
-  // ───────── FETCH ─────────
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('👥 [Users] Fetching users...');
       const response = await userApi.getUsers({ page: 1, limit: 100 });
       
-      console.group('👥 [Users] Parsing response');
-      console.log('📥 Response complète:', response);
-      console.log('🔍 response.data:', response?.data);
-      console.log('🔍 response.data.data:', response?.data?.data);
-      
-      // ✅ CORRECTION CRITIQUE : Naviguer dans la structure imbriquée
       const responseData = response?.data || response;
       const usersData = responseData?.data || responseData;
       const userList = usersData?.users || usersData || [];
       
-      console.log('✅ Users extraits:', Array.isArray(userList) ? userList.length : 0);
-      
-      // ✅ DEBUG : Log les avatars
-      if (Array.isArray(userList) && userList.length > 0) {
-        console.log('🖼️ Avatars détectés:');
-        userList.slice(0, 3).forEach(u => {
-          console.log(`  ${u.firstName} ${u.lastName}:`, u.avatar || '❌ Pas d\'avatar');
-        });
-      }
-      
-      console.groupEnd();
-      
       setUsers(Array.isArray(userList) ? userList : []);
     } catch (err: any) {
       console.error('❌ Error fetching users:', err);
-      console.error('   Response:', err?.response?.data);
-      
       const msg = getErrorMessage(err);
       setError(msg);
       toast.error(msg);
@@ -200,7 +154,6 @@ export default function UsersAdminPage() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  // ───────── FILTRAGE ─────────
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
       const matchesSearch = !search || 
@@ -211,7 +164,6 @@ export default function UsersAdminPage() {
     });
   }, [users, search, roleFilter]);
 
-  // ───────── ACTIONS ─────────
   const handleRoleUpdate = async (userId: string, newRole: string) => {
     if (updating === userId) return;
     setUpdating(userId);
@@ -250,16 +202,9 @@ export default function UsersAdminPage() {
     }
   };
 
-  // ───────── RENDER ─────────
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-      
-      {/* Header */}
-      <motion.div 
-        initial={{ opacity: 0, y: -12 }} 
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-      >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Utilisateurs</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -269,39 +214,24 @@ export default function UsersAdminPage() {
         <Badge variant="secondary" className="w-fit">
           {users.length} utilisateur{users.length > 1 ? 's' : ''}
         </Badge>
-      </motion.div>
+      </div>
 
-      {/* Messages */}
-      <AnimatePresence mode="wait">
-        {error && (
-          <motion.div
-            key="error"
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive"
+      {error && (
+        <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive animate-in fade-in slide-in-from-top-2 duration-300">
+          <Ban className="w-4 h-4 flex-shrink-0"/>
+          <p className="text-sm">{error}</p>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="ml-auto -mr-2 h-6 px-2"
+            onClick={() => setError(null)}
           >
-            <Ban className="w-4 h-4 flex-shrink-0"/>
-            <p className="text-sm">{error}</p>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="ml-auto -mr-2 h-6 px-2"
-              onClick={() => setError(null)}
-            >
-              <X className="w-3 h-3"/>
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <X className="w-3 h-3"/>
+          </Button>
+        </div>
+      )}
 
-      {/* Filtres */}
-      <motion.div 
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row gap-3 p-4 rounded-xl bg-card border"
-      >
-        {/* Search */}
+      <div className="flex flex-col sm:flex-row gap-3 p-4 rounded-xl bg-card border animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
           <Input
@@ -320,7 +250,6 @@ export default function UsersAdminPage() {
           )}
         </div>
 
-        {/* Role filter */}
         <Select value={roleFilter} onValueChange={setRoleFilter}>
           <SelectTrigger className="w-full sm:w-48">
             <SelectValue placeholder="Filtrer par rôle"/>
@@ -331,14 +260,9 @@ export default function UsersAdminPage() {
             ))}
           </SelectContent>
         </Select>
-      </motion.div>
+      </div>
 
-      {/* Table */}
-      <motion.div 
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-xl border bg-card overflow-hidden"
-      >
+      <div className="rounded-xl border bg-card overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/40">
@@ -381,17 +305,14 @@ export default function UsersAdminPage() {
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => (
-                  <motion.tr 
+                filteredUsers.map((user, index) => (
+                  <tr 
                     key={user._id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="hover:bg-accent/5 transition-colors group"
+                    className="hover:bg-accent/5 transition-colors group animate-in fade-in slide-in-from-left-2 duration-300"
+                    style={{ animationDelay: `${index * 30}ms` }}
                   >
-                    {/* Utilisateur avec Avatar */}
                     <td className="px-4 sm:px-6 py-4">
                       <div className="flex items-center gap-3">
-                        {/* ✅ AVATAR ICI */}
                         <UserAvatar user={user} size="md" />
                         <div className="min-w-0">
                           <p className="font-medium truncate">{user.firstName} {user.lastName}</p>
@@ -400,12 +321,10 @@ export default function UsersAdminPage() {
                       </div>
                     </td>
 
-                    {/* Email */}
                     <td className="px-4 sm:px-6 py-4">
                       <p className="text-sm truncate max-w-[180px]" title={user.email}>{user.email}</p>
                     </td>
 
-                    {/* Rôle */}
                     <td className="px-4 sm:px-6 py-4">
                       <Badge 
                         variant="outline" 
@@ -415,7 +334,6 @@ export default function UsersAdminPage() {
                       </Badge>
                     </td>
 
-                    {/* Statut */}
                     <td className="px-4 sm:px-6 py-4">
                       <span className={cn(
                         "inline-flex items-center gap-1.5 text-xs font-medium",
@@ -426,12 +344,10 @@ export default function UsersAdminPage() {
                       </span>
                     </td>
 
-                    {/* Inscription */}
                     <td className="px-4 sm:px-6 py-4">
                       <p className="text-sm text-muted-foreground">{formatDate(user.createdAt)}</p>
                     </td>
 
-                    {/* Actions */}
                     <td className="px-4 sm:px-6 py-4 text-right">
                       <Button 
                         variant="ghost" 
@@ -443,15 +359,14 @@ export default function UsersAdminPage() {
                         <MoreVertical className="w-4 h-4"/>
                       </Button>
                     </td>
-                  </motion.tr>
+                  </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Modal Détails */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -463,9 +378,7 @@ export default function UsersAdminPage() {
 
           {selectedUser && (
             <div className="space-y-5 py-2">
-              {/* Profile header avec Avatar */}
               <div className="flex items-center gap-4 p-4 bg-muted/40 rounded-xl">
-                {/* ✅ AVATAR DANS LE MODAL */}
                 <UserAvatar user={selectedUser} size="lg" />
                 <div className="min-w-0">
                   <h3 className="font-semibold truncate">{selectedUser.firstName} {selectedUser.lastName}</h3>
@@ -473,7 +386,6 @@ export default function UsersAdminPage() {
                 </div>
               </div>
 
-              {/* Info grid */}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">Téléphone</span>
@@ -485,9 +397,7 @@ export default function UsersAdminPage() {
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="space-y-4 pt-2 border-t">
-                {/* Rôle */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
                     <Shield className="w-4 h-4 text-muted-foreground"/> Rôle
@@ -508,7 +418,6 @@ export default function UsersAdminPage() {
                   </Select>
                 </div>
 
-                {/* Statut */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-muted-foreground"/> Statut du compte

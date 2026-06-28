@@ -2,12 +2,9 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Grid, Search, SlidersHorizontal, X, Loader2, Package, Filter
-} from 'lucide-react';
+import { Search, SlidersHorizontal, X, Loader2, Package, Filter, Grid } from 'lucide-react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -24,13 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useWishlist } from '@/hooks/useWishlist';
 import { useCart } from '@/hooks/useCart';
 import type { Product } from '@/types';
-
-import { PublicPageHeader } from '@/components/ui/public-page-header';
 import { ProductCard } from '@/components/features/ProductCard';
-
-// ============================================================================
-// 🔹 CONSTANTS
-// ============================================================================
 
 const SORT_OPTIONS = [
   { value: '-createdAt', label: 'Plus récents' },
@@ -47,10 +38,6 @@ const CATEGORIES = [
   { slug: 'parfums', name: 'Parfums' },
 ];
 
-// ============================================================================
-// 🔹 HELPERS
-// ============================================================================
-
 const normalizeProducts = (data: any): Product[] => {
   if (!data) return [];
   if (Array.isArray(data?.products)) return data.products;
@@ -61,12 +48,7 @@ const normalizeProducts = (data: any): Product[] => {
   return [];
 };
 
-// ============================================================================
-// 🔹 MAIN PAGE COMPONENT
-// ============================================================================
-
 export default function ProductsPage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { isInWishlist, toggleWishlist } = useWishlist();
@@ -77,15 +59,10 @@ export default function ProductsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
-  const [addingToCartIds, setAddingToCartIds] = useState<Set<string>>(new Set());
   
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
-  const [sortBy, setSortBy] = useState(searchParams.get('sort') || '-createdAt');
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
-
-  // ============================================================================
-  // 🔹 FETCH DATA
-  // ============================================================================
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [sortBy, setSortBy] = useState('-createdAt');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -122,10 +99,6 @@ export default function ProductsPage() {
     fetchProducts();
   }, [fetchProducts]);
 
-  // ============================================================================
-  // 🔹 HANDLERS
-  // ============================================================================
-
   const handleToggleWishlist = useCallback(async (productId: string, product: Product) => {
     if (!isAuthenticated) {
       toast.error('Veuillez vous connecter pour ajouter aux favoris');
@@ -152,8 +125,6 @@ export default function ProductsPage() {
       return;
     }
 
-    setAddingToCartIds(prev => new Set(prev).add(product._id));
-
     try {
       await addToCart({ product: product._id, quantity: 1 });
       toast.success(`${product.name} ajouté au panier`);
@@ -164,12 +135,6 @@ export default function ProductsPage() {
       } else {
         toast.error(message);
       }
-    } finally {
-      setAddingToCartIds(prev => {
-        const next = new Set(prev);
-        next.delete(product._id);
-        return next;
-      });
     }
   }, [isAuthenticated, addToCart, router]);
 
@@ -183,20 +148,14 @@ export default function ProductsPage() {
     setSortBy('-createdAt');
   };
 
-  // ============================================================================
-  // 🔹 RENDER
-  // ============================================================================
-
   if (loading && products.length === 0) {
     return (
       <div className="min-h-screen bg-background">
-        <PublicPageHeader
-          title="Nos Produits"
-          description="Explorez notre catalogue complet"
-          icon={<Package className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
-          breadcrumbs={[{ label: 'Produits' }]}
-        />
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+            <h1 className="text-4xl font-bold mb-2">Nos Produits</h1>
+            <p className="text-muted-foreground">Explorez notre catalogue complet</p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="bg-card border border-border rounded-2xl overflow-hidden animate-pulse">
@@ -216,22 +175,13 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <PublicPageHeader
-        title="Nos Produits"
-        description={`${pagination.total} produit${pagination.total !== 1 ? 's' : ''} disponible${pagination.total !== 1 ? 's' : ''}`}
-        icon={<Package className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
-        breadcrumbs={[{ label: 'Produits' }]}
-      />
-
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filters Bar */}
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between p-4 bg-card border border-border rounded-xl"
-        >
-          {/* Search */}
+        <div className="text-center mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+          <h1 className="text-4xl font-bold mb-2">Nos Produits</h1>
+          <p className="text-muted-foreground">{pagination.total} produit{pagination.total !== 1 ? 's' : ''} disponible{pagination.total !== 1 ? 's' : ''}</p>
+        </div>
+
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between p-4 bg-card border border-border rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -252,7 +202,6 @@ export default function ProductsPage() {
           </div>
 
           <div className="flex gap-2 w-full sm:w-auto flex-wrap">
-            {/* Category buttons - Desktop */}
             <div className="hidden sm:flex gap-2 flex-wrap">
               <Button 
                 variant={!selectedCategory ? 'default' : 'outline'} 
@@ -273,7 +222,6 @@ export default function ProductsPage() {
               ))}
             </div>
 
-            {/* Mobile filter button */}
             <Button 
               variant="outline" 
               size="sm" 
@@ -283,7 +231,6 @@ export default function ProductsPage() {
               <SlidersHorizontal className="w-4 h-4" /> Filtres
             </Button>
 
-            {/* Sort select */}
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Trier par" />
@@ -297,93 +244,71 @@ export default function ProductsPage() {
               </SelectContent>
             </Select>
 
-            {/* Clear filters */}
             {(selectedCategory || searchQuery || sortBy !== '-createdAt') && (
               <Button variant="ghost" size="icon" onClick={clearFilters} aria-label="Effacer les filtres">
                 <X className="w-4 h-4" />
               </Button>
             )}
           </div>
-        </motion.div>
+        </div>
 
-        {/* Mobile Filters */}
-        <AnimatePresence>
-          {filtersOpen && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0 }} 
-              animate={{ opacity: 1, height: 'auto' }} 
-              exit={{ opacity: 0, height: 0 }} 
-              className="sm:hidden mb-6 p-4 bg-card border border-border rounded-xl space-y-4 overflow-hidden"
-            >
-              <div>
-                <p className="text-sm font-medium mb-2">Catégorie</p>
-                <div className="flex flex-wrap gap-2">
+        {filtersOpen && (
+          <div className="sm:hidden mb-6 p-4 bg-card border border-border rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div>
+              <p className="text-sm font-medium mb-2">Catégorie</p>
+              <div className="flex flex-wrap gap-2">
+                <Button 
+                  variant={!selectedCategory ? 'default' : 'outline'} 
+                  size="sm" 
+                  onClick={() => handleCategoryChange('')}
+                >
+                  Tous
+                </Button>
+                {CATEGORIES.map((cat) => (
                   <Button 
-                    variant={!selectedCategory ? 'default' : 'outline'} 
+                    key={cat.slug} 
+                    variant={selectedCategory === cat.slug ? 'default' : 'outline'} 
                     size="sm" 
-                    onClick={() => handleCategoryChange('')}
+                    onClick={() => handleCategoryChange(cat.slug)}
                   >
-                    Tous
+                    {cat.name}
                   </Button>
-                  {CATEGORIES.map((cat) => (
-                    <Button 
-                      key={cat.slug} 
-                      variant={selectedCategory === cat.slug ? 'default' : 'outline'} 
-                      size="sm" 
-                      onClick={() => handleCategoryChange(cat.slug)}
-                    >
-                      {cat.name}
-                    </Button>
-                  ))}
-                </div>
+                ))}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </div>
+        )}
 
-        {/* Error State */}
         {error && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive flex items-center justify-between gap-3"
-          >
+          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
             <p>{error}</p>
             <Button variant="outline" size="sm" onClick={fetchProducts}>
               Réessayer
             </Button>
-          </motion.div>
+          </div>
         )}
 
-        {/* Products Grid */}
         {products.length === 0 ? (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            className="text-center py-16 bg-card border border-border rounded-xl"
-          >
+          <div className="text-center py-16 bg-card border border-border rounded-xl animate-in fade-in zoom-in duration-300">
             <Grid className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
             <p className="text-muted-foreground mb-4">Aucun produit ne correspond à votre recherche</p>
             <Button variant="outline" onClick={clearFilters}>
               Réinitialiser les filtres
             </Button>
-          </motion.div>
+          </div>
         ) : (
-          <motion.div 
-            layout
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-          >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {products.map((product, index) => (
-              <ProductCard
-                key={product._id}
-                product={product}
-                onAddToCart={handleAddToCart}
-              />
+              <div key={product._id} className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${index * 50}ms` }}>
+                <ProductCard
+                  product={product}
+                  onAddToCart={handleAddToCart}
+                />
+              </div>
             ))}
-          </motion.div>
+          </div>
         )}
 
-        {/* Pagination */}
         {pagination.pages > 1 && (
           <div className="mt-8 flex justify-center gap-2">
             <Button 
@@ -408,7 +333,6 @@ export default function ProductsPage() {
           </div>
         )}
 
-        {/* Categories Section */}
         <section className="mt-16 pt-12 border-t border-border">
           <h2 className="text-2xl font-bold mb-6">Parcourir par Catégorie</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

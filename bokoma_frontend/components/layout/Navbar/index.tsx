@@ -4,10 +4,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ShoppingCart, User, Heart, Menu, X, LogOut, Package,
-  LayoutDashboard, Bell, ChevronDown, Sparkles, Settings
+  LayoutDashboard, ChevronDown, Sparkles, Settings
 } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -18,29 +17,17 @@ import { ROUTES } from '@/constants';
 import { cn } from '@/utils/helpers';
 import { toast } from 'sonner';
 
-// ============================================================================
-// 🔹 CONSTANTS
-// ============================================================================
-
 const NAV_LINKS = [
   { label: 'Accueil', href: '/' },
   { label: 'Produits', href: ROUTES.PRODUCTS },
   { label: 'Catégories', href: `${ROUTES.PRODUCTS}#categories` },
 ];
 
-// ============================================================================
-// 🔹 HELPERS
-// ============================================================================
-
 const getAvatarUrl = (user: any, size: number = 32): string => {
   if (user?.avatar) return user.avatar;
   const name = `${user?.firstName || ''}${user?.lastName || ''}`.trim() || 'U';
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=a855f7&color=fff&size=${size}`;
 };
-
-// ============================================================================
-// 🔹 COMPOSANT PRINCIPAL
-// ============================================================================
 
 export function Navbar() {
   const router = useRouter();
@@ -55,10 +42,6 @@ export function Navbar() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // ============================================================================
-  // 🔹 COMPUTED VALUES
-  // ============================================================================
-
   const isAdminPath = useMemo(() => {
     return pathname?.startsWith('/dashboard') || pathname?.startsWith('/admin');
   }, [pathname]);
@@ -68,14 +51,6 @@ export function Navbar() {
   }, [user?.role]);
 
   const wishlistCount = wishlist.length;
-
-  // ✅ DEBUG : Logger le cartCount du store
-useEffect(() => {
-  console.log('🛒 [NAVBAR] cartCount depuis store:', cartCount);
-}, [cartCount]);
-  // ============================================================================
-  // 🔹 EFFECTS
-  // ============================================================================
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -102,22 +77,6 @@ useEffect(() => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isUserMenuOpen]);
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsMobileMenuOpen(false);
-        setIsUserMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, []);
-
-  // ============================================================================
-  // 🔹 HANDLERS
-  // ============================================================================
-
   const handleLogout = useCallback(async () => {
     try {
       await logout();
@@ -134,14 +93,8 @@ useEffect(() => {
     setIsMobileMenuOpen(false);
   }, []);
 
-  // ============================================================================
-  // 🔹 RENDER
-  // ============================================================================
-
   return (
-    <motion.nav
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
+    <nav
       className={cn(
         'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
         isScrolled
@@ -151,8 +104,6 @@ useEffect(() => {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          
-          {/* Logo */}
           <Link 
             href={isAdminPath ? ROUTES.ADMIN.DASHBOARD : ROUTES.HOME} 
             className="flex items-center gap-2 group"
@@ -172,7 +123,6 @@ useEffect(() => {
             </span>
           </Link>
 
-          {/* Search Bar (Desktop) */}
           <div className="hidden md:flex flex-1 max-w-md mx-4">
             <div className="relative w-full">
               <input 
@@ -186,9 +136,7 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-4">
-            
             {NAV_LINKS.map((link) => (
               <Link 
                 key={link.href}
@@ -204,7 +152,6 @@ useEffect(() => {
               </Link>
             ))}
 
-            {/* Icons */}
             <div className="flex items-center gap-1">
               {isAuthenticated && isStaff && (
                 <Link 
@@ -215,10 +162,6 @@ useEffect(() => {
                   <LayoutDashboard className="w-5 h-5" />
                 </Link>
               )}
-
-              <button className="relative p-2 rounded-lg hover:bg-card transition-colors" aria-label="Notifications">
-                <Bell className="w-5 h-5" />
-              </button>
 
               {isAuthenticated && (
                 <Link 
@@ -247,7 +190,6 @@ useEffect(() => {
               </Link>
             </div>
 
-            {/* Auth Section */}
             <div className="flex items-center gap-2 ml-2" data-user-menu>
               {authLoading && (
                 <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -271,51 +213,46 @@ useEffect(() => {
                     <ChevronDown className={cn("w-4 h-4 transition-transform", isUserMenuOpen && "rotate-180")} />
                   </button>
                   
-                  <AnimatePresence>
-                    {isUserMenuOpen && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 10 }} 
-                        animate={{ opacity: 1, y: 0 }} 
-                        exit={{ opacity: 0, y: 10 }} 
-                        className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50"
-                        data-user-menu
-                      >
-                        <div className="p-3 border-b border-border">
-                          <p className="font-semibold truncate">{user.firstName} {user.lastName}</p>
-                          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                        </div>
-                        <div className="py-1">
-                          <Link href={ROUTES.USER.PROFILE} className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
-                            <User className="w-4 h-4" /> Mon Profil
-                          </Link>
-                          <Link href="/profile?tab=orders" className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
-                            <Package className="w-4 h-4" /> Mes Commandes
-                          </Link>
-                          <Link href="/wishlist" className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
-                            <Heart className="w-4 h-4" /> Favoris
-                            {wishlistCount > 0 && (
-                              <span className="ml-auto text-xs bg-pink-500/10 text-pink-600 px-1.5 py-0.5 rounded-full">{wishlistCount}</span>
-                            )}
-                          </Link>
-                          <Link href="/profile/settings" className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
-                            <Settings className="w-4 h-4" /> Paramètres
-                          </Link>
-                          {isStaff && (
-                            <>
-                              <hr className="border-border my-1" />
-                              <Link href={ROUTES.ADMIN.DASHBOARD} className="flex items-center gap-2 px-4 py-2 text-sm text-accent hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
-                                <LayoutDashboard className="w-4 h-4" /> Dashboard Admin
-                              </Link>
-                            </>
+                  {isUserMenuOpen && (
+                    <div 
+                      className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200"
+                      data-user-menu
+                    >
+                      <div className="p-3 border-b border-border">
+                        <p className="font-semibold truncate">{user.firstName} {user.lastName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                      </div>
+                      <div className="py-1">
+                        <Link href={ROUTES.USER.PROFILE} className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
+                          <User className="w-4 h-4" /> Mon Profil
+                        </Link>
+                        <Link href="/profile?tab=orders" className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
+                          <Package className="w-4 h-4" /> Mes Commandes
+                        </Link>
+                        <Link href="/wishlist" className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
+                          <Heart className="w-4 h-4" /> Favoris
+                          {wishlistCount > 0 && (
+                            <span className="ml-auto text-xs bg-pink-500/10 text-pink-600 px-1.5 py-0.5 rounded-full">{wishlistCount}</span>
                           )}
-                          <hr className="border-border my-1" />
-                          <button onClick={handleLogout} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-destructive hover:bg-destructive/10">
-                            <LogOut className="w-4 h-4" /> Déconnexion
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                        </Link>
+                        <Link href="/profile/settings" className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
+                          <Settings className="w-4 h-4" /> Paramètres
+                        </Link>
+                        {isStaff && (
+                          <>
+                            <hr className="border-border my-1" />
+                            <Link href={ROUTES.ADMIN.DASHBOARD} className="flex items-center gap-2 px-4 py-2 text-sm text-accent hover:bg-muted" onClick={() => setIsUserMenuOpen(false)}>
+                              <LayoutDashboard className="w-4 h-4" /> Dashboard Admin
+                            </Link>
+                          </>
+                        )}
+                        <hr className="border-border my-1" />
+                        <button onClick={handleLogout} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-destructive hover:bg-destructive/10">
+                          <LogOut className="w-4 h-4" /> Déconnexion
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -333,7 +270,6 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Mobile Menu Button */}
           <button 
             className="md:hidden p-2 rounded-lg hover:bg-card"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -344,90 +280,82 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }} 
-            animate={{ height: 'auto', opacity: 1 }} 
-            exit={{ height: 0, opacity: 0 }} 
-            className="md:hidden border-t border-border bg-background/95 backdrop-blur overflow-hidden"
-          >
-            <div className="p-4 space-y-4">
-              <div className="relative">
-                <input 
-                  type="text" 
-                  placeholder="Rechercher..." 
-                  className="w-full bg-card border border-border rounded-lg pl-4 pr-10 py-2 text-sm"
-                  readOnly
-                  onFocus={() => { router.push('/search'); closeMobileMenu(); }}
-                />
-                <Search className="absolute right-3 top-2.5 w-4 h-4 text-muted-foreground" />
-              </div>
-
-              <div className="space-y-2">
-                {NAV_LINKS.map((link) => (
-                  <Link key={link.href} href={link.href} className="block px-3 py-2 rounded-lg hover:bg-muted" onClick={closeMobileMenu}>
-                    {link.label}
-                  </Link>
-                ))}
-                <Link href={ROUTES.CART} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted" onClick={closeMobileMenu}>
-                  <span>Panier</span>
-                  <span className="bg-accent text-accent-foreground text-xs rounded-full px-2 py-0.5">{cartCount ?? 0}</span>
-                </Link>
-                {isAuthenticated && (
-                  <Link href="/wishlist" className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted" onClick={closeMobileMenu}>
-                    <span>Favoris</span>
-                    {wishlistCount > 0 && <span className="bg-pink-500 text-white text-xs rounded-full px-2 py-0.5">{wishlistCount}</span>}
-                  </Link>
-                )}
-              </div>
-
-              <div className="pt-4 border-t border-border">
-                {authLoading ? (
-                  <div className="flex justify-center py-2">
-                    <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : isAuthenticated && user ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3 px-3 py-2">
-                      <img src={getAvatarUrl(user, 40)} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
-                      <div>
-                        <p className="font-medium">{user.firstName} {user.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{user.email}</p>
-                      </div>
-                    </div>
-                    {isStaff && (
-                      <Link href={ROUTES.ADMIN.DASHBOARD} className="block px-3 py-2 text-accent hover:bg-muted rounded-lg" onClick={closeMobileMenu}>
-                        <LayoutDashboard className="w-4 h-4 inline mr-2" /> Dashboard Admin
-                      </Link>
-                    )}
-                    <Link href={ROUTES.USER.PROFILE} className="block px-3 py-2 hover:bg-muted rounded-lg" onClick={closeMobileMenu}>
-                      <User className="w-4 h-4 inline mr-2" /> Mon Profil
-                    </Link>
-                    <Link href="/profile/settings" className="block px-3 py-2 hover:bg-muted rounded-lg" onClick={closeMobileMenu}>
-                      <Settings className="w-4 h-4 inline mr-2" /> Paramètres
-                    </Link>
-                    <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-destructive hover:bg-destructive/10 rounded-lg">
-                      <LogOut className="w-4 h-4 inline mr-2" /> Déconnexion
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    <Link href={`${ROUTES.AUTH.LOGIN}?from=${encodeURIComponent(pathname || '/')}`} className="block text-center px-4 py-2 rounded-lg border border-border hover:bg-muted" onClick={closeMobileMenu}>
-                      <User className="w-4 h-4 inline mr-2" /> Connexion
-                    </Link>
-                    <Link href={ROUTES.AUTH.REGISTER} className="block text-center px-4 py-2 rounded-lg bg-accent text-accent-foreground" onClick={closeMobileMenu}>
-                      S'inscrire
-                    </Link>
-                  </div>
-                )}
-              </div>
+      {isMobileMenuOpen && (
+        <div className="md:hidden border-t border-border bg-background/95 backdrop-blur overflow-hidden animate-in slide-in-from-top duration-300">
+          <div className="p-4 space-y-4">
+            <div className="relative">
+              <input 
+                type="text" 
+                placeholder="Rechercher..." 
+                className="w-full bg-card border border-border rounded-lg pl-4 pr-10 py-2 text-sm"
+                readOnly
+                onFocus={() => { router.push('/search'); closeMobileMenu(); }}
+              />
+              <Search className="absolute right-3 top-2.5 w-4 h-4 text-muted-foreground" />
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.nav>
+
+            <div className="space-y-2">
+              {NAV_LINKS.map((link) => (
+                <Link key={link.href} href={link.href} className="block px-3 py-2 rounded-lg hover:bg-muted" onClick={closeMobileMenu}>
+                  {link.label}
+                </Link>
+              ))}
+              <Link href={ROUTES.CART} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted" onClick={closeMobileMenu}>
+                <span>Panier</span>
+                <span className="bg-accent text-accent-foreground text-xs rounded-full px-2 py-0.5">{cartCount ?? 0}</span>
+              </Link>
+              {isAuthenticated && (
+                <Link href="/wishlist" className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted" onClick={closeMobileMenu}>
+                  <span>Favoris</span>
+                  {wishlistCount > 0 && <span className="bg-pink-500 text-white text-xs rounded-full px-2 py-0.5">{wishlistCount}</span>}
+                </Link>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-border">
+              {authLoading ? (
+                <div className="flex justify-center py-2">
+                  <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : isAuthenticated && user ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 px-3 py-2">
+                    <img src={getAvatarUrl(user, 40)} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
+                    <div>
+                      <p className="font-medium">{user.firstName} {user.lastName}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                  </div>
+                  {isStaff && (
+                    <Link href={ROUTES.ADMIN.DASHBOARD} className="block px-3 py-2 text-accent hover:bg-muted rounded-lg" onClick={closeMobileMenu}>
+                      <LayoutDashboard className="w-4 h-4 inline mr-2" /> Dashboard Admin
+                    </Link>
+                  )}
+                  <Link href={ROUTES.USER.PROFILE} className="block px-3 py-2 hover:bg-muted rounded-lg" onClick={closeMobileMenu}>
+                    <User className="w-4 h-4 inline mr-2" /> Mon Profil
+                  </Link>
+                  <Link href="/profile/settings" className="block px-3 py-2 hover:bg-muted rounded-lg" onClick={closeMobileMenu}>
+                    <Settings className="w-4 h-4 inline mr-2" /> Paramètres
+                  </Link>
+                  <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-destructive hover:bg-destructive/10 rounded-lg">
+                    <LogOut className="w-4 h-4 inline mr-2" /> Déconnexion
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Link href={`${ROUTES.AUTH.LOGIN}?from=${encodeURIComponent(pathname || '/')}`} className="block text-center px-4 py-2 rounded-lg border border-border hover:bg-muted" onClick={closeMobileMenu}>
+                    <User className="w-4 h-4 inline mr-2" /> Connexion
+                  </Link>
+                  <Link href={ROUTES.AUTH.REGISTER} className="block text-center px-4 py-2 rounded-lg bg-accent text-accent-foreground" onClick={closeMobileMenu}>
+                    S'inscrire
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </nav>
   );
 }
 

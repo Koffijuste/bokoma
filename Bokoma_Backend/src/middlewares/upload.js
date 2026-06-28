@@ -46,13 +46,13 @@ const imageFilter = (req, file, cb) => {
 const avatarUpload = multer({
   storage: avatarStorage,
   fileFilter: imageFilter,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 30 * 1024 * 1024 },
 });
 
 const productUpload = multer({
   storage: productStorage,
   fileFilter: imageFilter,
-  limits: { fileSize: 10 * 1024 * 1024, files: 10 },
+  limits: { fileSize: 30 * 1024 * 1024, files: 10 },
 });
 
 const categoryUpload = multer({

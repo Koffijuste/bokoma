@@ -2,7 +2,6 @@
 'use client';
 
 import React, { FormEvent, useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit, Trash2, X, Loader2, Percent, DollarSign, Calendar, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +11,6 @@ import { couponApi } from '@/services';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { formatDate } from '@/utils/helpers';
 
-// Types pour les coupons
 interface Coupon {
   _id: string;
   code: string;
@@ -45,11 +43,6 @@ const discountTypes = [
   { value: 'fixed', label: 'Montant fixe (FCFA)', icon: DollarSign },
 ] as const;
 
-const statusOptions = [
-  { value: 'true', label: 'Actif' },
-  { value: 'false', label: 'Inactif' },
-];
-
 export default function CouponsAdminPage() {
   useRequireAdmin();
 
@@ -74,7 +67,6 @@ export default function CouponsAdminPage() {
     isActive: true,
   });
 
-  // 🔁 Chargement initial des coupons
   const fetchCoupons = useCallback(async () => {
     try {
       setLoading(true);
@@ -94,7 +86,6 @@ export default function CouponsAdminPage() {
     fetchCoupons();
   }, [fetchCoupons]);
 
-  // 🔄 Reset du formulaire
   const resetForm = useCallback(() => {
     setFormData({
       code: '',
@@ -113,7 +104,6 @@ export default function CouponsAdminPage() {
     setEditingCoupon(null);
   }, []);
 
-  // 🎯 Ouvrir le modal pour créer ou éditer
   const openModal = useCallback((coupon?: Coupon) => {
     if (coupon) {
       setEditingCoupon(coupon);
@@ -134,7 +124,6 @@ export default function CouponsAdminPage() {
     setModalOpen(true);
   }, [resetForm]);
 
-  // ✅ Validation du formulaire
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
     const now = new Date();
@@ -169,7 +158,6 @@ export default function CouponsAdminPage() {
     return Object.keys(errors).length === 0;
   };
 
-  // 📤 Soumission du formulaire
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -216,7 +204,6 @@ export default function CouponsAdminPage() {
     }
   };
 
-  // 🗑️ Suppression d'un coupon
   const handleDelete = async (id: string, code: string) => {
     if (!confirm(`Êtes-vous sûr de vouloir supprimer le coupon "${code}" ?`)) return;
     
@@ -230,7 +217,6 @@ export default function CouponsAdminPage() {
     }
   };
 
-  // 🔄 Handlers pour les inputs
   const handleInputChange = (field: keyof FormData) => (value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (formErrors[field]) {
@@ -242,7 +228,6 @@ export default function CouponsAdminPage() {
     }
   };
 
-  // 🎨 Calcul de la prévisualisation
   const getPreviewDiscount = () => {
     const value = parseFloat(formData.discountValue) || 0;
     if (formData.discountType === 'percentage') {
@@ -253,12 +238,7 @@ export default function CouponsAdminPage() {
 
   return (
     <div className="p-4 sm:p-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8"
-      >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
         <div>
           <h1 className="text-3xl font-bold mb-2">Gestion des Coupons</h1>
           <p className="text-muted-foreground">
@@ -274,38 +254,20 @@ export default function CouponsAdminPage() {
           <Plus className="w-4 h-4" />
           Nouveau Coupon
         </Button>
-      </motion.div>
+      </div>
 
-      {/* Messages */}
-      <AnimatePresence>
-        {message && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
-          >
-            {message}
-          </motion.div>
-        )}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {error}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {message && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 animate-in fade-in slide-in-from-top-2 duration-300">
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive animate-in fade-in slide-in-from-top-2 duration-300">
+          {error}
+        </div>
+      )}
 
-      {/* Table des coupons */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-card border border-border rounded-lg overflow-hidden"
-      >
+      <div className="bg-card border border-border rounded-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/50 border-b border-border">
@@ -342,10 +304,11 @@ export default function CouponsAdminPage() {
                   </td>
                 </tr>
               ) : (
-                coupons.map((coupon) => (
+                coupons.map((coupon, index) => (
                   <tr
                     key={coupon._id}
-                    className="hover:bg-muted/50 transition-colors"
+                    className="hover:bg-muted/50 transition-colors animate-in fade-in slide-in-from-left-2 duration-300"
+                    style={{ animationDelay: `${index * 30}ms` }}
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -420,9 +383,8 @@ export default function CouponsAdminPage() {
             </tbody>
           </table>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Modal de création/édition */}
       <Modal
         isOpen={modalOpen}
         onClose={() => {
@@ -459,8 +421,6 @@ export default function CouponsAdminPage() {
         }
       >
         <form id="coupon-form" className="space-y-5" onSubmit={handleSubmit}>
-          
-          {/* Section: Code du coupon */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
               <Tag className="w-4 h-4" />
@@ -498,7 +458,6 @@ export default function CouponsAdminPage() {
             </div>
           </div>
 
-          {/* Section: Type et valeur de réduction */}
           <div className="space-y-4 pt-4 border-t">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
               <Percent className="w-4 h-4" />
@@ -537,7 +496,6 @@ export default function CouponsAdminPage() {
               </div>
             </div>
 
-            {/* Prévisualisation */}
             {formData.discountValue && (
               <div className="p-3 bg-accent/10 rounded-lg border border-accent/20">
                 <p className="text-sm text-muted-foreground mb-1">Aperçu de la réduction :</p>
@@ -546,7 +504,6 @@ export default function CouponsAdminPage() {
             )}
           </div>
 
-          {/* Section: Conditions */}
           <div className="space-y-4 pt-4 border-t">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               Conditions d'utilisation
@@ -579,7 +536,6 @@ export default function CouponsAdminPage() {
             </div>
           </div>
 
-          {/* Section: Dates de validité */}
           <div className="space-y-4 pt-4 border-t">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
               <Calendar className="w-4 h-4" />
@@ -610,7 +566,6 @@ export default function CouponsAdminPage() {
             </div>
           </div>
 
-          {/* Section: Statut */}
           <div className="space-y-4 pt-4 border-t">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               Statut
@@ -635,7 +590,6 @@ export default function CouponsAdminPage() {
             </div>
           </div>
 
-          {/* Error global */}
           {error && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
               {error}

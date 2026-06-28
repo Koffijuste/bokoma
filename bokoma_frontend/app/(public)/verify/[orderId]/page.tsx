@@ -1,35 +1,35 @@
 // app/(public)/verify/[orderId]/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import { 
   CheckCircle, XCircle, AlertTriangle, Loader2, Shield, 
   Package, Calendar, CreditCard, Truck, MapPin, 
   QrCode, Copy, RefreshCw, ArrowLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
-import QRCode from 'react-qr-code';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-// ✅ Badge importé mais utilisé avec wrapper pour éviter className
 
 import { orderApi } from '@/services';
 import { ROUTES } from '@/constants';
 import { formatPrice, formatDateTime, formatRelativeTime } from '@/utils/helpers';
 import type { Order } from '@/types';
 
-// ============================================================================
-// 🔹 STATUS CONFIG — Affichage public sécurisé
-// ============================================================================
+// ✅ Import dynamique de QRCode (chargé uniquement quand nécessaire)
+const QRCode = dynamic(() => import('react-qr-code'), {
+  ssr: false,
+  loading: () => <div className="w-[140px] h-[140px] bg-muted animate-pulse rounded" />
+});
 
 const PUBLIC_STATUS_CONFIG: Record<string, { 
   label: string; 
-  colorClass: string; // ✅ Renommé pour éviter conflit avec Badge
+  colorClass: string;
   icon: any;
   message: string;
   isFinal: boolean;
@@ -85,9 +85,6 @@ const PUBLIC_STATUS_CONFIG: Record<string, {
   },
 };
 
-// ============================================================================
-// 🔹 COMPOSANT BADGE COMPATIBLE (wrapper pour éviter className)
-// ============================================================================
 const StatusBadge = ({ 
   children, 
   colorClass 
@@ -100,9 +97,6 @@ const StatusBadge = ({
   </span>
 );
 
-// ============================================================================
-// 🔹 COMPOSANT PRINCIPAL
-// ============================================================================
 export default function OrderVerificationPage() {
   const params = useParams();
   const router = useRouter();
@@ -114,9 +108,6 @@ export default function OrderVerificationPage() {
   const [verificationStatus, setVerificationStatus] = useState<'valid' | 'invalid' | 'expired' | 'error'>('valid');
   const [lastChecked, setLastChecked] = useState<Date>(new Date());
 
-  // ============================================================================
-  // 🔹 FETCH ORDER FOR VERIFICATION
-  // ============================================================================
   useEffect(() => {
     if (!orderId) {
       setError('ID de commande manquant');
@@ -162,9 +153,6 @@ export default function OrderVerificationPage() {
     verifyOrder();
   }, [orderId]);
 
-  // ============================================================================
-  // 🔹 REFRESH VERIFICATION
-  // ============================================================================
   const refreshVerification = async () => {
     if (!orderId) return;
     toast.loading('Vérification en cours...');
@@ -182,36 +170,27 @@ export default function OrderVerificationPage() {
     }
   };
 
-  // ============================================================================
-  // 🔹 COPY VERIFICATION LINK
-  // ============================================================================
   const copyVerificationLink = async () => {
     const url = `${window.location.origin}/verify/${orderId}`;
     await navigator.clipboard.writeText(url);
     toast.success('Lien de vérification copié !');
   };
 
-  // ============================================================================
-  // 🔹 LOADING STATE
-  // ============================================================================
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-b from-background to-muted/30">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md">
+        <div className="text-center max-w-md animate-in fade-in zoom-in duration-300">
           <div className="relative mx-auto mb-6">
             <div className="w-20 h-20 border-4 border-accent/20 rounded-full" />
             <Loader2 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 text-accent animate-spin" />
           </div>
           <h2 className="text-xl font-bold mb-2">Vérification en cours...</h2>
           <p className="text-muted-foreground">Nous vérifions l'authenticité de cette commande.</p>
-        </motion.div>
+        </div>
       </div>
     );
   }
 
-  // ============================================================================
-  // 🔹 ERROR / INVALID STATES
-  // ============================================================================
   if (!order || verificationStatus !== 'valid') {
     const config = {
       invalid: { icon: XCircle, color: 'text-destructive', bg: 'bg-destructive/10', title: 'Commande invalide', message: error || 'Cette commande n\'existe pas.', action: 'Retour à l\'accueil', link: ROUTES.HOME },
@@ -223,7 +202,7 @@ export default function OrderVerificationPage() {
     
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-b from-background to-muted/30">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-md">
+        <div className="text-center max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className={`w-20 h-20 ${c.bg} rounded-full flex items-center justify-center mx-auto mb-6`}>
             <Icon className={`w-10 h-10 ${c.color}`} />
           </div>
@@ -237,14 +216,11 @@ export default function OrderVerificationPage() {
             )}
             <Button variant="outline" asChild><Link href={ROUTES.PRODUCTS}>Découvrir nos produits</Link></Button>
           </div>
-        </motion.div>
+        </div>
       </div>
     );
   }
 
-  // ============================================================================
-  // 🔹 VALID ORDER — MAIN RENDER
-  // ============================================================================
   const status = PUBLIC_STATUS_CONFIG[order.status] || PUBLIC_STATUS_CONFIG.pending;
   const StatusIcon = status.icon;
   
@@ -268,8 +244,6 @@ export default function OrderVerificationPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-      
-      {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href={ROUTES.HOME} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
@@ -284,19 +258,16 @@ export default function OrderVerificationPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-8">
-        
-        {/* Verification Success Banner */}
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+        <div className="mb-8 p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="flex items-center justify-center gap-3 mb-3">
             <CheckCircle className="w-8 h-8 text-emerald-500" />
             <span className="text-lg font-bold text-emerald-700">Commande vérifiée ✓</span>
           </div>
           <p className="text-muted-foreground text-sm">Cette commande Bokoma est authentique et enregistrée dans notre système.</p>
           <p className="text-xs text-muted-foreground mt-2">Dernière vérification: {formatRelativeTime(lastChecked)}</p>
-        </motion.div>
+        </div>
 
-        {/* Order Summary Card */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
           <Card className="border-2 border-border/50">
             <CardHeader className="pb-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -307,7 +278,6 @@ export default function OrderVerificationPage() {
                   </CardTitle>
                   <p className="text-muted-foreground text-sm mt-1">Passée le {formatDateTime(publicOrder.createdAt)}</p>
                 </div>
-                {/* ✅ Badge corrigé avec wrapper */}
                 <StatusBadge colorClass={status.colorClass}>
                   <StatusIcon className="w-3 h-3" />
                   {status.label}
@@ -315,13 +285,10 @@ export default function OrderVerificationPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              
-              {/* Status Message */}
               <div className="p-4 rounded-xl bg-muted/30">
                 <p className="text-sm text-center text-muted-foreground">{status.message}</p>
               </div>
 
-              {/* Order Details Grid */}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground text-xs">Total</p>
@@ -349,7 +316,6 @@ export default function OrderVerificationPage() {
 
               <Separator />
 
-              {/* Items Preview */}
               <div>
                 <h3 className="font-semibold mb-3 text-sm">Aperçu des articles</h3>
                 <div className="space-y-2">
@@ -371,10 +337,9 @@ export default function OrderVerificationPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        {/* QR Code Section */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-6">
+        <div className="mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
           <Card className="border-dashed">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center gap-4">
@@ -405,19 +370,17 @@ export default function OrderVerificationPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        {/* Security Notice */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="mt-8 p-4 rounded-xl bg-muted/30 text-center">
+        <div className="mt-8 p-4 rounded-xl bg-muted/30 text-center animate-in fade-in duration-500 delay-300">
           <Shield className="w-5 h-5 text-muted-foreground mx-auto mb-2" />
           <p className="text-xs text-muted-foreground">
             Cette page de vérification est sécurisée et officielle. 
             <br />Bokoma Store ne vous demandera jamais vos informations de paiement par email ou SMS.
           </p>
-        </motion.div>
+        </div>
 
-        {/* Footer Actions */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="mt-10 text-center space-y-3">
+        <div className="mt-10 text-center space-y-3 animate-in fade-in duration-500 delay-400">
           <p className="text-muted-foreground text-sm">Vous êtes le propriétaire de cette commande ?</p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Button asChild variant="outline">
@@ -429,8 +392,7 @@ export default function OrderVerificationPage() {
               <Link href={ROUTES.HOME}>Retour à l'accueil</Link>
             </Button>
           </div>
-        </motion.div>
-
+        </div>
       </div>
     </div>
   );

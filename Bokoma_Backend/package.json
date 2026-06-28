@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "nodemon ./src/server.js",
-    "dev": "next dev --turbopack"
+    "dev": "next dev --turbopack",
+    "reset:payments": "node scripts/resetPayments.js",
+    "clean:payments": "node scripts/cleanOldPayments.js"
   },
   "keywords": [],
   "author": "",
@@ -35,7 +37,7 @@
     "streamifier": "^0.1.1",
     "stripe": "^22.1.1",
     "turbopack": "^0.0.1",
-    "xss-clean": "^0.1.1",
+    "xss": "^1.0.15",
     "zod": "^4.4.3"
   },
   "devDependencies": {

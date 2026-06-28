@@ -2,7 +2,6 @@
 'use client';
 
 import React, { FormEvent, useEffect, useState, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, X, Image as ImageIcon, Loader2, AlertCircle, RefreshCw, 
   Upload, CheckCircle, Zap, Info, Edit2, Trash2, Eye
@@ -17,31 +16,6 @@ import { formatPrice } from '@/utils/helpers';
 import imageCompression from 'browser-image-compression';
 import { toast } from 'sonner';
 import type { Category, Product } from '@/types';
-
-
-// app/(admin)/dashboard/products/page.tsx
-<PageHeader
-  title="Produits"
-  description="Gérez votre catalogue de produits"
-  icon={<Package className="w-5 h-5 text-accent" />}
-  showBackButton
-  breadcrumbs={[
-    { label: 'Catalogue', href: '/dashboard/catalog' },
-    { label: 'Produits' }
-  ]}
-  actions={
-    <>
-      <Badge variant="secondary">{products.length} produits</Badge>
-      <Button onClick={() => { resetForm(); setModalOpen(true); }} className="gap-2">
-        <Plus className="w-4 h-4" />
-        Nouveau Produit
-      </Button>
-    </>
-  }
-/>
-// ============================================================================
-// 🔹 CONSTANTS
-// ============================================================================
 
 const PRODUCT_TYPES = [
   { value: 'shoes', label: 'Chaussures' },
@@ -80,46 +54,27 @@ const COMPRESSION_OPTIONS = {
 };
 
 const MIN_COMPRESSION_SIZE = 500 * 1024;
-
 const API_TIMEOUT = 30000;
-
-// ============================================================================
-// 🔹 HELPERS - GESTION DES URLs D'IMAGES
-// ============================================================================
 
 const normalizeImageUrl = (img: any): string | null => {
   if (!img) return null;
-  
   const url = typeof img === 'string' ? img : img?.url;
-  
   if (!url || typeof url !== 'string') return null;
-  
-  if (url.startsWith('file://')) {
-    console.warn('⚠️ Invalid file:// URL detected:', url);
-    return null;
-  }
-  
+  if (url.startsWith('file://')) return null;
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/uploads/')) {
     return url;
   }
-  
   return null;
 };
 
 const getFirstValidImage = (product: Product): string | null => {
   if (!product.images || product.images.length === 0) return null;
-  
   for (const img of product.images) {
     const url = normalizeImageUrl(img);
     if (url) return url;
   }
-  
   return null;
 };
-
-// ============================================================================
-// 🔹 COMPOSANT : ProductImage
-// ============================================================================
 
 const ProductImage = ({ 
   src, 
@@ -162,8 +117,7 @@ const ProductImage = ({
         alt={alt}
         className="w-full h-full object-cover"
         onLoad={() => setIsLoading(false)}
-        onError={(e) => {
-          console.error('❌ Image load error:', src);
+        onError={() => {
           setHasError(true);
           setIsLoading(false);
         }}
@@ -171,10 +125,6 @@ const ProductImage = ({
     </div>
   );
 };
-
-// ============================================================================
-// 🔹 COMPOSANTS RÉUTILISABLES
-// ============================================================================
 
 const NativeSelect = ({
   label, value, onChange, options, placeholder = 'Sélectionner...',
@@ -240,10 +190,6 @@ const FileSizeBadge = ({ original, compressed }: { original: number; compressed:
   );
 };
 
-// ============================================================================
-// 🔹 HELPERS
-// ============================================================================
-
 const normalizeCategories = (data: any): Category[] => {
   if (!data) return [];
   if (Array.isArray(data?.categories)) return data.categories;
@@ -306,10 +252,6 @@ const compressImage = async (file: File): Promise<CompressedImage> => {
   }
 };
 
-// ============================================================================
-// 🔹 COMPOSANT PRINCIPAL
-// ============================================================================
-
 export default function ProductsAdminPage() {
   useRequireAdmin();
 
@@ -322,7 +264,6 @@ export default function ProductsAdminPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   
@@ -354,10 +295,6 @@ export default function ProductsAdminPage() {
     };
   }, [compressedImages]);
 
-  // ============================================================================
-  // 🔹 FETCH DATA
-  // ============================================================================
-
   const loadCategories = useCallback(async () => {
     try {
       setCategoriesError(null);
@@ -368,9 +305,7 @@ export default function ProductsAdminPage() {
         credentials: 'include',
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = await response.json();
       const cats = normalizeCategories(data);
@@ -388,40 +323,15 @@ export default function ProductsAdminPage() {
 
   const loadProducts = useCallback(async () => {
     try {
-      console.log('📦 [Products] Loading products...');
-      const startTime = Date.now();
-      
       const response = await apiClient.get('/products', {
         params: { page: 1, limit: 50 },
         timeout: API_TIMEOUT,
       });
       
-      const elapsed = Date.now() - startTime;
       const productsData = normalizeProducts(response);
-      
-      console.log(`✅ [Products] Loaded ${productsData.length} products in ${elapsed}ms`);
-      
-      // ✅ DEBUG : Log le stock de chaque produit
-      if (productsData.length > 0) {
-        console.group('📊 [Products] Stock par produit:');
-        productsData.forEach(p => {
-          console.log(`  ${p.name}:`, {
-            totalStock: p.totalStock,
-            stockType: typeof p.totalStock,
-            inStock: p.inStock,
-          });
-        });
-        console.groupEnd();
-      }
-      
       setProducts(productsData);
     } catch (err: any) {
       console.error('❌ [Products] Failed:', err);
-      console.error('   Details:', {
-        message: err?.message,
-        code: err?.code,
-        response: err?.response?.data,
-      });
       setError(err.message || 'Impossible de charger les produits');
     }
   }, []);
@@ -440,10 +350,6 @@ export default function ProductsAdminPage() {
   }, [loadProducts, loadCategories]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  // ============================================================================
-  // 🔹 IMAGE COMPRESSION
-  // ============================================================================
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -511,10 +417,6 @@ export default function ProductsAdminPage() {
     };
   }, []);
 
-  // ============================================================================
-  // 🔹 HANDLERS
-  // ============================================================================
-
   const resetForm = useCallback(() => {
     compressedImages.forEach(img => URL.revokeObjectURL(img.preview));
     
@@ -527,7 +429,6 @@ export default function ProductsAdminPage() {
     setExistingImages([]);
     setFormErrors({});
     setError(null);
-    setMessage(null);
     setEditingProduct(null);
   }, [categories, compressedImages]);
 
@@ -553,104 +454,69 @@ export default function ProductsAdminPage() {
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-  event.preventDefault();
-  if (!validateForm()) return;
+    event.preventDefault();
+    if (!validateForm()) return;
 
-  setMessage(null);
-  setError(null);
+    setError(null);
 
-  try {
-    setSaving(true);
+    try {
+      setSaving(true);
 
-    console.group('📤 [Create] Préparation du produit');
-    console.log('📝 formData.totalStock:', formData.totalStock);
-    console.log('📝 parseInt:', parseInt(formData.totalStock));
-    
-    const formDataToSend = new FormData();
-    formDataToSend.append('name', formData.name.trim());
-    formDataToSend.append('description', formData.description.trim());
-    formDataToSend.append('basePrice', (parseFloat(formData.basePrice) || 0).toString());
-    formDataToSend.append('category', formData.category);
-    formDataToSend.append('type', formData.type);
-    formDataToSend.append('brand', formData.brand.trim());
-    formDataToSend.append('totalStock', (parseInt(formData.totalStock) || 0).toString());
-    
-    // ✅ Générer un SKU unique pour éviter les conflits
-    const uniqueSku = `${formData.type.toUpperCase()}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    formDataToSend.append('sku', uniqueSku);
-    console.log('🏷️ SKU généré:', uniqueSku);
+      const formDataToSend = new FormData();
+      formDataToSend.append('name', formData.name.trim());
+      formDataToSend.append('description', formData.description.trim());
+      formDataToSend.append('basePrice', (parseFloat(formData.basePrice) || 0).toString());
+      formDataToSend.append('category', formData.category);
+      formDataToSend.append('type', formData.type);
+      formDataToSend.append('brand', formData.brand.trim());
+      formDataToSend.append('totalStock', (parseInt(formData.totalStock) || 0).toString());
+      
+      const uniqueSku = `${formData.type.toUpperCase()}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      formDataToSend.append('sku', uniqueSku);
 
-    compressedImages.forEach((img) => {
-      formDataToSend.append('images', img.file);
-    });
+      compressedImages.forEach((img) => {
+        formDataToSend.append('images', img.file);
+      });
 
-    existingImages.forEach((img) => {
-      formDataToSend.append('existingImages', JSON.stringify(img));
-    });
+      existingImages.forEach((img) => {
+        formDataToSend.append('existingImages', JSON.stringify(img));
+      });
 
-    console.log('📦 Contenu du FormData:');
-    const formDataEntries: Record<string, any> = {};
-    formDataToSend.forEach((value, key) => {
-      if (value instanceof File) {
-        formDataEntries[key] = `File: ${value.name}`;
-      } else {
-        formDataEntries[key] = value;
+      const response = await apiClient.upload('/products', formDataToSend);
+      
+      toast.success('Produit ajouté avec succès');
+      setModalOpen(false);
+      resetForm();
+      await loadProducts();
+      
+    } catch (err: any) {
+      console.error('❌ Error creating product:', err);
+
+      let errorMessage = 'Impossible de créer le produit';
+      
+      if (err?.response?.status === 409) {
+        errorMessage = 'Un produit avec ce SKU existe déjà. Veuillez réessayer.';
+      } else if (err?.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err?.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+        errorMessage = err.response.data.errors.map((e: any) => e.message || e.msg).join(', ');
+      } else if (err?.message) {
+        errorMessage = err.message;
       }
-    });
-    console.log(formDataEntries);
-    console.groupEnd();
 
-    const response = await apiClient.upload('/products', formDataToSend);
-    
-    console.log('✅ [Create] Product created:', response?.data?.product?._id);
-    console.log('✅ [Create] Stock sauvegardé:', response?.data?.product?.totalStock);
-    
-    toast.success('Produit ajouté avec succès');
-    setModalOpen(false);
-    resetForm();
-    await loadProducts();
-    
-  } catch (err: any) {
-    console.error('❌ Error creating product:', err);
-    console.error('   Status:', err?.response?.status);
-    console.error('   Message:', err?.response?.data?.message);
-
-    let errorMessage = 'Impossible de créer le produit';
-    
-    // ✅ Gestion spécifique du 409 Conflict
-    if (err?.response?.status === 409) {
-      errorMessage = 'Un produit avec ce SKU existe déjà. Veuillez réessayer.';
-      console.warn('⚠️ Conflit SKU détecté');
-    } else if (err?.response?.data?.message) {
-      errorMessage = err.response.data.message;
-    } else if (err?.response?.data?.error) {
-      errorMessage = err.response.data.error;
-    } else if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
-      errorMessage = err.response.data.errors.map((e: any) => e.message || e.msg).join(', ');
-    } else if (err?.message) {
-      errorMessage = err.message;
+      toast.error(errorMessage);
+      setError(errorMessage);
+    } finally {
+      setSaving(false);
     }
-
-    toast.error(errorMessage);
-    setError(errorMessage);
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const handleEdit = useCallback((product: Product) => {
-    console.group('📝 [Edit] Ouverture du produit');
-    console.log('🆔 ID:', product._id);
-    console.log('📝 Nom:', product.name);
-    console.log('📦 totalStock:', product.totalStock);
-    console.log('📦 Type:', typeof product.totalStock);
-    console.log('📦 toString():', product.totalStock?.toString());
-    console.groupEnd();
-    
     setEditingProduct(product);
     
     const stockValue = product.totalStock?.toString() || '0';
-    console.log('📝 [Edit] Valeur stock définie dans formData:', stockValue);
     
     setFormData({
       name: product.name || '',
@@ -674,8 +540,6 @@ export default function ProductsAdminPage() {
       })
       .filter(Boolean) as Array<{ url: string; publicId?: string }>;
     
-    console.log(`🖼️ [Edit] Loaded ${images.length} valid images`);
-    
     setExistingImages(images);
     setCompressedImages([]);
     setFormErrors({});
@@ -684,92 +548,59 @@ export default function ProductsAdminPage() {
   }, []);
 
   const handleUpdate = async (event: FormEvent<HTMLFormElement>) => {
-  event.preventDefault();
-  if (!validateForm() || !editingProduct) return;
+    event.preventDefault();
+    if (!validateForm() || !editingProduct) return;
 
-  try {
-    setSaving(true);
+    try {
+      setSaving(true);
 
-    console.group('📝 [Update] Préparation de la mise à jour');
-    console.log('🆔 Product ID:', editingProduct._id);
-    console.log('📝 formData.totalStock:', formData.totalStock);
-    console.log('📝 parseInt:', parseInt(formData.totalStock));
-    console.log('🖼️ existingImages:', existingImages.length);
-    console.log('🖼️ compressedImages:', compressedImages.length);
-    
-    const formDataToSend = new FormData();
-    formDataToSend.append('name', formData.name.trim());
-    formDataToSend.append('description', formData.description.trim());
-    formDataToSend.append('basePrice', (parseFloat(formData.basePrice) || 0).toString());
-    formDataToSend.append('category', formData.category);
-    formDataToSend.append('type', formData.type);
-    formDataToSend.append('brand', formData.brand.trim());
-    formDataToSend.append('totalStock', (parseInt(formData.totalStock) || 0).toString());
+      const formDataToSend = new FormData();
+      formDataToSend.append('name', formData.name.trim());
+      formDataToSend.append('description', formData.description.trim());
+      formDataToSend.append('basePrice', (parseFloat(formData.basePrice) || 0).toString());
+      formDataToSend.append('category', formData.category);
+      formDataToSend.append('type', formData.type);
+      formDataToSend.append('brand', formData.brand.trim());
+      formDataToSend.append('totalStock', (parseInt(formData.totalStock) || 0).toString());
 
-    // ✅ CORRECTION : Envoyer les nouvelles images
-    compressedImages.forEach((img) => {
-      formDataToSend.append('images', img.file);
-    });
+      compressedImages.forEach((img) => {
+        formDataToSend.append('images', img.file);
+      });
 
-    // ✅ CORRECTION : Envoyer les URLs des images existantes (pas en JSON)
-    existingImages.forEach((img, index) => {
-      formDataToSend.append(`existingImages[${index}]`, img.url);
-    });
+      existingImages.forEach((img, index) => {
+        formDataToSend.append(`existingImages[${index}]`, img.url);
+      });
 
-    // ✅ DEBUG : Log le contenu du FormData
-    console.log('📦 Contenu du FormData:');
-    const formDataEntries: Record<string, any> = {};
-    formDataToSend.forEach((value, key) => {
-      if (value instanceof File) {
-        formDataEntries[key] = `File: ${value.name} (${(value.size / 1024).toFixed(1)}KB)`;
-      } else {
-        formDataEntries[key] = value;
+      const response = await apiClient.put(`/products/${editingProduct._id}`, formDataToSend, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: API_TIMEOUT,
+      });
+      
+      toast.success('Produit mis à jour avec succès');
+      setEditModalOpen(false);
+      resetForm();
+      await loadProducts();
+      
+    } catch (err: any) {
+      console.error('❌ Error updating product:', err);
+      
+      let errorMessage = 'Impossible de mettre à jour le produit';
+      
+      if (err?.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err?.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+        errorMessage = err.response.data.errors.map((e: any) => e.message || e.msg).join(', ');
+      } else if (err?.message) {
+        errorMessage = err.message;
       }
-    });
-    console.log(formDataEntries);
-    console.groupEnd();
-
-    const response = await apiClient.put(`/products/${editingProduct._id}`, formDataToSend, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: API_TIMEOUT,
-    });
-    
-    // ✅ CORRECTION : Parser correctement la réponse
-    console.log('✅ [Update] Response complète:', response);
-    console.log('✅ [Update] Response.data:', response?.data);
-    
-    const updatedProduct = response?.data?.product || response?.product || response?.data;
-    console.log('✅ [Update] Produit mis à jour:', updatedProduct);
-    console.log('✅ [Update] Stock après update:', updatedProduct?.totalStock);
-    console.log('✅ [Update] Images après update:', updatedProduct?.images?.length);
-    
-    toast.success('Produit mis à jour avec succès');
-    setEditModalOpen(false);
-    resetForm();
-    await loadProducts();
-    
-  } catch (err: any) {
-    console.error('❌ Error updating product:', err);
-    console.error('   Response:', err?.response?.data);
-    console.error('   Status:', err?.response?.status);
-    
-    let errorMessage = 'Impossible de mettre à jour le produit';
-    
-    if (err?.response?.data?.message) {
-      errorMessage = err.response.data.message;
-    } else if (err?.response?.data?.error) {
-      errorMessage = err.response.data.error;
-    } else if (err?.response?.data?.errors && Array.isArray(err.response.data.errors)) {
-      errorMessage = err.response.data.errors.map((e: any) => e.message || e.msg).join(', ');
-    } else if (err?.message) {
-      errorMessage = err.message;
+      
+      toast.error(errorMessage);
+    } finally {
+      setSaving(false);
     }
-    
-    toast.error(errorMessage);
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const handleDelete = async () => {
     if (!deletingProduct) return;
@@ -802,10 +633,6 @@ export default function ProductsAdminPage() {
     }
   };
 
-  // ============================================================================
-  // 🔹 LOADING STATE
-  // ============================================================================
-
   if (loading && products.length === 0 && categories.length === 0) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -817,18 +644,9 @@ export default function ProductsAdminPage() {
     );
   }
 
-  // ============================================================================
-  // 🔹 RENDER
-  // ============================================================================
-
   return (
     <div className="p-4 sm:p-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8"
-      >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
         <div>
           <h1 className="text-3xl font-bold mb-2">Gestion des Produits</h1>
           <p className="text-muted-foreground">
@@ -849,36 +667,23 @@ export default function ProductsAdminPage() {
             Nouveau Produit
           </Button>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Messages */}
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="font-medium">{error}</p>
-                <button onClick={loadData} className="text-xs underline mt-1 hover:text-destructive/80">
-                  Réessayer
-                </button>
-              </div>
+      {error && (
+        <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium">{error}</p>
+              <button onClick={loadData} className="text-xs underline mt-1 hover:text-destructive/80">
+                Réessayer
+              </button>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </div>
+      )}
 
-      {/* Table des produits */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-card border border-border rounded-lg overflow-hidden"
-      >
+      <div className="bg-card border border-border rounded-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/50 border-b border-border">
@@ -914,11 +719,11 @@ export default function ProductsAdminPage() {
                   </td>
                 </tr>
               ) : (
-                products.map((product) => {
+                products.map((product, index) => {
                   const firstImage = getFirstValidImage(product);
                   
                   return (
-                    <tr key={product._id} className="hover:bg-muted/50 transition-colors">
+                    <tr key={product._id} className="hover:bg-muted/50 transition-colors animate-in fade-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${index * 30}ms` }}>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <ProductImage
@@ -997,11 +802,8 @@ export default function ProductsAdminPage() {
             </tbody>
           </table>
         </div>
-      </motion.div>
+      </div>
 
-      {/* ================================================================== */}
-      {/* MODAL D'AJOUT DE PRODUIT */}
-      {/* ================================================================== */}
       <Modal
         isOpen={modalOpen}
         onClose={() => { setModalOpen(false); resetForm(); }}
@@ -1206,11 +1008,7 @@ export default function ProductsAdminPage() {
               </label>
 
               {compressionStats.count > 0 && compressionStats.saved > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-between p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg"
-                >
+                <div className="flex items-center justify-between p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="flex items-center gap-2">
                     <Zap className="w-4 h-4 text-emerald-600" />
                     <span className="text-sm text-emerald-700 font-medium">
@@ -1228,47 +1026,43 @@ export default function ProductsAdminPage() {
                       -{compressionStats.ratio.toFixed(0)}%
                     </span>
                   </div>
-                </motion.div>
+                </div>
               )}
 
               {compressedImages.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <AnimatePresence>
-                    {compressedImages.map((img, index) => (
-                      <motion.div
-                        key={img.file.name + index}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        className="relative aspect-square rounded-lg overflow-hidden border border-border group"
-                      >
-                        <img
-                          src={img.preview}
-                          alt={`Preview ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <FileSizeBadge original={img.originalSize} compressed={img.compressedSize} />
+                  {compressedImages.map((img, index) => (
+                    <div
+                      key={img.file.name + index}
+                      className="relative aspect-square rounded-lg overflow-hidden border border-border group animate-in fade-in zoom-in duration-300"
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      <img
+                        src={img.preview}
+                        alt={`Preview ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <FileSizeBadge original={img.originalSize} compressed={img.compressedSize} />
+                      </div>
+
+                      {index === 0 && (
+                        <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-accent text-accent-foreground rounded text-[10px] font-semibold">
+                          Principal
                         </div>
+                      )}
 
-                        {index === 0 && (
-                          <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-accent text-accent-foreground rounded text-[10px] font-semibold">
-                            Principal
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index)}
-                          disabled={compressing}
-                          className="absolute top-1 right-1 p-1 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition hover:bg-destructive/90 disabled:opacity-50"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        disabled={compressing}
+                        className="absolute top-1 right-1 p-1 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition hover:bg-destructive/90 disabled:opacity-50"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1276,9 +1070,6 @@ export default function ProductsAdminPage() {
         </form>
       </Modal>
 
-      {/* ================================================================== */}
-      {/* MODAL D'ÉDITION DE PRODUIT */}
-      {/* ================================================================== */}
       <Modal
         isOpen={editModalOpen}
         onClose={() => { setEditModalOpen(false); resetForm(); }}
@@ -1454,41 +1245,34 @@ export default function ProductsAdminPage() {
 
             {compressedImages.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <AnimatePresence>
-                  {compressedImages.map((img, index) => (
-                    <motion.div
-                      key={img.file.name + index}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      className="relative aspect-square rounded-lg overflow-hidden border border-border group"
+                {compressedImages.map((img, index) => (
+                  <div
+                    key={img.file.name + index}
+                    className="relative aspect-square rounded-lg overflow-hidden border border-border group animate-in fade-in zoom-in duration-300"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <img
+                      src={img.preview}
+                      alt={`Preview ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      disabled={compressing}
+                      className="absolute top-1 right-1 p-1 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition hover:bg-destructive/90"
                     >
-                      <img
-                        src={img.preview}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        disabled={compressing}
-                        className="absolute top-1 right-1 p-1 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition hover:bg-destructive/90"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </form>
       </Modal>
 
-      {/* ================================================================== */}
-      {/* MODAL DE CONFIRMATION DE SUPPRESSION */}
-      {/* ================================================================== */}
       <Modal
         isOpen={deleteModalOpen}
         onClose={() => { setDeleteModalOpen(false); setDeletingProduct(null); }}

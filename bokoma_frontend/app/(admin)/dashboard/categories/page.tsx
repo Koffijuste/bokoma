@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, Pencil, Trash2, AlertCircle, Loader2, Search, 
   X, Check, ChevronDown, ArrowUpDown, FolderTree, 
@@ -36,10 +35,6 @@ import { toast } from 'sonner';
 import { PageHeader } from '@/components/ui/page-header';
 import type { Category, ApiResponse } from '@/types';
 
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 TYPES & CONSTANTS
-// ──────────────────────────────────────────────────────────────────────────
-
 interface CategoryFormData {
   name: string;
   slug: string;
@@ -69,10 +64,6 @@ const DEFAULT_FORM_DATA: CategoryFormData = {
 
 const ITEMS_PER_PAGE = 10;
 
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 HELPERS
-// ──────────────────────────────────────────────────────────────────────────
-
 const extractCategories = (data: any): Category[] => {
   if (!data) return [];
   if (Array.isArray(data.categories)) return data.categories;
@@ -90,10 +81,6 @@ const generateSlug = (text: string): string => {
     .replace(/^-+|-+$/g, '');
 };
 
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 COMPOSANT: CategoryRow
-// ──────────────────────────────────────────────────────────────────────────
-
 const CategoryRow = React.memo<CategoryRowProps>(({ 
   category, 
   onEdit, 
@@ -105,21 +92,16 @@ const CategoryRow = React.memo<CategoryRowProps>(({
   const [showActions, setShowActions] = useState(false);
 
   return (
-    <motion.tr
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: category.isActive ? 1 : 0.6, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ delay: index * 0.03, duration: 0.2 }}
-      className={`border-b border-border/50 transition-all duration-200 group ${
+    <tr
+      className={`border-b border-border/50 transition-all duration-200 group animate-in fade-in slide-in-from-left-2 ${
         category.isActive 
           ? 'hover:bg-muted/30' 
-          : 'hover:bg-muted/20 bg-muted/10'
+          : 'hover:bg-muted/20 bg-muted/10 opacity-60'
       }`}
+      style={{ animationDelay: `${index * 30}ms` }}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      {/* Nom & Slug */}
       <td className="p-4">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
@@ -148,14 +130,12 @@ const CategoryRow = React.memo<CategoryRowProps>(({
         </div>
       </td>
 
-      {/* Description */}
       <td className="p-4 hidden md:table-cell">
         <p className="text-sm text-muted-foreground line-clamp-2 max-w-xs">
           {category.description || <span className="italic text-muted-foreground/50">Aucune description</span>}
         </p>
       </td>
 
-      {/* Ordre */}
       <td className="p-4">
         <div className="flex items-center gap-1.5 text-sm">
           <div className="w-7 h-7 rounded-lg bg-muted/50 flex items-center justify-center">
@@ -165,7 +145,6 @@ const CategoryRow = React.memo<CategoryRowProps>(({
         </div>
       </td>
 
-      {/* Statut */}
       <td className="p-4">
         <div className="relative">
           <Switch
@@ -182,7 +161,6 @@ const CategoryRow = React.memo<CategoryRowProps>(({
         </div>
       </td>
 
-      {/* Actions */}
       <td className="p-4">
         <div className={`flex items-center gap-1 transition-all duration-200 ${
           showActions ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0'
@@ -209,15 +187,11 @@ const CategoryRow = React.memo<CategoryRowProps>(({
           </Button>
         </div>
       </td>
-    </motion.tr>
+    </tr>
   );
 });
 
 CategoryRow.displayName = 'CategoryRow';
-
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 COMPOSANT: CategoryFormDialog
-// ──────────────────────────────────────────────────────────────────────────
 
 interface CategoryFormDialogProps {
   open: boolean;
@@ -339,7 +313,6 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5 py-2">
-          {/* Nom */}
           <div className="space-y-2">
             <Label htmlFor="name">
               Nom de la catégorie <span className="text-destructive">*</span>
@@ -361,7 +334,6 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
             )}
           </div>
 
-          {/* Slug */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="slug">
@@ -405,7 +377,6 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
             )}
           </div>
 
-          {/* Catégorie parente */}
           <div className="space-y-2">
             <Label htmlFor="parent">Catégorie parente</Label>
             <Select
@@ -437,7 +408,6 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
             </Select>
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
@@ -450,7 +420,6 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
             />
           </div>
 
-          {/* Ordre & Statut */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="order">Ordre d'affichage</Label>
@@ -487,7 +456,6 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
             </div>
           </div>
 
-          {/* Actions */}
           <DialogFooter className="pt-4 gap-2 sm:gap-0">
             <Button
               type="button"
@@ -516,10 +484,6 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
     </Dialog>
   );
 };
-
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 COMPOSANT: DeleteConfirmDialog
-// ──────────────────────────────────────────────────────────────────────────
 
 interface DeleteConfirmDialogProps {
   open: boolean;
@@ -594,10 +558,6 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
   );
 };
 
-// ──────────────────────────────────────────────────────────────────────────
-// 🔹 PAGE PRINCIPALE
-// ──────────────────────────────────────────────────────────────────────────
-
 export default function DashboardCategoriesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'order' | 'createdAt'>('order');
@@ -621,7 +581,6 @@ export default function DashboardCategoriesPage() {
 
   const categories = useMemo(() => extractCategories(apiResponse), [apiResponse]);
 
-  // Mutations
   const createMutation = useMutation<ApiResponse<{ category: Category }>, CategoryFormData>(
     (data) => categoryApi.createCategory(data),
     {
@@ -693,11 +652,9 @@ export default function DashboardCategoriesPage() {
     setSelectedCategory(null);
   }, [selectedCategory, deleteMutation]);
 
-  // ✅ CORRECTION BUG : Toggle avec mise à jour locale IMMÉDIATE
   const handleToggleActive = useCallback((id: string, isActive: boolean) => {
     setTogglingId(id);
     
-    // Mise à jour optimiste de l'UI
     updateMutation.mutate(
       { id, isActive },
       {
@@ -709,15 +666,14 @@ export default function DashboardCategoriesPage() {
         onError: () => {
           setTogglingId(null);
           toast.error('Erreur lors de la mise à jour');
-          refetch(); // Recharger pour revenir à l'état initial
+          refetch();
         },
       }
     );
   }, [updateMutation]);
 
-  // ✅ CORRECTION : Filtrage qui INCLUT les catégories inactives
   const filteredAndSortedCategories = useMemo(() => {
-    let result = [...categories]; // ✅ Copie complète, pas de filtre sur isActive
+    let result = [...categories];
     
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -758,13 +714,11 @@ export default function DashboardCategoriesPage() {
     setCurrentPage(1);
   }, [searchQuery, sortBy, sortDir]);
 
-  // Stats
   const activeCount = categories.filter(c => c.isActive).length;
   const inactiveCount = categories.length - activeCount;
 
   return (
     <div className="space-y-6">
-      {/* ═══════ HEADER ═══════ */}
       <PageHeader
         title="Catégories"
         description="Organisez et gérez les catégories de votre boutique"
@@ -793,35 +747,29 @@ export default function DashboardCategoriesPage() {
         }
       />
 
-      {/* ═══════ STATS CARDS ═══════ */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-2 sm:grid-cols-4 gap-4"
-      >
-        <div className="bg-card border border-border rounded-xl p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+        <div className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-muted-foreground">Total</p>
             <FolderTree className="w-4 h-4 text-accent" />
           </div>
           <p className="text-2xl font-bold">{categories.length}</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
+        <div className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-muted-foreground">Actives</p>
             <Eye className="w-4 h-4 text-green-500" />
           </div>
           <p className="text-2xl font-bold text-green-600">{activeCount}</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
+        <div className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-muted-foreground">Inactives</p>
             <EyeOff className="w-4 h-4 text-muted-foreground" />
           </div>
           <p className="text-2xl font-bold text-muted-foreground">{inactiveCount}</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
+        <div className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-muted-foreground">Racines</p>
             <FolderTree className="w-4 h-4 text-blue-500" />
@@ -830,15 +778,9 @@ export default function DashboardCategoriesPage() {
             {categories.filter(c => !c.parent).length}
           </p>
         </div>
-      </motion.div>
+      </div>
 
-      {/* ═══════ TOOLBAR ═══════ */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between p-4 bg-card border border-border rounded-xl"
-      >
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between p-4 bg-card border border-border rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -889,15 +831,9 @@ export default function DashboardCategoriesPage() {
             <RefreshCw className={`w-4 h-4 ${fetching ? 'animate-spin' : ''}`} />
           </Button>
         </div>
-      </motion.div>
+      </div>
 
-      {/* ═══════ TABLE ═══════ */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="rounded-xl border border-border bg-card overflow-hidden shadow-sm"
-      >
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/30 border-b border-border">
@@ -920,58 +856,51 @@ export default function DashboardCategoriesPage() {
               </tr>
             </thead>
             <tbody>
-              <AnimatePresence mode="popLayout">
-                {fetching ? (
-                  <tr>
-                    <td colSpan={5} className="p-12 text-center">
-                      <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-3" />
-                      <p className="text-muted-foreground">Chargement...</p>
-                    </td>
-                  </tr>
-                ) : paginatedCategories.length > 0 ? (
-                  paginatedCategories.map((category, index) => (
-                    <CategoryRow
-                      key={category._id}
-                      category={category}
-                      onEdit={handleOpenEdit}
-                      onDelete={handleOpenDelete}
-                      onToggleActive={handleToggleActive}
-                      index={index}
-                      isToggling={togglingId === category._id}
-                    />
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="p-12 text-center">
-                      <div className="flex flex-col items-center gap-4 text-muted-foreground">
-                        <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
-                          <FolderTree className="w-8 h-8 text-accent opacity-50" />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-medium">Aucune catégorie</p>
-                          <p className="text-sm">Commencez par créer votre première catégorie</p>
-                        </div>
-                        <Button onClick={handleOpenCreate} className="gap-2">
-                          <Plus className="w-4 h-4" />
-                          Créer une catégorie
-                        </Button>
+              {fetching ? (
+                <tr>
+                  <td colSpan={5} className="p-12 text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-3" />
+                    <p className="text-muted-foreground">Chargement...</p>
+                  </td>
+                </tr>
+              ) : paginatedCategories.length > 0 ? (
+                paginatedCategories.map((category, index) => (
+                  <CategoryRow
+                    key={category._id}
+                    category={category}
+                    onEdit={handleOpenEdit}
+                    onDelete={handleOpenDelete}
+                    onToggleActive={handleToggleActive}
+                    index={index}
+                    isToggling={togglingId === category._id}
+                  />
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="p-12 text-center">
+                    <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                      <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
+                        <FolderTree className="w-8 h-8 text-accent opacity-50" />
                       </div>
-                    </td>
-                  </tr>
-                )}
-              </AnimatePresence>
+                      <div className="space-y-1">
+                        <p className="font-medium">Aucune catégorie</p>
+                        <p className="text-sm">Commencez par créer votre première catégorie</p>
+                      </div>
+                      <Button onClick={handleOpenCreate} className="gap-2">
+                        <Plus className="w-4 h-4" />
+                        Créer une catégorie
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
-      </motion.div>
+      </div>
 
-      {/* ═══════ PAGINATION ═══════ */}
       {totalPages > 1 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex items-center justify-between gap-4 p-4 bg-card border border-border rounded-xl"
-        >
+        <div className="flex items-center justify-between gap-4 p-4 bg-card border border-border rounded-xl animate-in fade-in duration-500 delay-300">
           <p className="text-sm text-muted-foreground">
             Page {currentPage} sur {totalPages} • {filteredAndSortedCategories.length} résultat{filteredAndSortedCategories.length > 1 ? 's' : ''}
           </p>
@@ -993,10 +922,9 @@ export default function DashboardCategoriesPage() {
               Suivant
             </Button>
           </div>
-        </motion.div>
+        </div>
       )}
 
-      {/* ═══════ MODALS ═══════ */}
       <CategoryFormDialog
         open={formDialogOpen}
         onOpenChange={setFormDialogOpen}

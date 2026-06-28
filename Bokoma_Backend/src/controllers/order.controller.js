@@ -48,10 +48,9 @@ exports.createOrder = async (req, res, next) => {
       ));
     }
 
-    // ✅ 3. Calculer les totaux (incluant frais de livraison)
+    // ✅ 3. Calculer les totaux
     const subtotal = cart.items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0);
     
-    // ✅ CORRECTION : Calculer les frais de livraison
     let shippingCost = 0;
     if (shipping?.method === 'express') {
       shippingCost = 5000;
@@ -60,7 +59,6 @@ exports.createOrder = async (req, res, next) => {
     } else if (shipping?.method === 'pickup') {
       shippingCost = 0;
     } else {
-      // Frais par défaut si non spécifié
       shippingCost = 2500;
     }
     
@@ -73,52 +71,107 @@ exports.createOrder = async (req, res, next) => {
       if (cart.coupon.minPurchase && subtotal < cart.coupon.minPurchase) discount = 0;
     }
 
-    // ✅ CORRECTION : Total inclut les frais de livraison
     const total = Math.max(0, subtotal + shippingCost - discount);
 
-    // ✅ 4. Initialisation CinetPay
+    // ✅ 4. Construire les items (snapshot) AVANT de créer la commande
+    const items = cart.items
+      .map(item => ({
+        product: item.product?._id || item.product,
+        variant: item.variant?._id || item.variant,
+        name: item.name || item.product?.name || 'Produit',
+        sku: item.sku || 'N/A',
+        image: item.image || item.product?.images?.[0]?.url,
+        size: item.size,
+        color: item.color,
+        price: item.price || 0,
+        quantity: item.quantity || 1,
+        subtotal: (item.price || 0) * (item.quantity || 1),
+      }))
+      .filter(item => item.product);
+
+    if (items.length === 0) {
+      return next(new AppError('Aucun produit valide dans le panier', 400));
+    }
+
+    // ✅ 5. Générer le transactionId AVANT la création de la commande
+    const transactionId = `CMD-${Date.now()}-${userId.slice(-4)}`;
+
+    // ✅ 6. CRÉER LA COMMANDE D'ABORD (pour avoir l'orderId)
+    const order = await Order.create({
+      user: userId,
+      items,
+      shipping: {
+        ...shipping,
+        cost: shippingCost,
+        fullName: shipping?.fullName?.trim(),
+        phone: shipping?.phone?.trim(),
+        street: shipping?.street?.trim(),
+        city: shipping?.city?.trim(),
+        country: shipping?.country?.trim(),
+        postalCode: shipping?.postalCode?.trim(),
+      },
+      payment: {
+        method: payment?.method || 'cash_on_delivery',
+        status: 'pending',
+        transactionId, // ✅ Déjà généré
+        provider: null,
+        details: payment?.details || {},
+        amountPaid: 0,
+        remainingAmount: 0,
+      },
+      subtotal,
+      shippingCost,
+      discount,
+      total,
+      currency: 'XOF',
+      coupon: cart.coupon?._id,
+      notes: notes?.trim(),
+      status: 'pending',
+      statusHistory: [{ status: 'pending', note: 'Commande créée', timestamp: new Date() }],
+    });
+
+    console.log('✅ [OrderController] Commande créée:', order.orderNumber, 'ID:', order._id.toString());
+
+    // ✅ 7. Décrémenter les stocks (immédiatement pour réserver)
+    await decrementStock(items);
+
+    // ✅ 8. Initialiser le paiement CinetPay avec l'orderId
     let paymentData = null;
     const isOnlinePayment = payment?.method === 'mobile_money' || payment?.method === 'card';
     const isCashOnDelivery = payment?.method === 'cash_on_delivery';
     const needsPayment = total > 0 && (isOnlinePayment || isCashOnDelivery);
     
-    // ✅ Variables pour paiement partiel
     let paymentAmount = total;
     let remainingAmount = 0;
     let isPartialPayment = false;
-    
+
     if (needsPayment) {
       try {
         console.log('\n' + '='.repeat(80));
         console.log('💳 [OrderController] CINETPAY INITIALIZATION');
         console.log('='.repeat(80));
         
-        // ✅ CORRECTION : Calcul du montant à payer
+        // Calcul du montant à payer
         if (isCashOnDelivery) {
-          // Paiement partiel : 50% en ligne + 50% à la livraison
           paymentAmount = Math.ceil(total * 0.5);
           remainingAmount = total - paymentAmount;
           isPartialPayment = true;
           
           console.log('💰 Cash on Delivery - Paiement partiel:');
           console.log(`  - Total commande: ${total} FCFA`);
-          console.log(`  - Frais de livraison: ${shippingCost} FCFA`);
           console.log(`  - Acompte en ligne (50%): ${paymentAmount} FCFA`);
-          console.log(`  - Reste à payer à la livraison: ${remainingAmount} FCFA`);
+          console.log(`  - Reste à la livraison: ${remainingAmount} FCFA`);
         } else {
-          // Paiement intégral en ligne
           paymentAmount = total;
-          remainingAmount = 0;
-          isPartialPayment = false;
           console.log(`💰 Paiement intégral: ${paymentAmount} FCFA`);
         }
-        
-        let paymentDescription = `Commande Bokoma #${userId.slice(-6)}`;
+
+        let paymentDescription = `Commande Bokoma #${order.orderNumber}`;
         if (isPartialPayment) {
-          paymentDescription = `Acompte 50% - Commande Bokoma #${userId.slice(-6)} (reste ${remainingAmount} FCFA à la livraison)`;
+          paymentDescription = `Acompte 50% - Commande Bokoma #${order.orderNumber} (reste ${remainingAmount} FCFA à la livraison)`;
         }
         
-        // ✅ Mapper l'opérateur
+        // Mapper l'opérateur
         let cinetpayMethod = 'OM_CI';
         if (payment?.details?.operator) {
           const operatorMap = { 
@@ -132,7 +185,7 @@ exports.createOrder = async (req, res, next) => {
           cinetpayMethod = 'CARD';
         }
         
-        // ✅ Construire le numéro de téléphone
+        // Construire le numéro de téléphone
         let customerPhone = '+2250707070700';
         const rawPhone = payment?.details?.phoneNumber || req.user.phone;
         
@@ -153,32 +206,28 @@ exports.createOrder = async (req, res, next) => {
           if (nationalNumber.length === 10 && /^\d+$/.test(nationalNumber)) {
             customerPhone = '+225' + nationalNumber;
           } else {
-            console.warn('⚠️ Numéro invalide:', rawPhone, '→ national:', nationalNumber);
             customerPhone = phone.startsWith('+') ? phone : '+225' + phone.replace(/^0+/, '');
           }
         }
         
-        console.log('📞 Customer phone:', {
-          raw: rawPhone,
-          formatted: customerPhone,
-          length: customerPhone.length,
-        });
-        
+        console.log('📞 Customer phone:', customerPhone);
         console.log('💳 Payment method:', cinetpayMethod);
         console.log('💰 Amount:', paymentAmount, 'XOF');
+        console.log('🆔 Order ID:', order._id.toString());
+        console.log('🆔 Transaction ID:', transactionId);
         
+        // ✅ APPEL À initializePayment AVEC orderId
         paymentData = await initializePayment({
-          transactionId: `CMD-${Date.now()}-${userId.slice(-4)}`,
+          transactionId,
           amount: paymentAmount,
           description: paymentDescription,
+          orderId: order._id.toString(), // ✅ NOUVEAU : orderId pour construire les URLs
           customer: {
             name: req.user.firstName || 'Client',
             surname: req.user.lastName || 'Bokoma',
             email: req.user.email || 'client@bokoma.ci',
             phone: customerPhone,
           },
-          return_url: `${process.env.CLIENT_URL}/payment/success`,
-          notify_url: `${process.env.API_URL}/api/v1/orders/webhook/cinetpay`,
           payment_method: cinetpayMethod,
         });
         
@@ -187,81 +236,46 @@ exports.createOrder = async (req, res, next) => {
         console.log('='.repeat(80));
         console.log('💳 Payment URL:', paymentData.paymentUrl);
         console.log('🔑 Payment Token:', paymentData.paymentToken?.slice(0, 30) + '...');
-        console.log('🆔 Transaction ID:', paymentData.transactionId);
         console.log('='.repeat(80) + '\n');
+        
+        // ✅ 9. Mettre à jour la commande avec les infos de paiement
+        order.payment.provider = 'cinetpay';
+        order.payment.paymentToken = paymentData.paymentToken;
+        order.payment.amountPaid = paymentAmount;
+        order.payment.remainingAmount = remainingAmount;
+        await order.save();
         
       } catch (err) {
         console.error('\n' + '='.repeat(80));
         console.error('❌ [OrderController] CINETPAY INIT FAILED');
         console.error('='.repeat(80));
         console.error('Error:', err.message);
-        console.error('Stack:', err.stack);
         console.error('='.repeat(80) + '\n');
+        
+        // ⚠️ IMPORTANT : Si CinetPay échoue, on annule la commande et on restaure les stocks
+        try {
+          await restoreStock(items);
+          order.status = 'cancelled';
+          order.payment.status = 'failed';
+          order.payment.rejectionReason = 'Erreur initialisation paiement: ' + err.message;
+          order.statusHistory.push({
+            status: 'cancelled',
+            note: 'Annulée - Erreur initialisation paiement',
+            timestamp: new Date(),
+          });
+          await order.save();
+          console.log('🔄 [OrderController] Stocks restaurés, commande annulée:', order.orderNumber);
+        } catch (rollbackErr) {
+          console.error('❌ [OrderController] Rollback error:', rollbackErr.message);
+        }
+        
         return next(new AppError('Erreur de paiement, veuillez réessayer', 500));
       }
     } else {
       console.log('ℹ️ [OrderController] No online payment needed');
     }
 
-    // ✅ 5. Construire les items (snapshot)
-    const items = cart.items
-      .map(item => ({
-        product: item.product?._id || item.product,
-        variant: item.variant?._id || item.variant,
-        name: item.name || item.product?.name || 'Produit',
-        sku: item.sku || 'N/A',
-        image: item.image || item.product?.images?.[0]?.url,
-        size: item.size,
-        color: item.color,
-        price: item.price || 0,
-        quantity: item.quantity || 1,
-        subtotal: (item.price || 0) * (item.quantity || 1),
-      }))
-      .filter(item => item.product);
-
-    if (items.length === 0) {
-      return next(new AppError('Aucun produit valide dans le panier', 400));
-    }
-
-    // ✅ 6. Créer la commande
-    const order = await Order.create({
-      user: userId,
-      items,
-      shipping: {
-        ...shipping,
-        cost: shippingCost,
-        fullName: shipping?.fullName?.trim(),
-        phone: shipping?.phone?.trim(),
-        street: shipping?.street?.trim(),
-        city: shipping?.city?.trim(),
-        country: shipping?.country?.trim(),
-        postalCode: shipping?.postalCode?.trim(),
-      },
-      payment: {
-        method: payment?.method || 'cash_on_delivery',
-        status: 'pending',
-        transactionId: paymentData?.transactionId || payment?.transactionId,
-        provider: paymentData ? 'cinetpay' : payment?.provider,
-        details: payment?.details || {},
-        paymentToken: paymentData?.paymentToken,
-        amountPaid: paymentAmount,
-        remainingAmount: remainingAmount,
-      },
-      subtotal,
-      shippingCost,
-      discount,
-      total,
-      currency: 'XOF',
-      coupon: cart.coupon?._id,
-      notes: notes?.trim(),
-      status: 'pending',
-      statusHistory: [{ status: 'pending', note: 'Commande créée', timestamp: new Date() }],
-    });
-
-    // ✅ 7. Décrémenter les stocks
-    await decrementStock(items);
-
-    // ✅ 8. Mettre à jour le coupon
+    // ✅ 10. Mettre à jour le coupon
     if (cart.coupon) {
       cart.coupon.usedCount = (cart.coupon.usedCount || 0) + 1;
       if (!cart.coupon.usedBy?.includes(userId)) {
@@ -270,7 +284,7 @@ exports.createOrder = async (req, res, next) => {
       await cart.coupon.save();
     }
 
-    // ✅ 9. Vider le panier
+    // ✅ 11. Vider le panier
     if (cart && typeof cart.save === 'function') {
       cart.items = [];
       cart.coupon = undefined;
@@ -282,12 +296,12 @@ exports.createOrder = async (req, res, next) => {
       console.log('ℹ️ [OrderController] Panier provenant du payload frontend');
     }
 
-    // ✅ 10. Email de confirmation (non bloquant)
+    // ✅ 12. Email de confirmation (non bloquant)
     sendOrderConfirmation(req.user, order).catch(err => 
       console.error('❌ Confirmation email failed:', err)
     );
 
-    // ✅ CORRECTION : Réponse avec toutes les informations de paiement
+    // ✅ 13. Réponse avec toutes les informations de paiement
     res.status(201).json({
       success: true,
       message: 'Commande créée avec succès',
@@ -367,7 +381,7 @@ exports.getMyOrders = async (req, res, next) => {
       ? (req.query.sort?.startsWith('-') ? '-' : '') + sortField 
       : '-createdAt';
 
-    const filters = { user: userId };
+    const filters = { user: userId, archivedByUser: { $ne: true } };
     if (req.query.status && ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'].includes(req.query.status)) {
       filters.status = req.query.status;
     }
@@ -654,7 +668,7 @@ exports.updateOrderStatus = async (req, res, next) => {
 // ============================================================================
 exports.getAllOrders = async (req, res, next) => {
   try {
-    if (req.user?.role !== 'admin') {
+    if (!['admin', 'manager'].includes(req.user?.role)) {
       return next(new AppError('Accès réservé aux administrateurs', 403));
     }
 
@@ -1036,5 +1050,175 @@ exports.cinetpayWebhook = async (req, res, next) => {
   } catch (error) {
     console.error('❌ Erreur Webhook CinetPay:', error);
     res.status(500).json({ message: 'Erreur interne webhook' });
+  }
+};
+
+// ============================================================================
+// PATCH /api/v1/orders/:id/cancel — Annuler ma commande [client]
+// ============================================================================
+exports.cancelOrder = async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) return next(new AppError('Commande introuvable', 404));
+
+    // ✅ Vérifier que c'est bien la commande du client
+    const orderUserId = order.user?._id?.toString?.() || order.user?.toString?.() || order.user;
+    if (orderUserId !== userId) {
+      return next(new AppError('Accès refusé', 403));
+    }
+
+    // ✅ Ne peut annuler que si pas encore expédiée/livrée
+    if (['shipped', 'delivered'].includes(order.status)) {
+      return next(new AppError('Impossible d\'annuler une commande déjà expédiée', 400));
+    }
+
+    if (order.status === 'cancelled') {
+      return next(new AppError('Commande déjà annulée', 400));
+    }
+
+    // ✅ Restaurer les stocks
+    await restoreStock(order.items);
+
+    // ✅ Mettre à jour la commande
+    order.status = 'cancelled';
+    order.cancelReason = reason || 'Annulée par le client';
+    order.statusHistory.push({
+      status: 'cancelled',
+      note: reason || 'Annulée par le client',
+      changedAt: new Date(),
+      changedBy: userId,
+    });
+
+    await order.save();
+
+    res.json({
+      success: true,
+      message: 'Commande annulée avec succès',
+      data: {
+        order: {
+          _id: order._id.toString(),
+          orderNumber: order.orderNumber,
+          status: order.status,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('❌ [OrderController] cancelOrder error:', err);
+    next(err);
+  }
+};
+
+// ============================================================================
+// PATCH /api/v1/orders/:id/delivered — Confirmer réception [client]
+// ============================================================================
+exports.markAsDelivered = async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    const { id } = req.params;
+
+    if (!userId) return next(new AppError('Utilisateur non authentifié', 401));
+
+    const order = await Order.findById(id);
+    if (!order) return next(new AppError('Commande introuvable', 404));
+
+    // ✅ Vérifier que c'est bien la commande du client
+    const orderUserId = order.user?._id?.toString?.() || order.user?.toString?.() || order.user;
+    if (orderUserId !== userId) {
+      return next(new AppError('Accès refusé', 403));
+    }
+
+    // ✅ Seules les commandes confirmed peuvent être marquées livrées
+    if (order.status !== 'confirmed') {
+      return next(new AppError(
+        `Seules les commandes confirmées peuvent être marquées livrées (statut actuel: ${order.status})`,
+        400
+      ));
+    }
+
+    // ✅ Mettre à jour le statut
+    const previousStatus = order.status;
+    order.status = 'delivered';
+    order.shipping = order.shipping || {};
+    order.shipping.deliveredAt = new Date();
+    
+    order.statusHistory.push({
+      status: 'delivered',
+      note: 'Livraison confirmée par le client',
+      timestamp: new Date(),
+      changedBy: userId,
+    });
+
+    await order.save();
+
+    console.log(`✅ [OrderController] Commande #${order.orderNumber} marquée livrée par ${userId}`);
+
+    // ✅ Envoyer email de confirmation (optionnel)
+    const user = await User.findById(order.user).select('email firstName lastName');
+    if (user) {
+      sendOrderStatusUpdate(user, order).catch(err => 
+        console.error('❌ Status update email failed:', err)
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Commande #${order.orderNumber} marquée comme livrée`,
+      data: {
+        order: {
+          _id: order._id.toString(),
+          orderNumber: order.orderNumber,
+          status: order.status,
+          deliveredAt: order.shipping.deliveredAt,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('❌ [OrderController] markAsDelivered error:', err);
+    next(err);
+  }
+};
+
+// ============================================================================
+// PATCH /api/v1/orders/:id/archive — Archiver une commande [client]
+// ============================================================================
+exports.archiveOrder = async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    const { id } = req.params;
+
+    if (!userId) return next(new AppError('Utilisateur non authentifié', 401));
+
+    const order = await Order.findById(id);
+    if (!order) return next(new AppError('Commande introuvable', 404));
+
+    // ✅ Vérifier que c'est bien la commande du client
+    const orderUserId = order.user?._id?.toString?.() || order.user?.toString?.() || order.user;
+    if (orderUserId !== userId) {
+      return next(new AppError('Accès refusé', 403));
+    }
+
+    // ✅ Archiver la commande
+    order.archivedByUser = true;
+    order.archivedAt = new Date();
+    await order.save();
+
+    console.log(`🗑️ [OrderController] Commande #${order.orderNumber} archivée par ${userId}`);
+
+    res.json({
+      success: true,
+      message: `Commande #${order.orderNumber} archivée avec succès`,
+      data: {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        archivedAt: order.archivedAt,
+      },
+    });
+  } catch (err) {
+    console.error('❌ [OrderController] archiveOrder error:', err);
+    next(err);
   }
 };

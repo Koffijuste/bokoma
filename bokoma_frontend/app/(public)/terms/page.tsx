@@ -1,21 +1,11 @@
+// app/terms/page.tsx
 "use client";
-
-import { PublicPageHeader } from @/components/ui/public-page-header
-
-
-<PublicPageHeader
-  title="Conditions d'Utilisation"
-  description="Règles et conditions du service"
-  icon={<FileText className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
-  breadcrumbs={[{ label: 'Conditions' }]}
-/>
 
 export default function TermsPage() {
   return (
     <div className="min-h-screen px-4 py-12">
       <div className="max-w-5xl mx-auto space-y-8">
-        <div className="rounded-3xl border border-border bg-card p-10 shadow-sm"
-        >
+        <div className="rounded-3xl border border-border bg-card p-10 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h1 className="text-4xl font-bold mb-6">Conditions d'utilisation</h1>
           <p className="text-muted-foreground mb-6">
             Ces conditions décrivent les règles et principes qui régissent l'utilisation de Bokoma Store.

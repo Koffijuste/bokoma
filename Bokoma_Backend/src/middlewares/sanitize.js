@@ -1,7 +1,8 @@
+//src/middlewares/sanitize.js
 'use strict';
 
 const mongoSanitize = require('express-mongo-sanitize');
-const { clean } = require('xss-clean/lib/xss');
+const xss = require('xss');
 
 function deepClean(value) {
   if (Array.isArray(value)) {
@@ -16,7 +17,7 @@ function deepClean(value) {
   }
 
   if (typeof value === 'string') {
-    return clean(value);
+    return xss(value); // ✅ Remplace clean(value)
   }
 
   return value;

@@ -4,7 +4,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 import { Eye, EyeOff, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -14,19 +13,10 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/constants';
 
-import { PublicPageHeader } from @/components/ui/public-page-header
-
-<PublicPageHeader
-  title="Connexion"
-  description="Connectez-vous à votre compte"
-  icon={<LogIn className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
-  breadcrumbs={[{ label: 'Connexion' }]}
-/>
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // ✅ Déterminer la route de redirection
   const fromParam = searchParams.get('from');
   const redirectPath = fromParam && fromParam.startsWith('/') && !fromParam.includes('://') 
     ? fromParam 
@@ -37,43 +27,22 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
   
-  const { login, isLoading, isAuthenticated, isClient } = useAuth();
+  const { login, isLoading, isAuthenticated } = useAuth();
 
-  // 🔍 Debug log (dev only)
+  // ✅ Redirection automatique si déjà authentifié
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔐 [LoginPage]', {
-        isClient,
-        isAuthenticated,
-        isLoading,
-        redirectPath,
-        hasCookie: typeof window !== 'undefined' ? !!document.cookie.match(/bokoma_access_token/) : false,
-      });
-    }
-  }, [isClient, isAuthenticated, isLoading, redirectPath]);
-
-  // ✅ REDIRECTION 1 : Via useEffect (se déclenche si isAuthenticated devient true)
-  useEffect(() => {
-    if (isClient && isAuthenticated && !isLoading && !isRedirecting) {
-      console.log('🔄 [LoginPage] Redirecting via useEffect to:', redirectPath);
+    if (isAuthenticated && !isLoading && !isRedirecting) {
       setIsRedirecting(true);
-      
-      const timeout = setTimeout(() => {
-        router.replace(redirectPath);
-      }, 100);
-      
-      return () => clearTimeout(timeout);
+      router.replace(redirectPath);
     }
-  }, [isClient, isAuthenticated, isLoading, redirectPath, router, isRedirecting]);
+  }, [isAuthenticated, isLoading, redirectPath, router, isRedirecting]);
 
-  // ✅ REDIRECTION 2 : Explicite dans handleSubmit (plus fiable)
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
     const { email, password } = formData;
 
-    // Validations
     if (!email?.trim() || !password) {
       toast.error('Email et mot de passe requis');
       return;
@@ -90,37 +59,19 @@ export default function LoginPage() {
     }
 
     try {
-      console.log('🔐 [LoginPage] Attempting login...');
-      
-      // ✅ Appel à login() avec un OBJET
       await login({ 
         email: email.trim().toLowerCase(), 
         password 
       });
       
-      console.log('✅ [LoginPage] Login successful, redirecting to:', redirectPath);
       toast.success('Connexion réussie !');
-      
-      // ✅ REDIRECTION EXPLICITE (ne pas attendre le useEffect)
       setIsRedirecting(true);
       
-      // Petit délai pour laisser le temps au state de se mettre à jour
       setTimeout(() => {
-        console.log('🚀 [LoginPage] Executing redirect to:', redirectPath);
         router.push(redirectPath);
-        
-        // Fallback : si router.push ne fonctionne pas, forcer avec window.location
-        setTimeout(() => {
-          if (!window.location.pathname.startsWith(redirectPath)) {
-            console.warn('⚠️ [LoginPage] router.push failed, using window.location');
-            window.location.href = redirectPath;
-          }
-        }, 500);
       }, 300);
       
     } catch (err: any) {
-      console.error('❌ [LoginPage] Login failed:', err);
-      
       if (err?.statusCode === 422 && Array.isArray(err?.errors)) {
         const fieldErrors = err.errors
           .map((e: any) => e.message || e.msg || e.field)
@@ -138,11 +89,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-background">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        className="w-full max-w-md"
-      >
+      <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
             <Sparkles className="w-8 h-8 text-accent" />
@@ -154,12 +101,11 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive animate-in fade-in duration-300">
               {error}
             </div>
           )}
 
-          {/* Email */}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -171,11 +117,9 @@ export default function LoginPage() {
               required
               disabled={isLoading || isRedirecting}
               autoComplete="email"
-              className="transition-colors"
             />
           </div>
 
-          {/* Password */}
           <div className="space-y-2">
             <Label htmlFor="password">Mot de passe</Label>
             <div className="relative">
@@ -188,7 +132,7 @@ export default function LoginPage() {
                 required
                 disabled={isLoading || isRedirecting}
                 autoComplete="current-password"
-                className="pr-10 transition-colors"
+                className="pr-10"
               />
               <button
                 type="button"
@@ -203,7 +147,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Forgot password */}
           <div className="flex items-center justify-between text-sm">
             <Link 
               href={ROUTES?.AUTH?.FORGOT_PASSWORD || '/auth/forgot-password'} 
@@ -213,12 +156,11 @@ export default function LoginPage() {
             </Link>
           </div>
 
-          {/* Submit button */}
           <Button 
             type="submit" 
             variant="primary" 
             size="lg" 
-            className="w-full transition-all" 
+            className="w-full" 
             disabled={isLoading || isRedirecting}
           >
             {isLoading || isRedirecting ? (
@@ -232,7 +174,6 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        {/* Register link */}
         <p className="text-center text-sm text-muted-foreground mt-6">
           Pas encore de compte ?{' '}
           <Link 
@@ -242,7 +183,7 @@ export default function LoginPage() {
             S'inscrire gratuitement
           </Link>
         </p>
-      </motion.div>
+      </div>
     </div>
   );
 }

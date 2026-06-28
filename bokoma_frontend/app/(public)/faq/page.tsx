@@ -1,29 +1,24 @@
 "use client";
 
 import React from 'react';
-import { PublicPageHeader } from '@/components/ui/public-page-header';
 import { HelpCircle } from 'lucide-react';
 
 export default function FaqPage() {
   return (
     <div className="min-h-screen px-4 py-12">
-      <PublicPageHeader
-        title="Questions Fréquentes"
-        description="Trouvez rapidement les réponses à vos questions"
-        icon={<HelpCircle className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
-        hero
-        breadcrumbs={[
-          { label: 'FAQ' }
-        ]}
-      />
       <div className="max-w-5xl mx-auto space-y-8">
-        <div className="rounded-3xl border border-border bg-card p-10 shadow-sm"
-        >
-          <h1 className="text-4xl font-bold mb-6">FAQ</h1>
-          <p className="text-muted-foreground mb-6">
+        <div className="rounded-3xl border border-border bg-card p-10 shadow-sm">
+          
+          {/* Titre unifié avec l'icône */}
+          <h1 className="text-4xl font-bold mb-6 flex items-center gap-3">
+            <HelpCircle className="w-8 h-8 text-accent" />
+            Questions Fréquentes
+          </h1>
+          <p className="text-muted-foreground mb-8">
             Retrouvez ici les réponses aux questions les plus fréquentes sur votre expérience Bokoma Store.
           </p>
 
+          {/* Section des questions */}
           <section className="space-y-6">
             <article className="space-y-3">
               <h2 className="text-2xl font-semibold">Comment passer une commande ?</h2>
@@ -42,7 +37,7 @@ export default function FaqPage() {
             <article className="space-y-3">
               <h2 className="text-2xl font-semibold">Comment suivre ma commande ?</h2>
               <p className="text-muted-foreground">
-                Vous pouvez suivre l’état de vos commandes depuis votre espace personnel dans la section « Mes Commandes ».
+                Vous pouvez suivre l'état de vos commandes depuis votre espace personnel dans la section « Mes Commandes ».
               </p>
             </article>
 
@@ -59,7 +54,8 @@ export default function FaqPage() {
                 Envoyez-nous un email à contact@bokoma.com ou utilisez le formulaire de contact si disponible sur le site.
               </p>
             </article>
-          </section>
+          </section> {/* ✅ Balise fermante ajoutée ici */}
+
         </div>
       </div>
     </div>

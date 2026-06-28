@@ -2,14 +2,37 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import dynamic from 'next/dynamic';
 import { Loader2, TrendingUp, Package, DollarSign, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { orderApi } from '@/services';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { formatPrice } from '@/utils/helpers';
-import { BackButton } from '@/components/ui/back-button';
+
+// ✅ DEUX imports dynamiques séparés (pas un objet)
+const StatusPieChart = dynamic(
+  () => import('@/components/admin/charts/StatusPieChart'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="h-[320px] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-accent" />
+      </div>
+    )
+  }
+);
+
+const PaymentPieChart = dynamic(
+  () => import('@/components/admin/charts/PaymentPieChart'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="h-[320px] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-accent" />
+      </div>
+    )
+  }
+);
 
 type StatusStat = {
   _id: string;
@@ -60,36 +83,28 @@ const STATUS_LABELS: Record<string, string> = {
   refunded: 'Remboursée',
 };
 
-const PAYMENT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
-
 export default function AnalyticsAdminPage() {
   useRequireAdmin();
   const [analytics, setAnalytics] = useState<AnalyticsData>(initialAnalytics);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('📊 [Analytics] Fetching stats...');
       const response = await orderApi.getOrderStats({ days: 30 });
       
-      console.group('📊 [Analytics] Parsing response');
-      console.log('📥 Response complète:', response);
-      console.log('🔍 response.data:', (response as any)?.data);
-      console.log('🔍 response.data.data:', (response as any)?.data?.data);
-      
-      // ✅ CORRECTION CRITIQUE : Naviguer dans la structure imbriquée
       const responseData = (response as any)?.data || response;
       const analyticsData = responseData?.data || responseData;
       const stats = analyticsData?.stats || {};
       const period = analyticsData?.period;
-      
-      console.log('✅ Stats extraites:', stats);
-      console.log('✅ Period:', period);
-      console.groupEnd();
       
       setAnalytics({
         stats: {
@@ -105,7 +120,6 @@ export default function AnalyticsAdminPage() {
       
     } catch (err: any) {
       console.error('❌ Error fetching analytics:', err);
-      console.error('   Response:', err?.response?.data);
       setError(err?.response?.data?.message || err.message || 'Erreur lors du chargement des statistiques');
     } finally {
       setLoading(false);
@@ -113,10 +127,11 @@ export default function AnalyticsAdminPage() {
   }, []);
 
   useEffect(() => {
-    loadAnalytics();
-  }, [loadAnalytics]);
+    if (mounted) {
+      loadAnalytics();
+    }
+  }, [mounted, loadAnalytics]);
 
-  // ✅ Préparer les données pour le graphique
   const statusChartData = (analytics.stats.byStatus || [])
     .filter(s => s.count > 0)
     .map(s => ({
@@ -138,12 +153,7 @@ export default function AnalyticsAdminPage() {
 
   return (
     <div className="p-4 sm:p-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8"
-      >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
         <div>
           <h1 className="text-3xl font-bold mb-2">Analytiques & Rapports</h1>
           <p className="text-muted-foreground">
@@ -164,19 +174,17 @@ export default function AnalyticsAdminPage() {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Actualiser
         </Button>
-      </motion.div>
+      </div>
 
-      {/* Loading */}
       {loading && (
-        <div className="rounded-lg bg-card border border-border p-12 text-center">
+        <div className="rounded-lg bg-card border border-border p-12 text-center animate-in fade-in zoom-in duration-300">
           <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-3" />
           <p className="text-muted-foreground">Chargement des statistiques...</p>
         </div>
       )}
 
-      {/* Error */}
       {error && !loading && (
-        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-6 text-center">
+        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-6 text-center animate-in fade-in zoom-in duration-300">
           <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-3" />
           <p className="text-destructive font-medium">{error}</p>
           <Button variant="outline" className="mt-4" onClick={loadAnalytics}>
@@ -185,18 +193,10 @@ export default function AnalyticsAdminPage() {
         </div>
       )}
 
-      {/* Content */}
       {!loading && !error && (
         <div className="space-y-6">
-          
-          {/* ═══════ KPI Cards ═══════ */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="rounded-xl bg-card border border-border p-6"
-            >
+            <div className="rounded-xl bg-card border border-border p-6 hover:shadow-md transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '100ms' }}>
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-blue-500/10 rounded-lg">
                   <Package className="w-5 h-5 text-blue-500" />
@@ -204,14 +204,9 @@ export default function AnalyticsAdminPage() {
                 <span className="text-sm text-muted-foreground">Commandes totales</span>
               </div>
               <p className="text-3xl font-bold">{analytics.stats.totalOrders}</p>
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="rounded-xl bg-card border border-border p-6"
-            >
+            <div className="rounded-xl bg-card border border-border p-6 hover:shadow-md transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms' }}>
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-green-500/10 rounded-lg">
                   <DollarSign className="w-5 h-5 text-green-500" />
@@ -221,14 +216,9 @@ export default function AnalyticsAdminPage() {
               <p className="text-3xl font-bold text-green-600">
                 {formatPrice(analytics.stats.totalRevenue)}
               </p>
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="rounded-xl bg-card border border-border p-6"
-            >
+            <div className="rounded-xl bg-card border border-border p-6 hover:shadow-md transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '300ms' }}>
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-purple-500/10 rounded-lg">
                   <TrendingUp className="w-5 h-5 text-purple-500" />
@@ -238,139 +228,76 @@ export default function AnalyticsAdminPage() {
               <p className="text-3xl font-bold text-purple-600">
                 {formatPrice(analytics.stats.avgOrder)}
               </p>
-            </motion.div>
+            </div>
           </div>
 
-          {/* ═══════ Graphiques ═══════ */}
           <div className="grid lg:grid-cols-2 gap-6">
-            
-            {/* Répartition par statut */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="rounded-xl bg-card border border-border p-6"
-            >
+            {/* ✅ GRAPHIQUE 1 : StatusPieChart utilisé directement */}
+            <div className="rounded-xl bg-card border border-border p-6 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '400ms' }}>
               <h2 className="text-lg font-semibold mb-4">Répartition par statut</h2>
               
-              {statusChartData.length === 0 ? (
-                <div className="h-[320px] flex items-center justify-center text-muted-foreground">
-                  <p>Aucune donnée disponible</p>
-                </div>
-              ) : (
-                <>
-                  <div className="h-[320px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={statusChartData}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius={70}
-                          outerRadius={110}
-                          paddingAngle={4}
-                        >
-                          {statusChartData.map((entry, index) => (
-                            <Cell key={entry.name} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'var(--card)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '8px',
-                          }}
-                          formatter={(value: number) => [`${value} commande${value > 1 ? 's' : ''}`, 'Nombre']}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+              <div style={{ height: '320px' }}>
+                {mounted ? (
+                  <StatusPieChart data={statusChartData} />
+                ) : (
+                  <div className="h-full flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-accent" />
                   </div>
-                  
-                  {/* Légende */}
-                  <div className="mt-6 grid grid-cols-2 gap-3">
-  {statusChartData.map((status, index) => (
-    <div key={`status-${status.name}-${index}`} className="flex items-center gap-2 text-sm">
-      <span 
-        className="block h-3 w-3 rounded-full flex-shrink-0" 
-        style={{ backgroundColor: status.color }} 
-      />
-      <span className="font-medium">{status.name}</span>
-      <span className="text-muted-foreground ml-auto">{status.value}</span>
-    </div>
-  ))}
-</div>
-                </>
+                )}
+              </div>
+              
+              {statusChartData.length > 0 && (
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  {statusChartData.map((status, index) => (
+                    <div key={`status-${status.name}-${index}`} className="flex items-center gap-2 text-sm">
+                      <span 
+                        className="block h-3 w-3 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: status.color }} 
+                      />
+                      <span className="font-medium">{status.name}</span>
+                      <span className="text-muted-foreground ml-auto">{status.value}</span>
+                    </div>
+                  ))}
+                </div>
               )}
-            </motion.div>
+            </div>
 
-            {/* Répartition par méthode de paiement */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="rounded-xl bg-card border border-border p-6"
-            >
+            {/* ✅ GRAPHIQUE 2 : PaymentPieChart utilisé directement */}
+            <div className="rounded-xl bg-card border border-border p-6 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '500ms' }}>
               <h2 className="text-lg font-semibold mb-4">Méthodes de paiement</h2>
               
-              {paymentChartData.length === 0 ? (
-                <div className="h-[320px] flex items-center justify-center text-muted-foreground">
-                  <p>Aucune donnée disponible</p>
-                </div>
-              ) : (
-                <>
-                  <div className="h-[320px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={paymentChartData}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius={70}
-                          outerRadius={110}
-                          paddingAngle={4}
-                        >
-                          {paymentChartData.map((entry, index) => (
-                            <Cell key={entry.name} fill={PAYMENT_COLORS[index % PAYMENT_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'var(--card)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '8px',
-                          }}
-                          formatter={(value: number) => [`${value} commande${value > 1 ? 's' : ''}`, 'Nombre']}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+              <div style={{ height: '320px' }}>
+                {mounted ? (
+                  <PaymentPieChart data={paymentChartData} />
+                ) : (
+                  <div className="h-full flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-accent" />
                   </div>
-                  
-                  {/* Légende */}
-                  <div className="mt-6 grid grid-cols-2 gap-3">
-  {paymentChartData.map((payment, index) => (
-    <div key={`payment-${payment.name}-${index}`} className="flex items-center gap-2 text-sm">
-      <span 
-        className="block h-3 w-3 rounded-full flex-shrink-0" 
-        style={{ backgroundColor: PAYMENT_COLORS[index % PAYMENT_COLORS.length] }} 
-      />
-      <span className="font-medium">{payment.name}</span>
-      <span className="text-muted-foreground ml-auto">{payment.value}</span>
-    </div>
-  ))}
-</div>
-                </>
+                )}
+              </div>
+              
+              {paymentChartData.length > 0 && (
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  {paymentChartData.map((payment, index) => {
+                    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
+                    return (
+                      <div key={`payment-${payment.name}-${index}`} className="flex items-center gap-2 text-sm">
+                        <span 
+                          className="block h-3 w-3 rounded-full flex-shrink-0" 
+                          style={{ backgroundColor: colors[index % colors.length] }} 
+                        />
+                        <span className="font-medium">{payment.name}</span>
+                        <span className="text-muted-foreground ml-auto">{payment.value}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-            </motion.div>
+            </div>
           </div>
 
-          {/* ═══════ Trend des revenus (si disponible) ═══════ */}
           {analytics.stats.revenueTrend && analytics.stats.revenueTrend.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="rounded-xl bg-card border border-border p-6"
-            >
+            <div className="rounded-xl bg-card border border-border p-6 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '600ms' }}>
               <h2 className="text-lg font-semibold mb-4">Tendance des revenus</h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -394,7 +321,7 @@ export default function AnalyticsAdminPage() {
                   </tbody>
                 </table>
               </div>
-            </motion.div>
+            </div>
           )}
         </div>
       )}

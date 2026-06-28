@@ -4,7 +4,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Truck, CreditCard, Smartphone, Banknote, MapPin, Phone, User, 
   Plus, Minus, Trash2, CheckCircle, AlertCircle, Loader2,
@@ -20,27 +19,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMounted } from '@/hooks/useMounted';
 import { useCart } from '@/hooks/useCart';
 import { orderApi } from '@/services';
-import { ROUTES, STORAGE_KEYS } from '@/constants';
+import { ROUTES } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
-import type { Cart, Product } from '@/types';
 
-import { PublicPageHeader } from '@/components/ui/public-page-header';
-
-<PublicPageHeader
-  title="Mon Panier"
-  description={`${cart.items.length} article${cart.items.length > 1 ? 's' : ''}`}
-  icon={<ShoppingCart className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />}
-  showBackButton
-  backHref="/products"
-  breadcrumbs={[
-    { label: 'Produits', href: '/products' },
-    { label: 'Panier' }
-  ]}
-/>
-
-// ============================================================================
-// 🔹 DONNÉES GÉOGRAPHIQUES
-// ============================================================================
 const COUNTRIES = [
   { code: 'CI', name: 'Côte d\'Ivoire', flag: '🇨🇮' },
   { code: 'ML', name: 'Mali', flag: '🇲🇱' },
@@ -73,9 +54,6 @@ const getShippingLabel = (countryCode: string, city: string): string => {
   return 'Livraison Intérieur CIV';
 };
 
-// ============================================================================
-// 🔹 COMPOSANTS UI
-// ============================================================================
 const SimpleSelect = ({ value, onChange, options, placeholder, disabled, className = '' }: {
   value: string; onChange: (value: string) => void;
   options: Array<{ value: string; label: React.ReactNode }>;
@@ -100,16 +78,12 @@ const SimpleBadge = ({ children, variant = 'default' }: { children: React.ReactN
   return (<span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${variants[variant]}`}>{children}</span>);
 };
 
-// ============================================================================
-// 🔹 COMPOSANT PRINCIPAL
-// ============================================================================
 export default function CartPage() {
-  const { isAuthenticated, isLoading: authLoading, accessToken } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const mounted = useMounted();
   const router = useRouter();
   
-  // ✅ CORRECTION CRITIQUE : Utiliser le hook useCart au lieu d'un state local
-  const { cart, cartCount, updateItem, removeItem, fetchCart } = useCart();
+  const { cart, cartCount, updateItem, removeItem } = useCart();
   
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   
@@ -123,34 +97,13 @@ export default function CartPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // ============================================================================
-  // 🔹 LOGS DE DEBUG
-  // ============================================================================
-  useEffect(() => {
-    if (!mounted) return;
-    
-    console.group('🛒 [CartPage] État du panier');
-    console.log('📦 cart:', cart);
-    console.log('🔢 cartCount:', cartCount);
-    console.log('📦 items:', cart?.items?.length || 0);
-    console.log('👤 isAuthenticated:', isAuthenticated);
-    console.groupEnd();
-  }, [mounted, cart, cartCount, isAuthenticated]);
-
-  // ============================================================================
-  // 🔹 REDIRECTION SI NON AUTHENTIFIÉ
-  // ============================================================================
   useEffect(() => {
     if (mounted && !authLoading && !isAuthenticated) {
       const redirect = `/auth/login?from=${encodeURIComponent('/cart')}`;
-      console.log('🔄 [CartPage] Redirecting to login:', redirect);
       router.replace(redirect);
     }
   }, [mounted, authLoading, isAuthenticated, router]);
 
-  // ============================================================================
-  // 🔹 CALCULS DÉRIVÉS
-  // ============================================================================
   const availableCities = useMemo(() => 
     shippingDetails.country ? CITIES_BY_COUNTRY[shippingDetails.country] || [] : []
   , [shippingDetails.country]);
@@ -171,9 +124,6 @@ export default function CartPage() {
     paymentMethod === 'cash_on_delivery' ? Math.ceil(total * 0.5) : total
   , [total, paymentMethod]);
 
-  // ============================================================================
-  // 🔹 GESTIONNAIRES
-  // ============================================================================
   const handleShippingChange = (field: string, value: string) => {
     setShippingDetails(prev => {
       const updates = { ...prev, [field]: value };
@@ -201,11 +151,9 @@ export default function CartPage() {
     setUpdatingItemId(itemId);
 
     try {
-      console.log('🔄 [CartPage] Mise à jour quantité:', itemId, '->', newQuantity);
       await updateItem({ itemId, quantity: newQuantity });
       toast.success('Quantité mise à jour');
     } catch (err: any) {
-      console.error('❌ Failed to update quantity:', err);
       const errorMsg = err?.response?.data?.message || err?.message || 'Erreur lors de la mise à jour';
       toast.error(errorMsg);
     } finally {
@@ -215,11 +163,9 @@ export default function CartPage() {
 
   const handleRemoveItem = async (itemId: string) => {
     try {
-      console.log('🗑️ [CartPage] Suppression item:', itemId);
       await removeItem(itemId);
       toast.success('Produit retiré du panier');
     } catch (err: any) {
-      console.error('❌ Failed to remove item:', err);
       toast.error(err?.response?.data?.message || 'Erreur lors de la suppression');
     }
   };
@@ -240,12 +186,8 @@ export default function CartPage() {
     return Object.keys(errors).length === 0;
   };
 
-  // ============================================================================
-  // 🔹 handleSubmitOrder
-  // ============================================================================
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('🚀 [CartPage] handleSubmitOrder triggered');
     
     if (!validateForm()) {
       toast.error('Veuillez corriger les erreurs du formulaire');
@@ -259,8 +201,6 @@ export default function CartPage() {
     setIsSubmitting(true);
     
     try {
-      console.log('📦 [CartPage] Preparing order payload...');
-      
       const orderPayload = {
         shipping: {
           fullName: shippingDetails.fullName.trim(),
@@ -302,24 +242,15 @@ export default function CartPage() {
         }),
       };
 
-      console.log('📡 [CartPage] Calling orderApi.createOrder...');
-      const startTime = Date.now();
-      
       const response = await Promise.race([
         orderApi.createOrder(orderPayload),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout (30s)')), 30000))
       ]);
       
-      const elapsed = Date.now() - startTime;
-      console.log('✅ [CartPage] orderApi.createOrder succeeded in', elapsed, 'ms');
-      
       const paymentUrl = (response as any).data?.payment?.paymentUrl || (response as any).paymentUrl;
       const orderId = (response as any).data?.order?._id || (response as any).order?._id;
       
-      console.log('🎯 [CartPage] Response:', { paymentUrl, orderId });
-      
       if (paymentUrl) {
-        console.log('💳 [CartPage] Opening CinetPay popup:', paymentUrl);
         toast.success('Ouverture de la fenêtre de paiement...');
         
         if (orderId) {
@@ -346,12 +277,9 @@ export default function CartPage() {
         const handleMessage = (event: MessageEvent) => {
           if (!event.origin.includes('cinetpay')) return;
           
-          console.log('📩 [CinetPay] Message received:', event.data);
-          
           const data = event.data;
           
           if (data.status === 'ACCEPTED' || data.status === 'SUCCESS') {
-            console.log('✅ [CinetPay] Payment successful');
             toast.success('Paiement réussi !');
             popup.close();
             
@@ -361,13 +289,9 @@ export default function CartPage() {
             
             window.removeEventListener('message', handleMessage);
           } else if (data.status === 'REFUSED' || data.status === 'FAILED') {
-            console.error('❌ [CinetPay] Payment failed');
             toast.error('Paiement échoué. Veuillez réessayer.');
             popup.close();
             window.removeEventListener('message', handleMessage);
-          } else if (data.status === 'PENDING') {
-            console.log('⏳ [CinetPay] Payment pending');
-            toast.info('Paiement en cours de traitement...');
           }
         };
         
@@ -377,7 +301,6 @@ export default function CartPage() {
           if (popup.closed) {
             clearInterval(checkPopupClosed);
             window.removeEventListener('message', handleMessage);
-            console.log('🔒 [CinetPay] Popup closed');
             
             if (orderId) {
               toast.info('Vérification du paiement...');
@@ -391,39 +314,21 @@ export default function CartPage() {
 
       toast.success('Commande créée avec succès !');
       
-      console.log('🎯 [CartPage] Extracted orderId:', orderId);
-      
       if (orderId) {
-        console.log('🔄 [CartPage] Navigating to confirmation:', `/orders/${orderId}/confirmation`);
         router.push(`/orders/${orderId}/confirmation`);
       } else {
-        console.log('🔄 [CartPage] No orderId, redirecting to profile');
         router.push(ROUTES.USER.PROFILE || '/profile');
       }
       
     } catch (err: any) {
-      console.group('❌ [CartPage] Order creation FAILED');
-      console.log('  Timestamp:', new Date().toISOString());
-      console.log('  Message:', err?.message);
-      console.log('  Status code:', err?.response?.status || err?.statusCode);
-      
-      const validationErrors = err?.response?.data?.errors;
-      if (validationErrors) {
-        console.log('  🔍 Validation errors:', validationErrors);
-        console.table(validationErrors);
-      }
-      
-      console.log('  Response data:', err?.response?.data);
-      console.groupEnd();
-      
       if (err?.response?.status === 401 || err?.message?.includes('authentification') || err?.message?.includes('token')) {
-        console.error('🔐 [CartPage] AUTH ERROR');
         toast.error('Session expirée. Veuillez vous reconnecter.');
         return;
       }
       
       let message = 'Erreur lors de la création de la commande';
       
+      const validationErrors = err?.response?.data?.errors;
       if (validationErrors && Array.isArray(validationErrors)) {
         message = validationErrors.map((e: any) => e.msg || e.message).join(', ');
       } else if (err?.response?.data?.message) {
@@ -437,13 +342,9 @@ export default function CartPage() {
       
     } finally {
       setIsSubmitting(false);
-      console.log('🏁 [CartPage] handleSubmitOrder completed');
     }
   };
 
-  // ============================================================================
-  // 🔹 RENDER STATES
-  // ============================================================================
   if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
@@ -458,7 +359,7 @@ export default function CartPage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md">
+        <div className="text-center max-w-md animate-in fade-in zoom-in duration-300">
           <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
             <Shield className="w-10 h-10 text-muted-foreground" />
           </div>
@@ -468,7 +369,7 @@ export default function CartPage() {
             <Button asChild><Link href={`/auth/login?from=${encodeURIComponent('/cart')}`}>Se connecter</Link></Button>
             <Button variant="outline" asChild><Link href={ROUTES.PRODUCTS}>Continuer sans compte</Link></Button>
           </div>
-        </motion.div>
+        </div>
       </div>
     );
   }
@@ -476,24 +377,20 @@ export default function CartPage() {
   if (!cart || !cart.items?.length) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md">
+        <div className="text-center max-w-md animate-in fade-in zoom-in duration-300">
           <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
             <Package className="w-10 h-10 text-muted-foreground" />
           </div>
           <h2 className="text-2xl font-bold mb-3">Votre panier est vide</h2>
           <p className="text-muted-foreground mb-6">Ajoutez des produits à votre panier avant de passer au paiement.</p>
           <Button asChild size="lg"><Link href={ROUTES.PRODUCTS}>Découvrir nos produits</Link></Button>
-        </motion.div>
+        </div>
       </div>
     );
   }
 
-  // ============================================================================
-  // 🔹 MAIN RENDER
-  // ============================================================================
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href={ROUTES.PRODUCTS} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
@@ -508,52 +405,46 @@ export default function CartPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Title */}
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
+        <div className="text-center mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
           <h1 className="text-3xl sm:text-4xl font-bold mb-2">Finaliser votre commande</h1>
           <p className="text-muted-foreground">{cart.items.length} produit{cart.items.length > 1 ? 's' : ''} • Total: {formatPrice(total)}</p>
-        </motion.div>
+        </div>
 
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-8">
-          {/* FORMULAIRE */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
+          <div className="animate-in fade-in slide-in-from-left-4 duration-500">
             <form onSubmit={handleSubmitOrder} className="space-y-6">
-              {/* 📦 Items du panier */}
               <div className="rounded-3xl border border-border bg-card p-6">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Package className="w-5 h-5" /> Vos articles ({cart.items.length})</h2>
                 <div className="space-y-4">
-                  <AnimatePresence>
-                    {cart.items.map((item, index) => {
-                      const product = item.product as any;
-                      const productName = typeof product === 'object' ? product.name : item.name || 'Produit';
-                      const productImage = typeof product === 'object' ? product.images?.[0]?.url || product.images?.[0] || item.image : item.image;
-                      const itemTotal = (item.price || 0) * (item.quantity || 1);
-                      return (
-                        <motion.div key={item._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -100 }} transition={{ delay: index * 0.05 }} className="flex gap-4 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
-                          <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-                            {productImage ? (<img src={productImage} alt={productName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.svg'; }} />) : (<div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">Pas d'image</div>)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-sm line-clamp-2">{productName}</h4>
-                            {(item.size || item.color) && (<div className="flex gap-2 mt-1">{item.size && <SimpleBadge variant="outline">{item.size}</SimpleBadge>}{item.color && <SimpleBadge variant="outline">{item.color}</SimpleBadge>}</div>)}
-                            <div className="flex items-center gap-3 mt-3">
-                              <div className="flex items-center border border-border rounded-lg">
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) - 1)} disabled={(item.quantity || 1) <= 1 || updatingItemId === item._id}><Minus className="w-3 h-3" /></Button>
-                                <span className="w-8 text-center text-sm font-medium">{updatingItemId === item._id ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : item.quantity}</span>
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) + 1)} disabled={updatingItemId === item._id || (item.quantity || 1) >= ((item.product as any)?.totalStock || (item as any)?.totalStock || 999)}><Plus className="w-3 h-3" /></Button>
-                              </div>
-                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleRemoveItem(item._id!)} disabled={updatingItemId === item._id} title="Retirer du panier"><Trash2 className="w-4 h-4" /></Button>
+                  {cart.items.map((item, index) => {
+                    const product = item.product as any;
+                    const productName = typeof product === 'object' ? product.name : item.name || 'Produit';
+                    const productImage = typeof product === 'object' ? product.images?.[0]?.url || product.images?.[0] || item.image : item.image;
+                    const itemTotal = (item.price || 0) * (item.quantity || 1);
+                    return (
+                      <div key={item._id} className="flex gap-4 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
+                        <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+                          {productImage ? (<img src={productImage} alt={productName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.svg'; }} />) : (<div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">Pas d'image</div>)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm line-clamp-2">{productName}</h4>
+                          {(item.size || item.color) && (<div className="flex gap-2 mt-1">{item.size && <SimpleBadge variant="outline">{item.size}</SimpleBadge>}{item.color && <SimpleBadge variant="outline">{item.color}</SimpleBadge>}</div>)}
+                          <div className="flex items-center gap-3 mt-3">
+                            <div className="flex items-center border border-border rounded-lg">
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) - 1)} disabled={(item.quantity || 1) <= 1 || updatingItemId === item._id}><Minus className="w-3 h-3" /></Button>
+                              <span className="w-8 text-center text-sm font-medium">{updatingItemId === item._id ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : item.quantity}</span>
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) + 1)} disabled={updatingItemId === item._id || (item.quantity || 1) >= ((item.product as any)?.totalStock || (item as any)?.totalStock || 999)}><Plus className="w-3 h-3" /></Button>
                             </div>
+                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleRemoveItem(item._id!)} disabled={updatingItemId === item._id} title="Retirer du panier"><Trash2 className="w-4 h-4" /></Button>
                           </div>
-                          <div className="text-right flex-shrink-0"><p className="font-semibold text-accent">{formatPrice(itemTotal)}</p>{item.price && <p className="text-xs text-muted-foreground">{formatPrice(item.price)}/unité</p>}</div>
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
+                        </div>
+                        <div className="text-right flex-shrink-0"><p className="font-semibold text-accent">{formatPrice(itemTotal)}</p>{item.price && <p className="text-xs text-muted-foreground">{formatPrice(item.price)}/unité</p>}</div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* 📍 Adresse de livraison */}
               <div className="rounded-3xl border border-border bg-card p-6">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><MapPin className="w-5 h-5" /> Adresse de livraison</h2>
                 <div className="space-y-4">
@@ -583,11 +474,17 @@ export default function CartPage() {
                     </div>
                   </div>
                   <div className="space-y-2"><Label htmlFor="postalCode">Code postal (optionnel)</Label><Input id="postalCode" value={shippingDetails.postalCode} onChange={(e) => handleShippingChange('postalCode', e.target.value)} placeholder="Ex: 01 BP 1234" /></div>
-                  {shippingDetails.country && shippingDetails.city && (<motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="p-3 rounded-lg bg-accent/10 border border-accent/20"><div className="flex items-center justify-between text-sm"><span className="text-muted-foreground flex items-center gap-2"><Truck className="w-4 h-4" /> {getShippingLabel(shippingDetails.country, shippingDetails.city)}</span><span className="font-semibold text-accent">{formatPrice(shippingCost)}</span></div></motion.div>)}
+                  {shippingDetails.country && shippingDetails.city && (
+                    <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground flex items-center gap-2"><Truck className="w-4 h-4" /> {getShippingLabel(shippingDetails.country, shippingDetails.city)}</span>
+                        <span className="font-semibold text-accent">{formatPrice(shippingCost)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* 💳 Méthode de paiement */}
               <div className="rounded-3xl border border-border bg-card p-6">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5" /> Méthode de paiement</h2>
                 <div className="space-y-3">
@@ -605,36 +502,28 @@ export default function CartPage() {
                         </div>
                       </label>
                       
-                      <AnimatePresence>
-                        {paymentMethod === method.id && method.id === 'cash_on_delivery' && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }} 
-                            animate={{ opacity: 1, height: 'auto' }} 
-                            exit={{ opacity: 0, height: 0 }}
-                            className="mt-3 ml-7 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20"
-                          >
-                            <div className="flex items-start gap-2">
-                              <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                              <div className="text-sm">
-                                <p className="font-medium text-amber-900 mb-2">
-                                  Paiement en deux étapes
-                                </p>
-                                <ul className="space-y-1 text-amber-800 text-xs">
-                                  <li>• <strong>{formatPrice(amountDueNow)}</strong> à payer maintenant via la popup sécurisée</li>
-                                  <li>• <strong>{formatPrice(total - amountDueNow)}</strong> à payer en espèces à la livraison</li>
-                                  <li className="pt-1 text-amber-700">Le numéro de livraison ({shippingDetails.phone || 'non renseigné'}) sera utilisé pour l'acompte</li>
-                                </ul>
-                              </div>
+                      {paymentMethod === method.id && method.id === 'cash_on_delivery' && (
+                        <div className="mt-3 ml-7 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm">
+                              <p className="font-medium text-amber-900 mb-2">
+                                Paiement en deux étapes
+                              </p>
+                              <ul className="space-y-1 text-amber-800 text-xs">
+                                <li>• <strong>{formatPrice(amountDueNow)}</strong> à payer maintenant via la popup sécurisée</li>
+                                <li>• <strong>{formatPrice(total - amountDueNow)}</strong> à payer en espèces à la livraison</li>
+                                <li className="pt-1 text-amber-700">Le numéro de livraison ({shippingDetails.phone || 'non renseigné'}) sera utilisé pour l'acompte</li>
+                              </ul>
                             </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* 📝 Notes */}
               <div className="rounded-3xl border border-border bg-card p-6">
                 <h2 className="text-xl font-bold mb-4">Notes de commande (optionnel)</h2>
                 <textarea 
@@ -647,13 +536,12 @@ export default function CartPage() {
               </div>
 
               {formErrors.submit && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-3">
+                <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-3 animate-in fade-in duration-300">
                   <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                   <span>{formErrors.submit}</span>
-                </motion.div>
+                </div>
               )}
 
-              {/* Submit Button */}
               <Button 
                 type="submit" 
                 size="lg" 
@@ -674,10 +562,9 @@ export default function CartPage() {
                 En cliquant sur "Commander", vous acceptez nos <Link href="/terms" className="text-accent hover:underline">Conditions générales</Link> et <Link href="/privacy" className="text-accent hover:underline">Politique de confidentialité</Link>.
               </p>
             </form>
-          </motion.div>
+          </div>
 
-          {/* ───────── RÉCAPITULATIF ───────── */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="lg:sticky lg:top-24 h-fit">
+          <div className="lg:sticky lg:top-24 h-fit animate-in fade-in slide-in-from-right-4 duration-500 delay-200">
             <div className="rounded-3xl border-2 border-border/50 bg-card p-6">
               <h2 className="text-xl font-bold mb-4 flex items-center justify-between">
                 <span>Récapitulatif</span>
@@ -722,7 +609,7 @@ export default function CartPage() {
                 <span className="text-2xl font-bold text-accent">{formatPrice(total)}</span>
               </div>
               {paymentMethod === 'cash_on_delivery' && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 animate-in fade-in duration-300">
                   <div className="flex items-center gap-2 text-amber-700 text-sm mb-2">
                     <AlertCircle className="w-4 h-4" />
                     <span className="font-medium">Paiement partiel</span>
@@ -737,7 +624,7 @@ export default function CartPage() {
                       <span>{formatPrice(total - amountDueNow)}</span>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               )}
               <div className="flex items-center justify-center gap-4 pt-4 text-muted-foreground">
                 <div className="flex items-center gap-1 text-xs">
@@ -755,7 +642,7 @@ export default function CartPage() {
                 Besoin d'aide pour votre commande ?
               </Link>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </div>
