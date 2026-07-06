@@ -98,14 +98,17 @@ export default function CheckoutPage() {
       const response = await orderApi.createOrder({
         shipping: {
           fullName:   shipping.fullName.trim(),
-          street:     shipping.street.trim(),      // ✅ street (pas address)
+          street:     shipping.street.trim(),
           city:       shipping.city.trim(),
           country:    shipping.country.trim(),
           phone:      shipping.phone.trim(),
-          zipCode:    shipping.postalCode.trim(),
-        } as any,
-        shippingMethod: shipping.method,
-        paymentMethod: paymentMethod,
+          postalCode: shipping.postalCode.trim(),
+          method:     shipping.method,
+        },
+        payment: {
+          method: paymentMethod,
+        },
+        notes: undefined,
       } as any);
 
       const data = (response as any)?.data ?? response;

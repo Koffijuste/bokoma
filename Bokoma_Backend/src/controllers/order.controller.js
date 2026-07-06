@@ -430,7 +430,7 @@ function parseListQuery(req, { validSortFields = [], includeSearch = false } = {
   const filters = {};
 
   // Filtre user (pour les routes "my")
-  if (req.baseUrl?.includes('/orders') && req.route?.path === '/my') {
+  if (req.baseUrl === '/api/v1/orders' && req.route?.path === '/my') {
     filters.user = req.user?.userId || req.user?._id?.toString();
     filters.archivedByUser = { $ne: true };
   }

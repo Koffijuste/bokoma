@@ -6,11 +6,8 @@ import { useCartStore } from '@/store/cart';
 import { useMutation } from './useApi';
 import { cartApi } from '@/services';
 import { useAuth } from './useAuth';
-import type { Cart } from '@/types';
+import type { Cart, ApiResponse } from '@/types';
 
-// ─────────────────────────────
-// TYPES
-// ─────────────────────────────
 export interface AddItemPayload {
   product: string;
   variantId?: string;
@@ -24,47 +21,52 @@ interface UpdateItemParams {
   quantity: number;
 }
 
-// ─────────────────────────────
-// HOOK PRINCIPAL
-// ─────────────────────────────
+type CartResponse = ApiResponse<{ cart: Cart }>;
+type CartWithDiscountResponse = ApiResponse<{ cart: Cart; discount: number }>;
+
+const extractCart = (response: any): Cart | null => {
+  if (!response) return null;
+  if (response.data?.cart) return response.data.cart;
+  if (response.cart) return response.cart;
+  if (response.items) return response as Cart;
+  return null;
+};
+
 export function useCart() {
   const { isAuthenticated } = useAuth();
   const { cart, setCart, clearCart } = useCartStore();
 
-  // ✅ cartCount calculé dynamiquement depuis cart.items
   const cartCount = cart?.items?.length || 0;
 
-  // ───────── Mutations API ─────────
-  const addItemMutation = useMutation<Cart, AddItemPayload>(
+  const addItemMutation = useMutation<CartResponse, AddItemPayload>(
     (payload) => cartApi.addItem(payload.product, {
       variantId: payload.variantId,
       size: payload.size,
       color: payload.color,
       quantity: payload.quantity,
-    })
+    }) as Promise<CartResponse>
   );
 
-  const removeItemMutation = useMutation<Cart, string>(
-    (itemId) => cartApi.removeItem(itemId)
+  const removeItemMutation = useMutation<CartResponse, string>(
+    (itemId) => cartApi.removeItem(itemId) as Promise<CartResponse>
   );
 
-  const updateItemMutation = useMutation<Cart, UpdateItemParams>(
-    ({ itemId, quantity }) => cartApi.updateItem(itemId, quantity)
+  const updateItemMutation = useMutation<CartResponse, UpdateItemParams>(
+    ({ itemId, quantity }) => cartApi.updateItem(itemId, quantity) as Promise<CartResponse>
   );
 
-  const clearCartMutation = useMutation<Cart, void>(
-    () => cartApi.clearCart()
+  const clearCartMutation = useMutation<ApiResponse, void>(
+    () => cartApi.clearCart() as Promise<ApiResponse>
   );
 
-  const applyCouponMutation = useMutation<Cart, string>(
-    (code) => cartApi.applyCoupon(code)
+  const applyCouponMutation = useMutation<CartWithDiscountResponse, string>(
+    (code) => cartApi.applyCoupon(code) as Promise<CartWithDiscountResponse>
   );
 
-  const removeCouponMutation = useMutation<Cart, void>(
-    () => cartApi.removeCoupon()
+  const removeCouponMutation = useMutation<CartResponse, void>(
+    () => cartApi.removeCoupon() as Promise<CartResponse>
   );
 
-  // ───────── Fetch cart depuis API ─────────
   const fetchCart = useCallback(async () => {
     if (!isAuthenticated) {
       setCart(null);
@@ -72,17 +74,15 @@ export function useCart() {
     }
 
     try {
-      const response = await cartApi.getCart();
-
-      const extractedCart = response?.data?.cart || response?.cart || response;
-      setCart(extractedCart);
-      return extractedCart;
+      const response: any = await cartApi.getCart();
+      const extracted = extractCart(response);
+      if (extracted) setCart(extracted);
+      return extracted;
     } catch {
       return null;
     }
   }, [isAuthenticated, setCart]);
 
-  // ───────── Fetch initial quand auth change ─────────
   useEffect(() => {
     if (isAuthenticated) {
       fetchCart();
@@ -91,7 +91,6 @@ export function useCart() {
     }
   }, [isAuthenticated, fetchCart, setCart]);
 
-  // ───────── Handlers ─────────
   const handleAddItem = useCallback(
     async (payload: AddItemPayload) => {
       const { product: productId, variantId, size, color, quantity = 1 } = payload;
@@ -101,19 +100,18 @@ export function useCart() {
       }
 
       try {
-        // ✅ ÉTAPE 1: Récupérer le panier actuel
-        const cartResponse = await cartApi.getCart();
-        const currentCart = cartResponse?.data?.cart || cartResponse?.cart;
+        const cartResponse: any = await cartApi.getCart();
+        const currentCart = extractCart(cartResponse);
 
-        // ✅ ÉTAPE 2: Chercher si le produit existe DÉJÀ
-        const existingItem = currentCart?.items?.find(item =>
-          item.product?._id === productId &&
-          (item.variantId === variantId) &&
-          (item.size === size) &&
-          (item.color === color)
-        );
+        const existingItem = currentCart?.items?.find((item: any) => {
+          const itemProductId = typeof item.product === 'string' ? item.product : item.product?._id;
+          return itemProductId === productId
+            && (item.variantId ?? undefined) === (variantId ?? undefined)
+            && (item.size ?? undefined) === (size ?? undefined)
+            && (item.color ?? undefined) === (color ?? undefined);
+        });
 
-        let response;
+        let response: any;
         if (existingItem) {
           const newQuantity = (existingItem.quantity || 1) + quantity;
           response = await updateItemMutation.mutate({ itemId: existingItem._id, quantity: newQuantity });
@@ -121,8 +119,7 @@ export function useCart() {
           response = await addItemMutation.mutate({ product: productId, variantId, size, color, quantity });
         }
 
-        // ✅ ÉTAPE 3: Synchroniser le store avec la réponse
-        const respCart = response?.cart || response?.data?.cart || response;
+        const respCart = extractCart(response);
         if (respCart) {
           setCart(respCart);
         } else {
@@ -140,16 +137,13 @@ export function useCart() {
   const handleRemoveItem = useCallback(
     async (itemId: string) => {
       try {
-        const response = await removeItemMutation.mutate(itemId);
-
-        // ✅ Synchroniser le store
-        const respCart = response?.cart || response?.data?.cart || response;
+        const response: any = await removeItemMutation.mutate(itemId);
+        const respCart = extractCart(response);
         if (respCart) {
           setCart(respCart);
         } else {
           await fetchCart();
         }
-
         return response;
       } catch (error) {
         throw error;
@@ -161,16 +155,13 @@ export function useCart() {
   const handleUpdateItem = useCallback(
     async ({ itemId, quantity }: UpdateItemParams) => {
       try {
-        const response = await updateItemMutation.mutate({ itemId, quantity });
-
-        // ✅ Synchroniser le store
-        const respCart = response?.cart || response?.data?.cart || response;
+        const response: any = await updateItemMutation.mutate({ itemId, quantity });
+        const respCart = extractCart(response);
         if (respCart) {
           setCart(respCart);
         } else {
           await fetchCart();
         }
-
         return response;
       } catch (error) {
         throw error;
@@ -186,30 +177,25 @@ export function useCart() {
 
   const handleApplyCoupon = useCallback(
     async (code: string) => {
-      const response = await applyCouponMutation.mutate(code);
-
-      const respCart = response?.cart || response?.data?.cart || response;
+      const response: any = await applyCouponMutation.mutate(code);
+      const respCart = extractCart(response);
       if (respCart) {
         setCart(respCart);
       }
-
       return response;
     },
     [applyCouponMutation, setCart]
   );
 
   const handleRemoveCoupon = useCallback(async () => {
-    const response = await removeCouponMutation.mutate(undefined);
-
-    const respCart = response?.cart || response?.data?.cart || response;
+    const response: any = await removeCouponMutation.mutate(undefined);
+    const respCart = extractCart(response);
     if (respCart) {
       setCart(respCart);
     }
-
     return response;
   }, [removeCouponMutation, setCart]);
 
-  // ───────── Return ─────────
   return {
     cart,
     cartCount,

@@ -63,7 +63,7 @@ interface Testimonial {
   text: string;
   rating: number;
   avatar: string;
-//  avatarFallback: string;
+  avatarFallback?: string;
 }
 
 // 🎯 Données
@@ -89,7 +89,6 @@ const testimonials: Testimonial[] = [
     text: 'Qualité exceptionnelle et livraison rapide. Je recommande !', 
     rating: 5,
     avatar: IMAGE_CONFIG.avatars.marie,
-//    avatarFallback: IMAGE_CONFIG.avatars.marieFallback,
   },
   { 
     name: 'Kouassi B.', 
@@ -97,7 +96,6 @@ const testimonials: Testimonial[] = [
     text: 'Le service client est au top. Mes achats sont toujours parfaits.', 
     rating: 5,
     avatar: IMAGE_CONFIG.avatars.kouassi,
-//    avatarFallback: IMAGE_CONFIG.avatars.kouassiFallback,
   },
   { 
     name: 'Aïcha D.', 
@@ -105,7 +103,6 @@ const testimonials: Testimonial[] = [
     text: 'Bokoma Store est devenu mon go-to pour le style premium.', 
     rating: 5,
     avatar: IMAGE_CONFIG.avatars.aicha,
-//    avatarFallback: IMAGE_CONFIG.avatars.aichaFallback,
   },
 ];
 
@@ -234,10 +231,12 @@ export default function HomePage() {
                   <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="w-full sm:w-auto gap-2">
-                <span className="w-4 h-4 border-2 border-current rounded-full" />
-                Voir la Vidéo
-              </Button>
+              <Link href={ROUTES.GALLERY}>
+                <Button size="lg" variant="outline" className="w-full sm:w-auto gap-2">
+                  <span className="w-4 h-4 border-2 border-current rounded-full" />
+                  Voir la Vidéo
+                </Button>
+              </Link>
             </div>
 
             {/* Trust Badges */}

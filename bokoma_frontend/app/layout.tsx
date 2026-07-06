@@ -1,11 +1,13 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from 'next';
-import { Inter, Poppins } from 'next/font/google';
+import { Inter, Poppins, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { SessionWatcher } from '@/components/SessionWatcher';
+import { CookieBanner } from '@/components/legal/CookieBanner';
+import RatingPromptHost from '@/components/features/RatingPromptHost';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -18,6 +20,16 @@ const poppins = Poppins({
   subsets: ['latin'],
   weight: ['400', '600', '700'],
   variable: '--font-poppins',
+  display: 'swap',
+  preload: true,
+});
+
+// ✅ Police élégante pour le logo Bokoma — Playfair Display (serif chic, premium/luxe)
+const playfair = Playfair_Display({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800', '900'],
+  style: ['normal', 'italic'],
+  variable: '--font-playfair',
   display: 'swap',
   preload: true,
 });
@@ -39,6 +51,18 @@ export const metadata: Metadata = {
   description: 'Découvrez notre sélection premium de produits de luxe livrés en Côte d\'Ivoire.',
   keywords: ['e-commerce', 'luxe', 'Abidjan', 'Côte d\'Ivoire', 'livraison'],
   authors: [{ name: 'Bokoma Store' }],
+  // ✅ Manifest PWA auto-servi par Next.js depuis /app/manifest.webmanifest
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/favicon.ico',       sizes: 'any',     type: 'image/x-icon' },
+      { url: '/icon.png',           sizes: '192x192', type: 'image/png' },
+      { url: '/icon.png',           sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-icon.png',     sizes: '180x180', type: 'image/png' },
+    ],
+  },
   robots: { index: true, follow: true },
   openGraph: {
     type: 'website',
@@ -60,7 +84,7 @@ export default function RootLayout({
       </head>
       <body
         className={`
-          ${inter.variable} ${poppins.variable}
+          ${inter.variable} ${poppins.variable} ${playfair.variable}
           font-sans antialiased
           flex flex-col min-h-screen
           bg-background text-foreground
@@ -77,6 +101,12 @@ export default function RootLayout({
           </main>
 
           <Footer />
+
+          {/* 🍪 Bandeau cookies CNIL — global, bas de page */}
+          <CookieBanner />
+
+          {/* ⭐ Modale "noter ce produit" — déclenchée par useAddToCart depuis n'importe où */}
+          <RatingPromptHost />
         </Providers>
       </body>
     </html>

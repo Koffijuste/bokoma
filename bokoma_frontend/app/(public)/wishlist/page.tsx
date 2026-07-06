@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useMounted } from '@/hooks/useMounted';
 import { useWishlist } from '@/hooks/useWishlist';
-import { apiClient } from '@/services/api';
+import { useAddToCart } from '@/hooks/useAddToCart';
 import { ROUTES } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
 import { toast } from 'sonner';
@@ -32,13 +32,15 @@ export default function WishlistPage() {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const mounted = useMounted();
   
-  const { 
-    wishlist, 
-    loading: wishlistLoading, 
+  const {
+    wishlist,
+    loading: wishlistLoading,
     error: wishlistError,
     removeFromWishlist,
     refreshWishlist,
   } = useWishlist();
+
+  const { add: addToCartWithPrompt } = useAddToCart();
 
   const [addingToCart, setAddingToCart] = useState<Set<string>>(new Set());
   const [addingAllToCart, setAddingAllToCart] = useState(false);
@@ -69,14 +71,10 @@ export default function WishlistPage() {
     setAddingToCart(prev => new Set(prev).add(product._id));
 
     try {
-      await apiClient.post('/cart/items', {
-        product: product._id,
-        quantity: 1,
-      });
-      toast.success(`${product.name} ajouté au panier`);
-    } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || 'Erreur lors de l\'ajout au panier';
-      toast.error(message);
+      const res = await addToCartWithPrompt({ product, quantity: 1 });
+      if (res.ok) {
+        toast.success(`${product.name} ajouté au panier`);
+      }
     } finally {
       setAddingToCart(prev => {
         const next = new Set(prev);
@@ -84,7 +82,7 @@ export default function WishlistPage() {
         return next;
       });
     }
-  }, []);
+  }, [addToCartWithPrompt]);
 
   const handleAddAllToCart = useCallback(async () => {
     const availableProducts = wishlist.filter(p => (p.totalStock || 0) > 0);
@@ -102,11 +100,9 @@ export default function WishlistPage() {
 
       for (const product of availableProducts) {
         try {
-          await apiClient.post('/cart/items', {
-            product: product._id,
-            quantity: 1,
-          });
-          successCount++;
+          const res = await addToCartWithPrompt({ product, quantity: 1 });
+          if (res.ok) successCount++;
+          else errorCount++;
         } catch {
           errorCount++;
         }
@@ -124,7 +120,7 @@ export default function WishlistPage() {
     } finally {
       setAddingAllToCart(false);
     }
-  }, [wishlist]);
+  }, [wishlist, addToCartWithPrompt]);
 
   if (!mounted || authLoading || wishlistLoading) {
     return (

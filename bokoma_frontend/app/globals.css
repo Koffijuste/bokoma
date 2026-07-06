@@ -166,6 +166,104 @@
   animation: fade-in 0.3s ease-out;
 }
 
+/* ────────────────────────────────────────────────────────────────────────
+   🔹 Animations CSS natives — remplacent framer-motion sur /dashboard
+   ──────────────────────────────────────────────────────────────────────── */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96) translateY(16px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes slide-down-soft {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-slide-down-soft {
+  animation: slide-down-soft 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Stagger CSS via nth-child — performances GPU optimales, sans JS runtime.
+   Limite volontairement à ~30 items pour rester raisonnable. */
+.stagger-children > * {
+  animation: fade-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger-children > *:nth-child(1)  { animation-delay: 0.02s; }
+.stagger-children > *:nth-child(2)  { animation-delay: 0.06s; }
+.stagger-children > *:nth-child(3)  { animation-delay: 0.10s; }
+.stagger-children > *:nth-child(4)  { animation-delay: 0.14s; }
+.stagger-children > *:nth-child(5)  { animation-delay: 0.18s; }
+.stagger-children > *:nth-child(6)  { animation-delay: 0.22s; }
+.stagger-children > *:nth-child(7)  { animation-delay: 0.26s; }
+.stagger-children > *:nth-child(8)  { animation-delay: 0.30s; }
+.stagger-children > *:nth-child(9)  { animation-delay: 0.34s; }
+.stagger-children > *:nth-child(10) { animation-delay: 0.38s; }
+.stagger-children > *:nth-child(11) { animation-delay: 0.42s; }
+.stagger-children > *:nth-child(12) { animation-delay: 0.46s; }
+.stagger-children > *:nth-child(13) { animation-delay: 0.50s; }
+.stagger-children > *:nth-child(14) { animation-delay: 0.54s; }
+.stagger-children > *:nth-child(15) { animation-delay: 0.58s; }
+.stagger-children > *:nth-child(16) { animation-delay: 0.62s; }
+.stagger-children > *:nth-child(17) { animation-delay: 0.66s; }
+.stagger-children > *:nth-child(18) { animation-delay: 0.70s; }
+.stagger-children > *:nth-child(19) { animation-delay: 0.74s; }
+.stagger-children > *:nth-child(20) { animation-delay: 0.78s; }
+.stagger-children > *:nth-child(n+21) { animation-delay: 0.80s; }
+
+/* Hover lift léger — utilisé sur les cartes */
+.hover-lift {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 200ms ease,
+              border-color 200ms ease;
+  will-change: transform;
+}
+.hover-lift:hover {
+  transform: translateY(-1px);
+}
+.hover-lift-strong:hover {
+  transform: translateY(-2px);
+}
+
+/* Respect du préférence utilisateur */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-slide-down-soft,
+  .stagger-children > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .hover-lift,
+  .hover-lift-strong {
+    transition: none !important;
+  }
+  .hover-lift:hover,
+  .hover-lift-strong:hover {
+    transform: none !important;
+  }
+}
+
 /* Floating elements */
 .float-animation {
   animation: float 6s ease-in-out infinite;

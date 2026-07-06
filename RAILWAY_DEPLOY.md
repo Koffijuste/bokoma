@@ -105,6 +105,8 @@ JWT_ISSUER=bokoma-api
 JWT_AUDIENCE=bokoma-users
 
 # ─── CinetPay (sandbox) ───────────────────────────────────
+# ⚠️ NE PAS COMMITER DE VRAIES CLÉS — utilise un App Password ou des secrets sandbox jetables
+# Va sur https://cinetpay.com → crée un compte → récupère ta clé API sandbox
 CINETPAY_API_KEY=<TA_CLE_CINETPAY_SANDBOX_ICI>
 CINETPAY_API_PASSWORD_CI=<TON_MOT_DE_PASSE_CINETPAY_ICI>
 CINETPAY_API_URL=https://api.cinetpay.net

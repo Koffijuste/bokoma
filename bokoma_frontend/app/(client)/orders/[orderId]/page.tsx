@@ -172,7 +172,7 @@ export default function OrderDetailsPage() {
                 </div>
               </div>
               <Button asChild className="mt-3">
-                <Link href={`/checkout/${order._id}`}>Réessayer le paiement</Link>
+                <Link href={ROUTES.CHECKOUT}>Réessayer le paiement</Link>
               </Button>
             </div>
           )}

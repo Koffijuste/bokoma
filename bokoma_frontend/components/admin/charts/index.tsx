@@ -20,9 +20,7 @@ export {
 } from 'recharts';
 
 export type {
-  LineChartProps,
   LineProps,
-  BarChartProps,
   BarProps,
   XAxisProps,
   YAxisProps,

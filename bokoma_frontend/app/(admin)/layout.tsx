@@ -8,7 +8,7 @@ import { Moon, Sun, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useUiStore } from '@/store';
-import { PageLoading } from '@/components/ui/page-loading';
+import { BokomaLoader } from '@/components/ui/bokoma-loader';
 
 export default function AdminLayout({
   children,
@@ -84,7 +84,13 @@ export default function AdminLayout({
 
         <div className="p-4 sm:p-6 lg:p-8">
           {isNavigating ? (
-            <PageLoading key="loading" message="Chargement..." />
+            <BokomaLoader
+              key="loading"
+              size={110}
+              message="Chargement du tableau de bord..."
+              showWordmark={false}
+              showDots
+            />
           ) : (
             <div key={pathname} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
               {children}

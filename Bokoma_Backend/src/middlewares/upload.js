@@ -26,6 +26,27 @@ const productStorage = createCloudinaryStorage('bokoma/products');
 const categoryStorage = createCloudinaryStorage('bokoma/categories');
 const tempStorage = createCloudinaryStorage('bokoma/temp');
 
+// ✅ Galerie Bokoma — accepte IMAGES ET VIDÉOS
+// Pour les vidéos on définit resource_type: 'video' pour que Cloudinary les
+// stocke en resource_type video (sinon il essaie de les transformer en image).
+const galleryStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    const isVideo = file.mimetype.startsWith('video/');
+    return {
+      folder: isVideo ? 'bokoma/gallery/videos' : 'bokoma/gallery/images',
+      allowed_formats: isVideo
+        ? ['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v']
+        : ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+      resource_type: isVideo ? 'video' : 'image',
+      transformation: isVideo
+        ? [{ quality: 'auto' }]
+        : [{ quality: 'auto' }, { fetch_format: 'auto' }],
+      public_id: `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+    };
+  },
+});
+
 // ============================================================================
 // 🔹 FILTRES
 // ============================================================================
@@ -36,6 +57,22 @@ const imageFilter = (req, file, cb) => {
     cb(null, true);
   } else {
     cb(new Error(`Type non supporté: ${file.mimetype}. Types acceptés: JPEG, PNG, WEBP, GIF`), false);
+  }
+};
+
+// ✅ Filtre média : image OU vidéo
+const mediaFilter = (req, file, cb) => {
+  const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+  const videoTypes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/x-m4v'];
+  if (imageTypes.includes(file.mimetype) || videoTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(
+      new Error(
+        `Type non supporté: ${file.mimetype}. Formats acceptés: JPEG, PNG, WEBP, GIF, MP4, WEBM, MOV`,
+      ),
+      false,
+    );
   }
 };
 
@@ -65,6 +102,13 @@ const tempUpload = multer({
   storage: tempStorage,
   fileFilter: imageFilter,
   limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+// ✅ Upload galerie — images 30 MB, vidéos 100 MB
+const galleryUpload = multer({
+  storage: galleryStorage,
+  fileFilter: mediaFilter,
+  limits: { fileSize: 100 * 1024 * 1024, files: 1 },
 });
 
 // ============================================================================
@@ -169,14 +213,27 @@ const uploadTemp = (req, res, next) => {
 // 🔹 EXPORTS
 // ============================================================================
 
+// ============================================================================
+// 🔹 UPLOAD GALERIE — accepte image OU vidéo (champ "file")
+// ============================================================================
+const uploadGallery = (req, res, next) => {
+  const safeNext = createSafeNext(res, next);
+  galleryUpload.single('file')(req, res, (err) => {
+    if (err) return handleMulterError(err, req, res, safeNext);
+    safeNext();
+  });
+};
+
 module.exports = {
   uploadSingle,
   uploadMultiple,
   uploadCategory,
   uploadTemp,
+  uploadGallery,
   avatarUpload,
   productUpload,
   categoryUpload,
+  galleryUpload,
   tempUpload,
   handleMulterError,
   cleanupTempFiles,

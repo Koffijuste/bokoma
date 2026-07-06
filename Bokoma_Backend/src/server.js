@@ -43,16 +43,20 @@ app.use(helmet({
 }));
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-// ✅ Autorise plusieurs origines : localhost (dev) + URL Railway frontend (prod)
-//    + toutes les previews Railway (*.up.railway.app)
+// ✅ Autorise plusieurs origines : localhost (dev) + URL Railway/Vercel frontend (prod)
+//    + toutes les previews Railway (*.up.railway.app) et Vercel (*.vercel.app)
 const allowedOrigins = [
   process.env.CLIENT_URL,
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ].filter(Boolean);
 
+// ✅ Si CLIENT_URL=* (mode permissif), on autorise tout le monde
+const isWildcard = process.env.CLIENT_URL === '*';
+
 const isAllowedOrigin = (origin) => {
   if (!origin) return true; // Server-to-server / curl sans Origin
+  if (isWildcard) return true;
   if (allowedOrigins.includes(origin)) return true;
   if (/\.up\.railway\.app$/.test(origin)) return true; // Previews Railway
   if (/\.vercel\.app$/.test(origin))     return true; // Previews Vercel
@@ -69,6 +73,8 @@ app.use(cors({
 // ─── Webhook raw body (avant express.json) ───────────────────────────────────
 // Le webhook CinetPay a besoin du body brut pour vérifier la signature HMAC.
 // On capture le raw body ici et on le rend dispo à req.rawBody dans le handler.
+// IMPORTANT : on monte le webhook AVANT le rate limiter global pour ne pas
+// être limité par CinetPay (qui peut envoyer plusieurs notifications en rafale).
 app.use(
   '/api/v1/webhook',
   express.json({
@@ -77,6 +83,7 @@ app.use(
       req.rawBody = buf;
     },
   }),
+  require('./routes/webhook.routes'),
 );
 
 // ─── Parsers ──────────────────────────────────────────────────────────────────
@@ -116,9 +123,6 @@ app.use(apiLimiter);
 
 // ─── Routes API ───────────────────────────────────────────────────────────────
 
-// Webhook (pas de rate limiter — appelé par CinetPay)
-app.use('/api/v1/webhook', require('./routes/webhook.routes'));
-
 // Auth
 app.use('/api/v1/auth', authLimiter, require('./routes/auth.routes'));
 
@@ -139,6 +143,13 @@ app.use('/api/v1/payments',   require('./routes/payment.routes'));
 
 app.use('/api/v1/reviews',    require('./routes/review.routes'));
 app.use('/api/v1/coupons',    require('./routes/coupon.routes'));
+
+// ✅ Bokoma Store — communautés
+app.use('/api/v1/gallery',    require('./routes/gallery.routes'));
+app.use('/api/v1/feedbacks',  require('./routes/feedback.routes'));
+
+// ✅ RGPD / Cookies — log de consentement CNIL (public + admin)
+app.use('/api/v1/consent',    require('./routes/consent.routes'));
 
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/v1/test/cinetpay', require('./routes/test.cinetpay.routes'));

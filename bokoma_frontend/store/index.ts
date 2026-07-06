@@ -20,3 +20,6 @@ export { useNotificationStore } from './notification';
 
 // ✅ Product store
 export { useProductStore } from './product';
+
+// ✅ Rating prompt store (modale "noter ce produit" après ajout panier)
+export { useRatingPromptStore } from './ratingPrompt';

@@ -3,7 +3,7 @@
 
 import React from 'react';
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
 } from 'recharts';
 
 interface ChartData {
@@ -14,7 +14,7 @@ interface ChartData {
 
 const DEFAULT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
 
-export default function PaymentPieChart({ data }: { data: ChartData[] }) {
+function PaymentPieChartImpl({ data }: { data: ChartData[] }) {
   if (!data || data.length === 0) {
     return (
       <div className="h-[320px] flex items-center justify-center text-muted-foreground">
@@ -33,11 +33,12 @@ export default function PaymentPieChart({ data }: { data: ChartData[] }) {
           innerRadius={70}
           outerRadius={110}
           paddingAngle={4}
+          isAnimationActive={false}
         >
           {data.map((entry, index) => (
-            <Cell 
-              key={`cell-${index}`} 
-              fill={DEFAULT_COLORS[index % DEFAULT_COLORS.length]} 
+            <Cell
+              key={`cell-${index}`}
+              fill={DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
             />
           ))}
         </Pie>
@@ -53,3 +54,6 @@ export default function PaymentPieChart({ data }: { data: ChartData[] }) {
     </ResponsiveContainer>
   );
 }
+
+// ✅ Mémoïsation : évite rerender si `data` est identique.
+export default React.memo(PaymentPieChartImpl);

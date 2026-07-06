@@ -13,6 +13,7 @@ import { productApi } from '@/services';
 import { useCart } from '@/hooks/useCart';
 import { useWishlist } from '@/hooks/useWishlist';
 import { useAuth } from '@/hooks/useAuth';
+import { useAddToCart } from '@/hooks/useAddToCart';
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants';
 import { formatPrice, cn } from '@/utils/helpers';
@@ -65,14 +66,19 @@ export default function ProductDetailsPage() {
   const slug = typeof params?.slug === 'string' ? params.slug : '';
   
   const { addItem } = useCart();
+  const { add: addToCartWithPrompt } = useAddToCart();
   const { isAuthenticated } = useAuth();
   const { isInWishlist, toggleWishlist } = useWishlist();
-  
+
   const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedSize, setSelectedSize] = useState<string>(''); // Pour vêtements
-  const [customSize, setCustomSize] = useState<string>(''); // Pour chaussures
+  const [selectedSize, setSelectedSize] = useState<string>('');
+  const [customSize, setCustomSize] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
+
+  const productImage =
+    product?.images?.find((img: any) => typeof img === 'string' || img?.url)?.url
+    ?? (typeof product?.images?.[0] === 'string' ? product.images[0] : undefined);
 
   const { data: apiResponse, loading, error, refetch } = useFetch<any>(
     () => productApi.getProduct(slug),
@@ -134,31 +140,33 @@ export default function ProductDetailsPage() {
 
     setIsAdding(true);
     try {
-      await addItem({
-        product: productId,
-        // ✅ Envoie la bonne taille selon la catégorie
+      const res = await addToCartWithPrompt({
+        product,
         size: isFootwearProduct ? customSize : (isClothingProduct ? selectedSize : undefined),
         quantity,
       });
-      
-      const sizeInfo = isFootwearProduct 
-        ? ` (Pointure ${customSize})` 
-        : isClothingProduct 
-          ? ` (Taille ${selectedSize})` 
-          : '';
-      
-      toast.success(`Ajouté au panier${sizeInfo} 🛒`);
-    } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || "Erreur d'ajout";
-      if (message.includes('déjà') || message.includes('exist')) {
-        toast.info('Quantité augmentée');
-      } else {
-        toast.error(message);
+
+      if (res.ok) {
+        const sizeInfo = isFootwearProduct
+          ? ` (Pointure ${customSize})`
+          : isClothingProduct
+            ? ` (Taille ${selectedSize})`
+            : '';
+        toast.success(`Ajouté au panier${sizeInfo} 🛒`);
       }
     } finally {
       setIsAdding(false);
     }
-  }, [productId, selectedSize, customSize, quantity, addItem, isFootwearProduct, isClothingProduct]);
+  }, [
+    productId,
+    selectedSize,
+    customSize,
+    quantity,
+    addToCartWithPrompt,
+    isFootwearProduct,
+    isClothingProduct,
+    product,
+  ]);
 
   const handleWishlist = useCallback(async () => {
     if (!productId) return;

@@ -64,17 +64,24 @@ const computeCouponDiscount = (coupon, subtotal) => {
   return discount;
 };
 
-/**
- * Récupère le panier de l'utilisateur, ou reconstruit depuis le payload si
- * le panier en base est vide (cas où le frontend envoie directement les items).
- */
 const resolveCart = async (userId, payload) => {
   const cart = await Cart.findOne({ user: userId }).populate('coupon');
 
   if ((!cart || !cart.items?.length) && payload.items?.length) {
     return { items: payload.items, coupon: payload.coupon || null, isReconstructed: true };
   }
-  return { ...(cart?._doc || cart || {}), isReconstructed: false };
+
+  if (!cart) {
+    return { items: [], coupon: null, isReconstructed: false };
+  }
+
+  return {
+    items: cart.items,
+    coupon: cart.coupon || null,
+    isReconstructed: false,
+    save: async () => cart.save(),
+    raw: cart.toObject(),
+  };
 };
 
 const buildOrderItems = (cartItems) => {
@@ -111,7 +118,17 @@ const createOrder = async (req) => {
   const userId = getUserId(req);
   if (!userId) throw new AppError('Utilisateur non authentifié', 401);
 
-  const { shipping, payment, notes } = req.body;
+  // ✅ Tolérance : accepter shippingMethod / paymentMethod en racine (legacy)
+  //                 ou shipping.method / payment.method (canonique)
+  const { shipping: shippingRaw, payment: paymentRaw, notes } = req.body;
+  const shipping = {
+    ...shippingRaw,
+    method: shippingRaw?.method || req.body.shippingMethod || 'standard',
+  };
+  const payment = {
+    method: paymentRaw?.method || req.body.paymentMethod || 'cash_on_delivery',
+    details: paymentRaw?.details || {},
+  };
 
   // 1. Récupérer le panier
   const cart = await resolveCart(userId, req.body);
@@ -160,11 +177,11 @@ const createOrder = async (req) => {
       postalCode: shipping?.postalCode?.trim(),
     },
     payment: {
-      method: payment?.method || 'cash_on_delivery',
+      method: payment.method,
       status: 'pending',
       transactionId,
       provider: null,
-      details: payment?.details || {},
+      details: payment.details,
       amountPaid: 0,
       remainingAmount: 0,
     },
@@ -224,10 +241,12 @@ const createOrder = async (req) => {
 
   // 9. Vider le panier (uniquement si DB)
   if (!cart.isReconstructed && typeof cart.save === 'function') {
-    cart.items = [];
+    cart.items.length = 0;
     cart.coupon = undefined;
-    cart.subtotal = 0;
-    cart.total = 0;
+    if (cart.raw) {
+      cart.raw.subtotal = 0;
+      cart.raw.total = 0;
+    }
     await cart.save();
   }
 

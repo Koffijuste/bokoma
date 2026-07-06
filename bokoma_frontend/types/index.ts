@@ -61,7 +61,7 @@ export interface AuthPayload {
   expiresIn: string;
 }
 
-export type AuthResponse = ApiResponse<AuthPayload>;
+export type AuthResponse = AuthPayload;
 
 export interface LoginCredentials {
   email: string;
@@ -222,11 +222,12 @@ export interface ShippingInfo {
   city: string;
   country: string;
   zipCode?: string;
-  postalCode?: string; // ✅ Alias pour compatibilité
+  postalCode?: string;
+  address?: string;
   deliveryInstructions?: string;
-  trackingNumber?: string; // ✅ Ajouté pour le suivi
-  deliveredAt?: string; // ✅ Date de livraison effective
-  cost?: number; // ✅ Coût de livraison
+  trackingNumber?: string;
+  deliveredAt?: string;
+  cost?: number;
 }
 
 export interface PaymentInfo {
@@ -234,8 +235,10 @@ export interface PaymentInfo {
   status: PaymentStatus;
   transactionId?: string;
   paidAt?: string;
-  provider?: string; // ✅ Stripe, Wave, etc.
-  amountPaid?: number; // ✅ Pour paiement partiel (cash_on_delivery)
+  provider?: string;
+  amountPaid?: number;
+  remainingAmount?: number;
+  rejectionReason?: string;
   metadata?: Record<string, any>;
 }
 
@@ -383,7 +386,7 @@ export interface PaginatedResponse<T> {
 export interface ApiError {
   statusCode: number;
   message: string;
-  errors?: Record<string, string[]>;
+  errors?: Record<string, string | string[]>;
   isOperational: boolean;
   stack?: string;
 }
@@ -507,4 +510,113 @@ export interface UsePaginationResult<T> extends PaginationState {
   nextPage: () => void;
   prevPage: () => void;
   setLimit: (limit: number) => void;
+}
+// ──────────────────────────────────────────────────────────────────────────
+// 🖼️ GALLERY — Bokoma Store vitrine médias
+// ──────────────────────────────────────────────────────────────────────────
+export type GalleryType = 'image' | 'video';
+export type GalleryProvider = 'cloudinary' | 'youtube' | 'vimeo' | 'mp4' | 'local' | 'other';
+export type GalleryCategory =
+  | 'collection'
+  | 'lookbook'
+  | 'produit'
+  | 'evenement'
+  | 'temoignage'
+  | 'arriere-boutique'
+  | 'autre';
+
+export interface GalleryItem extends Timestamps {
+  _id: string;
+  title: string;
+  description?: string;
+  type: GalleryType;
+  url: string;
+  thumbnail?: string;
+  provider?: GalleryProvider;
+  category?: GalleryCategory;
+  categoryLabel?: string;
+  tags?: string[];
+  product?: string | { _id: string; name?: string; slug?: string };
+  width?: number | null;
+  height?: number | null;
+  duration?: number | null;
+  isPublished: boolean;
+  isFeatured: boolean;
+  order: number;
+  createdBy?: string;
+  displayUrl?: string;
+  isExternalVideo?: boolean;
+  relativeTime?: string;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 💬 FEEDBACKS — Avis / retours clients
+// ──────────────────────────────────────────────────────────────────────────
+export type FeedbackCategory =
+  | 'site_feedback'
+  | 'purchase_issue'
+  | 'improvement'
+  | 'product_opinion'
+  | 'after_sales';
+
+export type FeedbackStatus = 'pending' | 'approved' | 'rejected' | 'archived';
+
+export interface FeedbackCategoryInfo {
+  id: FeedbackCategory;
+  label: string;
+  emoji: string;
+}
+
+export interface FeedbackItem extends Timestamps {
+  _id: string;
+  category: FeedbackCategory;
+  categoryLabel?: string;
+  categoryEmoji?: string;
+  subject?: string;
+  message: string;
+  messageFull?: string;
+  excerpt?: string;
+  rating?: number | null;
+  user?: string | { _id: string; firstName?: string; lastName?: string; avatar?: string };
+  userObj?: { _id: string; firstName?: string; lastName?: string; avatar?: string };
+  authorName?: string;
+  contactEmail?: string;
+  product?: string | { _id: string; name?: string; slug?: string };
+  order?: string | { _id: string; orderNumber?: string; status?: string };
+  status: FeedbackStatus;
+  isPublic: boolean;
+  isAnonymous: boolean;
+  adminResponse?: string;
+  respondedAt?: string | null;
+  respondedBy?: string | { _id: string; firstName?: string; lastName?: string };
+  relativeTime?: string;
+}
+
+export interface CreateFeedbackPayload {
+  category: FeedbackCategory;
+  subject?: string;
+  message: string;
+  rating?: number | null;
+  authorName?: string;
+  contactEmail?: string;
+  product?: string;
+  order?: string;
+}
+
+export interface CreateGalleryItemPayload {
+  title: string;
+  description?: string;
+  type: GalleryType;
+  url: string;
+  thumbnail?: string;
+  provider?: GalleryProvider;
+  category?: GalleryCategory;
+  tags?: string[];
+  product?: string;
+  isPublished?: boolean;
+  isFeatured?: boolean;
+  order?: number;
+  width?: number | null;
+  height?: number | null;
+  duration?: number | null;
 }

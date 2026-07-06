@@ -49,7 +49,9 @@ export const ROUTES = {
   PRIVACY: '/privacy-policy',
   TERMS: '/terms',
   FAQ: '/faq',
-  
+  GALLERY: '/gallery',
+  FEEDBACK: '/feedback',
+
   AUTH: {
     LOGIN: '/auth/login',
     REGISTER: '/auth/register',
@@ -57,7 +59,7 @@ export const ROUTES = {
     RESET_PASSWORD: '/auth/reset-password',
     VERIFY_EMAIL: '/auth/verify-email',
   },
-  
+
   USER: {
     PROFILE: '/profile',
     ORDERS: '/profile/orders',
@@ -66,7 +68,7 @@ export const ROUTES = {
     ADDRESSES: '/profile/addresses',
     WISHLIST: '/wishlist',
   },
-  
+
   ADMIN: {
     DASHBOARD: '/dashboard',
     ORDERS: '/dashboard/orders',
@@ -75,6 +77,8 @@ export const ROUTES = {
     USERS: '/dashboard/users',
     COUPONS: '/dashboard/coupons',
     REVIEWS: '/dashboard/reviews',
+    GALLERY: '/dashboard/gallery',
+    FEEDBACKS: '/dashboard/feedbacks',
     SETTINGS: '/dashboard/settings',
     ANALYTICS: '/dashboard/analytics',
   },
@@ -169,6 +173,26 @@ export const API_ENDPOINTS = {
   DASHBOARD: {
     STATS: '/dashboard/stats',
     SALES_TREND: '/dashboard/sales-trend',
+  },
+
+  GALLERY: {
+    LIST: '/gallery',
+    ADMIN_LIST: '/gallery/admin/list',
+    ADMIN_STATS: '/gallery/admin/stats',
+    ADMIN_UPLOAD: '/gallery/admin/upload',
+    ADMIN_ITEM: '/gallery/admin',
+    ADMIN_DETAIL: (id: string) => `/gallery/admin/${id}`,
+  },
+
+  FEEDBACKS: {
+    LIST: '/feedbacks',
+    CATEGORIES: '/feedbacks/categories',
+    CREATE: '/feedbacks',
+    ADMIN_LIST: '/feedbacks/admin/list',
+    ADMIN_STATS: '/feedbacks/admin/stats',
+    ADMIN_DETAIL: (id: string) => `/feedbacks/admin/${id}`,
+    ADMIN_STATUS: (id: string) => `/feedbacks/admin/${id}/status`,
+    ADMIN_DELETE: (id: string) => `/feedbacks/admin/${id}`,
   },
 } as const;
 

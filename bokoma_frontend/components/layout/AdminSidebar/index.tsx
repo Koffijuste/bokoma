@@ -7,20 +7,22 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, Layers, Users, ShoppingCart,
   Ticket, MessageSquare, BarChart3, Settings, ChevronLeft,
-  ChevronRight, X,
+  ChevronRight, X, ImageIcon, Send,
 } from 'lucide-react';
 import { useUiStore } from '@/store';
-import { ROUTES } from '@/app/constants.old';
+import { ROUTES } from '@/constants';
 import { cn } from '@/utils/helpers';
 
 const adminNavItems = [
   { label: 'Tableau de Bord', href: ROUTES?.ADMIN?.DASHBOARD || '/dashboard', icon: LayoutDashboard },
   { label: 'Produits', href: ROUTES?.ADMIN?.PRODUCTS || '/dashboard/products', icon: Package },
+  { label: 'Galerie', href: '/dashboard/gallery', icon: ImageIcon },
   { label: 'Catégories', href: ROUTES?.ADMIN?.CATEGORIES || '/dashboard/categories', icon: Layers },
   { label: 'Utilisateurs', href: ROUTES?.ADMIN?.USERS || '/dashboard/users', icon: Users },
   { label: 'Commandes', href: ROUTES?.ADMIN?.ORDERS || '/dashboard/orders', icon: ShoppingCart },
   { label: 'Coupons', href: ROUTES?.ADMIN?.COUPONS || '/dashboard/coupons', icon: Ticket },
-  { label: 'Avis', href: ROUTES?.ADMIN?.REVIEWS || '/dashboard/reviews', icon: MessageSquare },
+  { label: 'Avis produits', href: ROUTES?.ADMIN?.REVIEWS || '/dashboard/reviews', icon: MessageSquare },
+  { label: 'Feedbacks', href: '/dashboard/feedbacks', icon: Send },
   { label: 'Statistiques', href: ROUTES?.ADMIN?.ANALYTICS || '/dashboard/analytics', icon: BarChart3 },
 ];
 

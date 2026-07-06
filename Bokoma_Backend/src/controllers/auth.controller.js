@@ -21,7 +21,9 @@ exports.register = async (req, res, next) => {
       return next(new AppError('Tous les champs sont requis', 400));
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return next(new AppError('Cet email est déjà utilisé', 409));
     }
@@ -29,7 +31,7 @@ exports.register = async (req, res, next) => {
     const user = await User.create({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
       password,
       phone: phone?.trim(),
       role: 'customer',
@@ -45,7 +47,7 @@ exports.register = async (req, res, next) => {
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
     };
 
@@ -89,7 +91,7 @@ exports.login = async (req, res, next) => {
       return next(new AppError('Email et mot de passe requis', 400));
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
     
     if (!user || !user.isActive) {
       return next(new AppError('Identifiants invalides', 401));
@@ -110,7 +112,7 @@ exports.login = async (req, res, next) => {
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
     };
 
@@ -118,7 +120,7 @@ exports.login = async (req, res, next) => {
       ...cookieOptions,
       maxAge: 60 * 60 * 1000,
     });
-    
+
     res.cookie('bokoma_refresh_token', refreshToken, {
       ...cookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -173,7 +175,7 @@ exports.refreshToken = async (req, res, next) => {
     res.cookie('bokoma_access_token', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 60 * 60 * 1000,
     });
 
@@ -440,7 +442,7 @@ exports.resetPasswordWithOtp = async (req, res, next) => {
       .update(String(otp).trim())
       .digest('hex');
 
-    const user = await User.findOne({ email: email.toLowerCase() })
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
       .select('+resetOtpCode +resetOtpExpires +resetOtpAttempts +password');
 
     if (!user) {

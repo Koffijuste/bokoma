@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { useWishlist } from '@/hooks/useWishlist';
-import { apiClient } from '@/services/api';
+import { useAddToCart } from '@/hooks/useAddToCart';
 import { formatPrice, cn } from '@/utils/helpers';
 import type { Product } from '@/types';
 
@@ -46,6 +46,7 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
 }) => {
   const [addingToCart, setAddingToCart] = useState(false);
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { add: addToCartWithPrompt } = useAddToCart();
   const router = useRouter();
 
   if (!product) {
@@ -103,20 +104,15 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
     }
 
     setAddingToCart(true);
-
     try {
-      await apiClient.post('/cart/items', {
-        product: productId,
-        quantity: 1,
-      });
-      toast.success(`${product.name} ajouté au panier`);
-    } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || "Erreur lors de l'ajout au panier";
-      toast.error(message);
+      const res = await addToCartWithPrompt({ product, quantity: 1 });
+      if (res.ok) {
+        toast.success(`${product.name} ajouté au panier`);
+      }
     } finally {
       setAddingToCart(false);
     }
-  }, [productId, product.name, inStock, onAddToCart, product]);
+  }, [productId, product, inStock, onAddToCart, addToCartWithPrompt]);
 
   const variantClasses = useMemo(() => {
     switch (variant) {

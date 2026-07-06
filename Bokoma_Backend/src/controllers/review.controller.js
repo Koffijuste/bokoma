@@ -53,10 +53,13 @@ exports.getAllReviews = async (req, res, next) => {
       : 'createdAt';
     const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
 
-    // ✅ Requête avec populate
+    // ✅ Requête avec populate — limit drastique des champs pour alléger le payload
     const [reviews, total] = await Promise.all([
       Review.find(filters)
-        .populate('product', 'name slug images')
+        .populate({
+          path: 'product',
+          select: 'name slug images',
+        })
         .populate('user', 'firstName lastName email avatar')
         .sort({ [sortField]: sortOrder })
         .skip(skip)
@@ -65,12 +68,23 @@ exports.getAllReviews = async (req, res, next) => {
       Review.countDocuments(filters),
     ]);
 
-    console.log(`✅ [Reviews] ${reviews.length} avis chargés (total: ${total})`);
+    // ✅ Tronque le body à 240 chars pour le listing admin (économise ~70% du payload)
+    const lightweight = reviews.map((r) => ({
+      ...r,
+      bodyFull: r.body,
+      body: r.body?.length > 240 ? `${r.body.slice(0, 240).trimEnd()}…` : r.body,
+      // Limite aussi la 1re image du produit à 1 pour éviter les tableaux longs
+      product: r.product
+        ? { ...r.product, images: Array.isArray(r.product.images) ? r.product.images.slice(0, 1) : r.product.images }
+        : r.product,
+    }));
+
+    console.log(`✅ [Reviews] ${lightweight.length} avis chargés (total: ${total})`);
 
     res.json({
       success: true,
       data: {
-        reviews,
+        reviews: lightweight,
         pagination: {
           page,
           limit,

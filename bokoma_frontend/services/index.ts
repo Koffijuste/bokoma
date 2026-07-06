@@ -1,30 +1,33 @@
 // services/index.ts
-// ============================================================================
-// 📦 EXPORTS CENTRALISÉS DES SERVICES API
-// ============================================================================
+// Point d'entrée unique des services API.
+// Ré-exporte apiClient + services de base depuis ./api (source unique),
+// puis expose les services additionnels (gallery, feedback, etc.).
 
 import { apiClient } from './api';
 import { API_ENDPOINTS } from '@/constants';
 import type {
-  User,
-  Product,
-  Category,
-  Order,
-  Cart,
-  Review,
-  Coupon,
-  ProductFilters,
-  OrderFilters,
-  PaginatedResponse,
-  AuthResponse,
-  ApiResponse,
-  Image,
-  Address,
+  GalleryItem,
+  CreateGalleryItemPayload,
+  FeedbackItem,
+  FeedbackCategory,
+  FeedbackStatus,
+  FeedbackCategoryInfo,
+  CreateFeedbackPayload,
 } from '@/types';
 
-// ============================================================================
-// 🔹 TYPES EXPORTÉS (pour réutilisation dans les composants)
-// ============================================================================
+export { apiClient, default } from './api';
+export {
+  authApi,
+  userApi,
+  categoryApi,
+  productApi,
+  cartApi,
+  orderApi,
+  reviewApi,
+  couponApi,
+  dashboardApi,
+  systemApi,
+} from './api';
 
 export interface CartItemOptions {
   variantId?: string;
@@ -34,13 +37,6 @@ export interface CartItemOptions {
 }
 
 export interface CreateOrderPayload {
-  items: Array<{
-    product: string;
-    quantity: number;
-    variantId?: string;
-    size?: string;
-    color?: string;
-  }>;
   shipping: {
     fullName: string;
     phone: string;
@@ -49,7 +45,8 @@ export interface CreateOrderPayload {
     country: string;
     zipCode?: string;
   };
-  paymentMethod: 'card' | 'mobile_money' | 'cash_on_delivery' | 'bank_transfer';
+  payment?: { method: 'card' | 'mobile_money' | 'cash_on_delivery' | 'bank_transfer' };
+  paymentMethod?: 'card' | 'mobile_money' | 'cash_on_delivery' | 'bank_transfer';
   couponCode?: string;
   notes?: string;
 }
@@ -61,447 +58,109 @@ export interface CreateReviewPayload {
   images?: File[];
 }
 
-// ============================================================================
-// 🔹 AUTH SERVICES — ✅ CORRECTION CRITIQUE
-// ============================================================================
+export interface AdminReviewFilters {
+  page?: number;
+  limit?: number;
+  approved?: boolean;
+  sortBy?: 'createdAt' | 'rating' | 'helpful';
+  sortOrder?: 'asc' | 'desc';
+}
 
-export const authApi = {
-  // ✅ CORRECTION : Accepter un objet credentials au lieu de 2 arguments séparés
-  login: ({ email, password }: { email: string; password: string }) =>
-    apiClient.post<ApiResponse<AuthResponse>>(API_ENDPOINTS.AUTH.LOGIN, { 
-      email: email.trim().toLowerCase(), 
-      password 
-    }),
+export interface AdminReviewStats {
+  totalReviews: number;
+  approvedCount: number;
+  pendingCount: number;
+  averageRating: number;
+}
 
-  register: (data: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    password: string;
-    phone?: string;
-  }) => apiClient.post<ApiResponse<AuthResponse>>(API_ENDPOINTS.AUTH.REGISTER, data),
+export interface AdminReviewListResponse {
+  reviews: any[];
+  pagination: { page: number; pages: number; total: number };
+}
 
-  refresh: () => apiClient.post<ApiResponse<{ accessToken: string }>>(API_ENDPOINTS.AUTH.REFRESH),
+// Gallery ────────────────────────────────────────────────────────────────────
 
-  getMe: () => apiClient.get<ApiResponse<{ user: User }>>(API_ENDPOINTS.AUTH.ME),
+export const galleryApi = {
+  list: (params?: { page?: number; limit?: number; type?: 'image' | 'video'; category?: string; featured?: boolean }) =>
+    apiClient.get<any>(API_ENDPOINTS.GALLERY.LIST, { params }),
 
-  logout: () => apiClient.post<ApiResponse>(API_ENDPOINTS.AUTH.LOGOUT),
+  get: (id: string) =>
+    apiClient.get<any>(`/gallery/${id}`),
 
-  forgotPassword: (email: string) =>
-    apiClient.post<ApiResponse & { devOtp?: string; expiresIn?: number }>(
-      API_ENDPOINTS.AUTH.FORGOT_PASSWORD,
-      { email }
-    ),
+  adminList: (params?: { page?: number; limit?: number; type?: string; category?: string; isPublished?: boolean }) =>
+    apiClient.get<any>(API_ENDPOINTS.GALLERY.ADMIN_LIST, { params }),
 
-  resetPassword: (token: string, password: string) =>
-    apiClient.patch<ApiResponse<AuthResponse>>(API_ENDPOINTS.AUTH.RESET_PASSWORD(token), { password }),
+  adminStats: () =>
+    apiClient.get<any>(API_ENDPOINTS.GALLERY.ADMIN_STATS),
 
-  resetPasswordWithOtp: (payload: { email: string; otp: string; password: string }) =>
-    apiClient.post<ApiResponse>('/auth/reset-password-otp', payload),
-};
-
-// ============================================================================
-// 🔹 PRODUCT SERVICES
-// ============================================================================
-
-export const productApi = {
-  getProducts: (filters?: ProductFilters) =>
-    apiClient.get<PaginatedResponse<Product>>(API_ENDPOINTS.PRODUCTS.LIST, {
-      params: filters,
-    }),
-
-  getProduct: async (slug: string): Promise<Product> => {
-    const response = await apiClient.get<ApiResponse<{ product: Product }>>(
-      API_ENDPOINTS.PRODUCTS.DETAIL(slug)
-    );
-    
-    // ✅ Extraire le produit selon le format de réponse
-    if ('product' in response && response.product) return response.product;
-    if ('data' in response && response.data && typeof response.data === 'object' && '_id' in response.data) {
-      return response.data as unknown as Product;
-    }
-    if (response && typeof response === 'object' && ('_id' in response || 'id' in response)) {
-      return response as unknown as Product;
-    }
-    throw new Error('Format de réponse produit invalide');
+  uploadMedia: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.upload<any>(API_ENDPOINTS.GALLERY.ADMIN_UPLOAD, fd);
   },
 
-  createProduct: (data: Omit<Product, '_id' | 'slug' | 'createdAt' | 'updatedAt'>, files?: File[]) => {
-    const formData = new FormData();
-    
+  create: (data: CreateGalleryItemPayload, file?: File) => {
+    if (!file) {
+      return apiClient.post<any>(API_ENDPOINTS.GALLERY.ADMIN_ITEM, data);
+    }
+    const fd = new FormData();
     Object.entries(data).forEach(([key, value]) => {
       if (value == null) return;
-      if (value instanceof File) {
-        formData.append(key, value);
-      } else if (Array.isArray(value) || typeof value === 'object') {
-        formData.append(key, JSON.stringify(value));
+      if (Array.isArray(value) || typeof value === 'object') {
+        fd.append(key, JSON.stringify(value));
       } else {
-        formData.append(key, String(value));
+        fd.append(key, String(value));
       }
     });
-    
-    files?.forEach((file) => formData.append('images', file));
-    
-    return apiClient.upload<ApiResponse<{ product: Product }>>(API_ENDPOINTS.PRODUCTS.CREATE, formData);
+    fd.append('file', file);
+    return apiClient.upload<any>(API_ENDPOINTS.GALLERY.ADMIN_ITEM, fd);
   },
 
-  updateProduct: (id: string, data: Partial<Product>, files?: File[]) => {
-    const formData = new FormData();
-    
-    Object.entries(data).forEach(([key, value]) => {
-      if (value == null) return;
-      if (value instanceof File) {
-        formData.append(key, value);
-      } else if (Array.isArray(value) || typeof value === 'object') {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        formData.append(key, String(value));
-      }
-    });
-    
-    files?.forEach((file) => formData.append('images', file));
-    
-    return apiClient.patch<ApiResponse<{ product: Product }>>(API_ENDPOINTS.PRODUCTS.UPDATE(id), formData);
-  },
-
-  deleteProduct: (id: string) =>
-    apiClient.delete<ApiResponse>(API_ENDPOINTS.PRODUCTS.DELETE(id)),
-
-  deleteProductImage: (productId: string, imageIndex: number) =>
-    apiClient.delete<ApiResponse<{ images: Image[] }>>(
-      API_ENDPOINTS.PRODUCTS.DELETE_IMAGE(productId, imageIndex)
-    ),
-
-  getFeatured: (limit?: number) =>
-    apiClient.get<ApiResponse<{ products: Product[] }>>(API_ENDPOINTS.PRODUCTS.FEATURED, {
-      params: { limit },
-    }),
-
-  search: (query: string, filters?: Omit<ProductFilters, 'search'>) =>
-    apiClient.get<PaginatedResponse<Product>>(API_ENDPOINTS.PRODUCTS.SEARCH, {
-      params: { search: query, ...filters },
-    }),
-};
-
-// ============================================================================
-// 🔹 CATEGORY SERVICES
-// ============================================================================
-
-export const categoryApi = {
-  getCategories: (params?: { parent?: string; active?: boolean }) =>
-    apiClient.get<ApiResponse<{ categories: Category[] }>>(API_ENDPOINTS.CATEGORIES.LIST, { params }),
-
-  getCategory: (slug: string) =>
-    apiClient.get<ApiResponse<{ category: Category }>>(API_ENDPOINTS.CATEGORIES.DETAIL(slug)),
-
-  createCategory: (data: Omit<Category, '_id' | 'createdAt' | 'updatedAt'>) =>
-    apiClient.post<ApiResponse<{ category: Category }>>(API_ENDPOINTS.CATEGORIES.CREATE, data),
-
-  updateCategory: (id: string, data: Partial<Category>) =>
-    apiClient.patch<ApiResponse<{ category: Category }>>(API_ENDPOINTS.CATEGORIES.UPDATE(id), data),
-
-  deleteCategory: (id: string) =>
-    apiClient.delete<ApiResponse>(API_ENDPOINTS.CATEGORIES.DELETE(id)),
-};
-
-// ============================================================================
-// 🔹 CART SERVICES — ✅ CORRECTIONS CRITIQUES
-// ============================================================================
-
-export const cartApi = {
-  getCart: () => apiClient.get<ApiResponse<{ cart: Cart }>>(API_ENDPOINTS.CART.GET),
-
-  // ✅ CORRECTION : Accepter un objet options + filtrer les undefined
-  addItem: (productId: string, options: CartItemOptions = {}) => {
-    const { variantId, size, color, quantity = 1 } = options;
-    
-    // ✅ Ne pas envoyer les champs undefined/null au backend
-    const payload: Record<string, any> = { product: productId, quantity };
-    if (variantId) payload.variantId = variantId;
-    if (size) payload.size = size;
-    if (color) payload.color = color;
-    
-    return apiClient.post<ApiResponse<{ cart: Cart }>>(API_ENDPOINTS.CART.ADD_ITEM, payload);
-  },
-
-  updateItem: (itemId: string, quantity: number) =>
-    apiClient.patch<ApiResponse<{ cart: Cart }>>(API_ENDPOINTS.CART.UPDATE_ITEM(itemId), { quantity }),
-
-  removeItem: (itemId: string) =>
-    apiClient.delete<ApiResponse<{ cart: Cart }>>(API_ENDPOINTS.CART.REMOVE_ITEM(itemId)),
-
-  applyCoupon: (code: string) =>
-    apiClient.post<ApiResponse<{ cart: Cart; discount: number }>>(API_ENDPOINTS.CART.APPLY_COUPON, { 
-      code: code.toUpperCase() 
-    }),
-
-  removeCoupon: () =>
-    apiClient.delete<ApiResponse<{ cart: Cart }>>(API_ENDPOINTS.CART.REMOVE_COUPON),
-
-  clearCart: () => apiClient.delete<ApiResponse<{ message: string }>>(API_ENDPOINTS.CART.CLEAR),
-};
-
-// ============================================================================
-// 🔹 ORDER SERVICES
-// ============================================================================
-
-export const orderApi = {
-  createOrder: (payload: CreateOrderPayload) =>
-    apiClient.post<ApiResponse<{ order: Order }>>(API_ENDPOINTS.ORDERS.CREATE, payload),
-
-  getMyOrders: (filters?: Omit<OrderFilters, 'user'>) =>
-    apiClient.get<PaginatedResponse<Order>>(API_ENDPOINTS.ORDERS.LIST_MY, {
-      params: filters,
-    }),
-
-  getOrder: (id: string) =>
-    apiClient.get<ApiResponse<{ order: Order }>>(API_ENDPOINTS.ORDERS.DETAIL(id)),
-
-  getAllOrders: (filters?: OrderFilters) =>
-    apiClient.get<PaginatedResponse<Order>>(API_ENDPOINTS.ORDERS.LIST_ALL, {
-      params: filters,
-    }),
-
-  updateOrderStatus: (id: string, status: string, note?: string, trackingNumber?: string) =>
-    apiClient.patch<ApiResponse<{ order: Order }>>(API_ENDPOINTS.ORDERS.UPDATE_STATUS(id), {
-      status,
-      note,
-      trackingNumber,
-    }),
-
-  getOrderStats: (params?: { days?: number }) =>
-    apiClient.get<ApiResponse<{
-      stats: {
-        totalOrders: number;
-        totalRevenue: number;
-        avgOrder: number;
-        byStatus: Array<{ _id: string; count: number }>;
-        revenueTrend: Array<{ date: string; revenue: number; orders: number }>;
-      };
-    }>>(API_ENDPOINTS.ORDERS.STATS, { params }),
-
-  cancelOrder: (id: string, reason?: string) =>
-    apiClient.patch<ApiResponse<{ order: Order }>>(API_ENDPOINTS.ORDERS.CANCEL(id), { reason }),
-
-  deleteOrder: (id: string) =>
-    apiClient.delete<ApiResponse>(API_ENDPOINTS.ORDERS.DETAIL(id)),
-
-  // ✅ NOUVEAU : Vérification publique du paiement (SANS AUTH)
-  verifyPaymentPublic: async (params: {
-    orderId?: string | null;
-    merchantTransactionId?: string | null;
-    transactionId?: string | null;
-  }) => {
-    const { orderId, merchantTransactionId, transactionId } = params;
-    
-    // ✅ L'API backend attend l'orderId dans l'URL : /orders/verify/:orderId
-    const idToVerify = orderId || merchantTransactionId || transactionId;
-    
-    if (!idToVerify) {
-      throw new Error('Identifiant de commande manquant');
+  update: (id: string, data: Partial<CreateGalleryItemPayload>, file?: File) => {
+    if (!file) {
+      return apiClient.patch<any>(API_ENDPOINTS.GALLERY.ADMIN_DETAIL(id), data);
     }
-    
-    const response = await apiClient.get<any>(`/orders/verify/${idToVerify}`);
-    return response;
-  },
-
-  // ✅ NOUVEAU : Récupérer une commande par ID (admin)
-  getOrderById: async (orderId: string) => {
-    const response = await apiClient.get<ApiResponse<{ order: Order }>>(`/orders/${orderId}`);
-    return response;
-  },
-
-  // ✅ NOUVEAU : Mise à jour du statut avec tracking
-  updateOrderTracking: (id: string, trackingNumber: string) =>
-    apiClient.patch<ApiResponse<{ order: Order }>>(API_ENDPOINTS.ORDERS.UPDATE_STATUS(id), {
-      trackingNumber,
-    }),
-};
-
-// ============================================================================
-// 🔹 REVIEW SERVICES — Version optimisée
-// ============================================================================
-
-export const reviewApi = {
-  // ✅ Liste TOUS les avis (admin)
-  getAllReviews: (params?: {
-    page?: number;
-    limit?: number;
-    approved?: boolean;
-    sortBy?: 'createdAt' | 'rating' | 'helpful';
-    sortOrder?: 'asc' | 'desc';
-  }) => apiClient.get<any>('/reviews', { params }),
-
-  // ✅ Statistiques des avis (admin)
-  getReviewStats: (productId?: string) =>
-    apiClient.get<any>('/reviews/stats', {
-      params: productId ? { productId } : undefined,
-    }),
-
-  // Avis d'un produit spécifique
-  getReviews: (productId: string, params?: {
-    page?: number;
-    limit?: number;
-    sortBy?: 'createdAt' | 'rating';
-    sortOrder?: 'asc' | 'desc';
-  }) => apiClient.get<any>(`/reviews/product/${productId}`, { params }),
-
-  // Créer un avis
-  createReview: (productId: string, data: any) => {
-    const formData = new FormData();
+    const fd = new FormData();
     Object.entries(data).forEach(([key, value]) => {
       if (value == null) return;
-      if (key === 'images' && Array.isArray(value)) {
-        (value as File[]).forEach((file) => formData.append('images', file));
-      } else if (typeof value === 'object') {
-        formData.append(key, JSON.stringify(value));
+      if (Array.isArray(value) || typeof value === 'object') {
+        fd.append(key, JSON.stringify(value));
       } else {
-        formData.append(key, String(value));
+        fd.append(key, String(value));
       }
     });
-    return apiClient.upload<any>(`/reviews/product/${productId}`, formData);
+    fd.append('file', file);
+    return apiClient.patch<any>(API_ENDPOINTS.GALLERY.ADMIN_DETAIL(id), fd);
   },
 
-  // Approuver
-  approveReview: (id: string) =>
-    apiClient.patch<any>(`/reviews/${id}/approve`),
-
-  // Rejeter
-  rejectReview: (id: string) =>
-    apiClient.patch<any>(`/reviews/${id}/reject`),
-
-  // Supprimer
-  deleteReview: (id: string) =>
-    apiClient.delete<any>(`/reviews/${id}`),
-
-  // Marquer comme utile
-  markHelpful: (id: string) =>
-    apiClient.post<any>(`/reviews/${id}/helpful`),
+  remove: (id: string) =>
+    apiClient.delete<any>(API_ENDPOINTS.GALLERY.ADMIN_DETAIL(id)),
 };
 
-// ============================================================================
-// 🔹 COUPON SERVICES
-// ============================================================================
+// Feedback ───────────────────────────────────────────────────────────────────
 
-export const couponApi = {
-  getCoupons: (params?: { active?: boolean; page?: number; limit?: number }) =>
-    apiClient.get<PaginatedResponse<Coupon>>(API_ENDPOINTS.COUPONS.LIST, { params }),
+export const feedbackApi = {
+  categories: () =>
+    apiClient.get<any>(API_ENDPOINTS.FEEDBACKS.CATEGORIES),
 
-  createCoupon: (data: Omit<Coupon, '_id' | 'createdAt' | 'updatedAt' | 'currentUsage'>) =>
-    apiClient.post<ApiResponse<{ coupon: Coupon }>>(API_ENDPOINTS.COUPONS.CREATE, data),
+  list: (params?: { page?: number; limit?: number; category?: FeedbackCategory }) =>
+    apiClient.get<any>(API_ENDPOINTS.FEEDBACKS.LIST, { params }),
 
-  updateCoupon: (id: string, data: Partial<Coupon>) =>
-    apiClient.patch<ApiResponse<{ coupon: Coupon }>>(API_ENDPOINTS.COUPONS.UPDATE(id), data),
+  create: (payload: CreateFeedbackPayload) =>
+    apiClient.post<any>(API_ENDPOINTS.FEEDBACKS.CREATE, payload),
 
-  deleteCoupon: (id: string) =>
-    apiClient.delete<ApiResponse>(API_ENDPOINTS.COUPONS.DELETE(id)),
+  adminList: (params?: { page?: number; limit?: number; status?: FeedbackStatus; category?: FeedbackCategory }) =>
+    apiClient.get<any>(API_ENDPOINTS.FEEDBACKS.ADMIN_LIST, { params }),
 
-  validateCoupon: (code: string, cartTotal: number) =>
-    apiClient.post<ApiResponse<{ valid: boolean; discount?: number; message?: string }>>(
-      API_ENDPOINTS.COUPONS.VALIDATE, 
-      { code, cartTotal }
-    ),
-};
+  adminStats: () =>
+    apiClient.get<any>(API_ENDPOINTS.FEEDBACKS.ADMIN_STATS),
 
-// ============================================================================
-// 🔹 USER SERVICES
-// ============================================================================
+  adminGet: (id: string) =>
+    apiClient.get<any>(API_ENDPOINTS.FEEDBACKS.ADMIN_DETAIL(id)),
 
-export const userApi = {
-  // ─────────────────────────────────────────────────────────────
-  // 🔹 Profil utilisateur
-  // ─────────────────────────────────────────────────────────────
-  
-  getMe: () => apiClient.get<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.ME),
+  adminUpdateStatus: (id: string, body: { status?: FeedbackStatus; isPublic?: boolean; isAnonymous?: boolean; adminResponse?: string }) =>
+    apiClient.patch<any>(API_ENDPOINTS.FEEDBACKS.ADMIN_STATUS(id), body),
 
-  updateMe: (data: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'avatar'>>) =>
-    apiClient.patch<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.UPDATE_ME, data),
-
-  updatePassword: (currentPassword: string, newPassword: string) =>
-    apiClient.patch<ApiResponse>(API_ENDPOINTS.USERS.UPDATE_PASSWORD, { 
-      currentPassword, 
-      newPassword 
-    }),
-
-  uploadAvatar: (file: File) => {
-    const formData = new FormData();
-    formData.append('avatar', file);
-    return apiClient.patch<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.UPLOAD_AVATAR, formData);
-  },
-
-  deleteAvatar: () =>
-    apiClient.delete<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.DELETE_AVATAR),
-
-  // ─────────────────────────────────────────────────────────────
-  // 🔹 Adresses
-  // ─────────────────────────────────────────────────────────────
-  
-  addAddress: (address: Omit<Address, '_id'>) =>
-    apiClient.post<ApiResponse<{ address: Address }>>(API_ENDPOINTS.USERS.ADD_ADDRESS, address),
-
-  updateAddress: (id: string, address: Partial<Address>) =>
-    apiClient.patch<ApiResponse<{ address: Address }>>(API_ENDPOINTS.USERS.UPDATE_ADDRESS(id), address),
-
-  deleteAddress: (id: string) =>
-    apiClient.delete<ApiResponse>(API_ENDPOINTS.USERS.DELETE_ADDRESS(id)),
-
-  // ─────────────────────────────────────────────────────────────
-  // 🔹 Gestion utilisateurs (admin)
-  // ─────────────────────────────────────────────────────────────
-  
-  getUsers: (filters?: { page?: number; limit?: number; search?: string; role?: string }) =>
-    apiClient.get<PaginatedResponse<User>>(API_ENDPOINTS.USERS.LIST, { params: filters }),
-
-  getUser: (id: string) => 
-    apiClient.get<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.DETAIL(id)),
-
-  updateUser: (id: string, data: Partial<User>) =>
-    apiClient.patch<ApiResponse<{ user: User }>>(API_ENDPOINTS.USERS.UPDATE(id), data),
-
-  deleteUser: (id: string) =>
-    apiClient.delete<ApiResponse>(API_ENDPOINTS.USERS.DELETE(id)),
-
-  // ✅ NOUVEAU : Activer/Désactiver un utilisateur (admin)
-  toggleUserStatus: (id: string, isActive: boolean) =>
-    apiClient.patch<ApiResponse<{ user: User; isActive: boolean }>>(
-      `/users/${id}/status`,
-      { isActive }
-    ),
-
-  // ✅ NOUVEAU : Modifier le rôle d'un utilisateur (admin)
-  updateUserRole: (id: string, role: string) =>
-    apiClient.patch<ApiResponse<{ user: User }>>(
-      `/users/${id}/role`,
-      { role }
-    ),
-};
-
-// ============================================================================
-// 🔹 DASHBOARD & ANALYTICS (Admin)
-// ============================================================================
-
-export const dashboardApi = {
-  getStats: (filters?: { startDate?: string; endDate?: string }) =>
-    apiClient.get<ApiResponse<{
-      totalOrders: number;
-      totalRevenue: number;
-      totalProducts: number;
-      totalUsers: number;
-      recentOrders: Array<Pick<Order, '_id' | 'orderNumber' | 'total' | 'status' | 'createdAt'>>;
-      topProducts: Array<Pick<Product, '_id' | 'name' | 'basePrice' | 'soldCount'>>;
-    }>>(API_ENDPOINTS.DASHBOARD.STATS, { params: filters }),
-
-  getSalesTrend: (filters: { startDate: string; endDate: string; granularity?: 'day' | 'week' | 'month' }) =>
-    apiClient.get<ApiResponse<{
-      trend: Array<{ date: string; revenue: number; orders: number }>;
-    }>>(API_ENDPOINTS.DASHBOARD.SALES_TREND, { params: filters }),
-};
-
-// ============================================================================
-// 🔹 SYSTEM & HEALTH
-// ============================================================================
-
-export const systemApi = {
-  health: () => apiClient.get<{ status: string; timestamp: string; uptime: number }>('/health'),
-  config: () => apiClient.get<ApiResponse<{ config: Record<string, any> }>>('/config'),
+  adminRemove: (id: string) =>
+    apiClient.delete<any>(API_ENDPOINTS.FEEDBACKS.ADMIN_DELETE(id)),
 };

@@ -28,7 +28,8 @@ export function useAsync<T>(
       setState({ data: null, loading: false, error });
       throw error;
     }
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps]);
 
   useEffect(() => {
     if (immediate) {

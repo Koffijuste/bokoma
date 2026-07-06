@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Search, ShoppingBag, User, Heart, Menu, X, LogOut, Package,
@@ -23,6 +24,7 @@ import { toast } from 'sonner';
 const NAV_LINKS = [
   { label: 'Accueil', href: '/' },
   { label: 'Boutique', href: ROUTES.PRODUCTS },
+  { label: 'Galerie', href: ROUTES.GALLERY },
   { label: 'Nouveautés', href: `${ROUTES.PRODUCTS}?sort=-createdAt` },
   { label: 'Promotions', href: `${ROUTES.PRODUCTS}?sort=promotions` },
 ];
@@ -146,13 +148,30 @@ export function Header() {
     return (
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 h-16 lg:h-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative w-10 h-10 lg:w-11 lg:h-11 rounded-xl overflow-hidden shadow-lg shadow-accent/30 ring-1 ring-black/5">
+              <Image
+                src="/logo.jpeg"
+                alt="Bokoma"
+                fill
+                sizes="44px"
+                priority
+                className="object-cover"
+              />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-accent to-purple-500 bg-clip-text text-transparent">
-              Bokoma
-            </span>
+            <div className="flex flex-col">
+              <span
+                className="text-2xl lg:text-[1.7rem] leading-none font-bold tracking-tight"
+                style={{ fontFamily: 'var(--font-playfair), Georgia, serif', fontStyle: 'italic' }}
+              >
+                <span className="bg-gradient-to-r from-rose-700 via-red-700 to-rose-900 bg-clip-text text-transparent">
+                  Bokoma
+                </span>
+              </span>
+              <span className="text-[9px] text-muted-foreground font-medium tracking-[0.25em] uppercase -mt-0.5 hidden sm:block">
+                Premium Store
+              </span>
+            </div>
           </Link>
         </div>
       </header>
@@ -180,15 +199,27 @@ export function Header() {
               className="flex items-center gap-3 group"
             >
               <div className="relative">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-accent/30 group-hover:shadow-accent/50 transition-shadow">
-                  <Sparkles className="w-5 h-5 text-white" />
+                <div className="relative w-10 h-10 lg:w-11 lg:h-11 rounded-xl overflow-hidden shadow-lg shadow-rose-900/20 ring-1 ring-black/5 group-hover:shadow-rose-900/40 group-hover:scale-105 transition-all duration-300">
+                  <Image
+                    src="/logo.jpeg"
+                    alt="Bokoma"
+                    fill
+                    sizes="44px"
+                    priority
+                    className="object-cover"
+                  />
                 </div>
               </div>
               <div className="flex flex-col">
-                <span className="text-xl font-bold bg-gradient-to-r from-accent via-purple-500 to-pink-500 bg-clip-text text-transparent tracking-tight">
-                  Bokoma
+                <span
+                  className="text-2xl lg:text-[1.75rem] leading-none font-bold tracking-tight"
+                  style={{ fontFamily: 'var(--font-playfair), Georgia, serif', fontStyle: 'italic' }}
+                >
+                  <span className="bg-gradient-to-r from-rose-700 via-red-700 to-rose-900 bg-clip-text text-transparent">
+                    Bokoma
+                  </span>
                 </span>
-                <span className="text-[10px] text-muted-foreground font-medium tracking-widest uppercase -mt-1 hidden sm:block">
+                <span className="text-[9px] text-muted-foreground font-medium tracking-[0.25em] uppercase -mt-0.5 hidden sm:block">
                   Premium Store
                 </span>
               </div>
@@ -454,11 +485,22 @@ export function Header() {
               {/* Header du menu */}
               <div className="flex items-center justify-between mb-8 -mt-8">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-white" />
+                  <div className="relative w-9 h-9 rounded-lg overflow-hidden shadow-md shadow-rose-900/20 ring-1 ring-black/5">
+                    <Image
+                      src="/logo.jpeg"
+                      alt="Bokoma"
+                      fill
+                      sizes="36px"
+                      className="object-cover"
+                    />
                   </div>
-                  <span className="text-lg font-bold bg-gradient-to-r from-accent to-purple-500 bg-clip-text text-transparent">
-                    Bokoma
+                  <span
+                    className="text-xl leading-none font-bold tracking-tight"
+                    style={{ fontFamily: 'var(--font-playfair), Georgia, serif', fontStyle: 'italic' }}
+                  >
+                    <span className="bg-gradient-to-r from-rose-700 via-red-700 to-rose-900 bg-clip-text text-transparent">
+                      Bokoma
+                    </span>
                   </span>
                 </div>
                 <button

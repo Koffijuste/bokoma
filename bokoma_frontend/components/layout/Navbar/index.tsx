@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
-import { useMounted } from '@/hooks/useMounted';
 import { useWishlist } from '@/hooks/useWishlist';
 import { useCartStore } from '@/store';
 import { ROUTES } from '@/constants';
@@ -32,11 +31,11 @@ const getAvatarUrl = (user: any, size: number = 32): string => {
 export function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const mounted = useMounted();
-  
+
   const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const { wishlist } = useWishlist();
-  const cartCount = useCartStore((state) => state.cartCount);
+  const cart = useCartStore((state) => state.cart);
+  const cartCount = cart?.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) ?? 0;
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);

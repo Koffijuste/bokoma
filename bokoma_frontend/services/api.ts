@@ -161,27 +161,27 @@ class ApiClient {
 
   // ─── Méthodes HTTP ──────────────────────────────────────────────────────────
 
-  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return (await this.client.get<T>(url, config)).data;
   }
 
-  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return (await this.client.post<T>(url, data, config)).data;
   }
 
-  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async patch<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return (await this.client.patch<T>(url, data, config)).data;
   }
 
-  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async put<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return (await this.client.put<T>(url, data, config)).data;
   }
 
-  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return (await this.client.delete<T>(url, config)).data;
   }
 
-  async upload<T>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
+  async upload<T = any>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
     return (await this.client.post<T>(url, formData, config)).data;
   }
 
@@ -296,15 +296,17 @@ export const cartApi = {
 // ── Orders ────────────────────────────────────────────────────────────────────
 export const orderApi = {
   getOrders:       (filters?: OrderFilters) =>
-                     apiClient.get<ApiResponse<{ orders: Order[]; total: number }>>('/orders', { params: filters }),
+                     apiClient.get<ApiResponse<{ orders: Order[]; pagination?: any }>>('/orders', { params: filters }),
+  getAllOrders:    (filters?: OrderFilters) =>
+                     apiClient.get<ApiResponse<{ orders: Order[]; pagination?: any }>>('/orders', { params: filters }),
   getOrder:        (id: string) => apiClient.get<ApiResponse<{ order: Order }>>(`/orders/${id}`),
   getMyOrders:     (filters?: any) =>
-                     apiClient.get<ApiResponse<{ orders: Order[]; total: number }>>('/orders/my', { params: filters }),
+                     apiClient.get<ApiResponse<{ orders: Order[]; pagination?: any }>>('/orders/my', { params: filters }),
   getOrderStats:   (params?: { days?: number }) =>
-                     apiClient.get<ApiResponse<{ stats: any }>>('/orders/stats', { params }),
+                     apiClient.get<ApiResponse<{ stats: any; period?: any }>>('/orders/stats', { params }),
   createOrder:     (payload: any) =>
                      apiClient.post<ApiResponse<{ order: Order; payment?: any }>>('/orders', payload),
-  updateOrderStatus: (id: string, status: OrderStatus, note?: string, trackingNumber?: string) =>
+  updateOrderStatus: (id: string, status: OrderStatus | string, note?: string, trackingNumber?: string) =>
                      apiClient.patch<ApiResponse<{ order: Order }>>(`/orders/${id}/status`, { status, note, trackingNumber }),
   cancelOrder:     (id: string, reason?: string) =>
                      apiClient.patch<ApiResponse<{ order: Order }>>(`/orders/${id}/cancel`, { reason }),
@@ -318,6 +320,20 @@ export const orderApi = {
 };
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
+export interface AdminReviewFilters {
+  page?: number;
+  limit?: number;
+  approved?: boolean;
+  sortBy?: 'createdAt' | 'rating' | 'helpful';
+  sortOrder?: 'asc' | 'desc';
+}
+export interface AdminReviewStats {
+  totalReviews: number;
+  approvedCount: number;
+  pendingCount: number;
+  averageRating: number;
+}
+
 export const reviewApi = {
   getProductReviews: (slug: string, params?: any) =>
     apiClient.get<ApiResponse<{ reviews: Review[]; total: number }>>(`/products/${slug}/reviews`, { params }),
@@ -328,6 +344,16 @@ export const reviewApi = {
   deleteReview:  (id: string) => apiClient.delete<ApiResponse>(`/reviews/${id}`),
   markHelpful:   (id: string) => apiClient.post<ApiResponse<{ review: Review }>>(`/reviews/${id}/helpful`),
   approveReview: (id: string) => apiClient.patch<ApiResponse<{ review: Review }>>(`/reviews/${id}/approve`),
+  // Admin
+  adminList: (params?: AdminReviewFilters) =>
+    apiClient.get<ApiResponse<{ reviews: Review[]; pagination: { page: number; pages: number; total: number } }>>(
+      `/reviews`,
+      { params },
+    ),
+  adminStats: () =>
+    apiClient.get<ApiResponse<AdminReviewStats>>(`/reviews/stats`),
+  rejectReview: (id: string) =>
+    apiClient.patch<ApiResponse<{ review: Review }>>(`/reviews/${id}/reject`),
 };
 
 // ── Coupons ───────────────────────────────────────────────────────────────────

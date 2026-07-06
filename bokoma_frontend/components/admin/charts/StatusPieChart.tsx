@@ -3,7 +3,7 @@
 
 import React from 'react';
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
 } from 'recharts';
 
 interface ChartData {
@@ -12,7 +12,7 @@ interface ChartData {
   color: string;
 }
 
-export default function StatusPieChart({ data }: { data: ChartData[] }) {
+function StatusPieChartImpl({ data }: { data: ChartData[] }) {
   if (!data || data.length === 0) {
     return (
       <div className="h-[320px] flex items-center justify-center text-muted-foreground">
@@ -31,6 +31,7 @@ export default function StatusPieChart({ data }: { data: ChartData[] }) {
           innerRadius={70}
           outerRadius={110}
           paddingAngle={4}
+          isAnimationActive={false}
         >
           {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={entry.color} />
@@ -48,3 +49,6 @@ export default function StatusPieChart({ data }: { data: ChartData[] }) {
     </ResponsiveContainer>
   );
 }
+
+// ✅ Mémoïsation : évite rerender si `data` est identique (référence stable).
+export default React.memo(StatusPieChartImpl);

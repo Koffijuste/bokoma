@@ -68,6 +68,17 @@ export function formatNumber(num: number): string {
   return new Intl.NumberFormat('fr-FR').format(num);
 }
 
+/**
+ * Formate une taille en octets en chaîne lisible (B / KB / MB).
+ * Utilisé par la galerie et tout upload UI.
+ */
+export function formatBytes(bytes: number): string {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export function percentage(value: number, total: number): number {
   return (value / total) * 100;
 }

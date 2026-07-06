@@ -3,11 +3,12 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { 
-  Mail, Phone, MapPin, Facebook, Twitter, Instagram, Linkedin, 
-  Sparkles, CreditCard, Truck, Shield, Headphones, ArrowRight
+import {
+  Mail, Phone, MapPin, Facebook, Twitter, Instagram, Linkedin,
+  Sparkles, CreditCard, Truck, Shield, Headphones, ArrowRight, ImageIcon, MessageSquare
 } from 'lucide-react';
 import { ROUTES } from '@/constants';
+import { CookiePreferencesButton } from '@/components/legal/CookiePreferencesButton';
 
 export function Footer() {
   return (
@@ -120,6 +121,30 @@ export function Footer() {
           </div>
 
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
+            <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">Communauté</h4>
+            <ul className="space-y-2 text-sm">
+              {[
+                { icon: ImageIcon, label: 'Galerie', href: ROUTES.GALLERY, desc: 'Nos créations en images & vidéos' },
+                { icon: MessageSquare, label: 'Votre avis', href: ROUTES.FEEDBACK, desc: 'Suggestions, retours, difficultés' },
+                { icon: Headphones, label: 'FAQ', href: ROUTES.FAQ, desc: 'Questions fréquentes' },
+              ].map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-muted-foreground hover:text-accent transition-colors flex items-start gap-2 group"
+                  >
+                    <link.icon className="w-4 h-4 mt-0.5 shrink-0 group-hover:text-accent transition-colors" />
+                    <span>
+                      <span className="font-medium flex items-center gap-1">{link.label} <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" /></span>
+                      <span className="block text-xs text-muted-foreground/70">{link.desc}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
             <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">Contact</h4>
             <ul className="space-y-3 text-sm">
               <li className="flex items-start gap-3">
@@ -171,6 +196,7 @@ export function Footer() {
             <Link href={ROUTES.FAQ || '/faq'} className="hover:text-accent transition-colors">
               FAQ
             </Link>
+            <CookiePreferencesButton />
           </div>
         </div>
       </div>

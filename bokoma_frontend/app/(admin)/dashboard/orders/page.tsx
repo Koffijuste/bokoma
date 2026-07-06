@@ -1,12 +1,12 @@
 // app/(admin)/dashboard/orders/page.tsx
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { 
-  Loader2, Eye, Package, Truck, CheckCircle, AlertCircle, Clock, 
-  ShoppingBag, User, MapPin, Phone, Mail, CreditCard, FileText,
-  Calendar, Hash, Copy, ExternalLink,
-  Search, Filter, RefreshCw, Bell, BellRing, Trash2, XCircle,
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  Loader2, Eye, Package, Truck, CheckCircle, AlertCircle, Clock,
+  ShoppingBag,
+  Calendar,
+  Search, Filter, RefreshCw, BellRing, Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -81,7 +81,7 @@ const DeleteConfirmModal = ({
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Client</span>
             <span className="font-medium">
-              {order.user?.firstName || order.shipping?.fullName || 'N/A'}
+              {getUserDisplay(order).name}
             </span>
           </div>
           <div className="flex justify-between text-sm">
@@ -157,10 +157,8 @@ export default function OrdersAdminPage() {
 
   const fetchOrders = useCallback(async (): Promise<Order[]> => {
     try {
-      const response = await orderApi.getAllOrders({ page: 1, limit: 50 });
-      const responseData = response?.data || response;
-      const ordersData = responseData?.data || responseData;
-      const ordersList = ordersData?.orders || ordersData || [];
+      const response: any = await orderApi.getAllOrders({ page: 1, limit: 50 });
+      const ordersList = response?.data?.orders || response?.orders || [];
       return Array.isArray(ordersList) ? ordersList : [];
     } catch (err: any) {
       console.error('❌ Error fetching orders:', err);
@@ -168,6 +166,16 @@ export default function OrdersAdminPage() {
       return [];
     }
   }, []);
+
+  const getUserDisplay = (order: Order): { name: string; email: string } => {
+    const u: any = typeof order.user === 'object' && order.user !== null ? order.user : {};
+    return {
+      name: u.firstName
+        ? `${u.firstName} ${u.lastName || ''}`.trim()
+        : u.name || order.shipping?.fullName || 'Client',
+      email: u.email || order.shipping?.phone || '—',
+    };
+  };
 
   const handleNewOrder = useCallback((order: Order) => {
     toast.success('🎉 Nouvelle commande !', {
@@ -213,8 +221,8 @@ export default function OrdersAdminPage() {
       await orderApi.updateOrderStatus(orderId, newStatus);
       toast.success(`Statut mis à jour: ${newStatus}`);
       setMessage(`✅ Statut mis à jour avec succès`);
-      
-      setSelectedOrder(prev => prev ? { ...prev, status: newStatus } : null);
+
+      setSelectedOrder(prev => prev ? { ...prev, status: newStatus as Order['status'] } : null);
       setTimeout(() => setMessage(null), 3000);
       await refresh();
     } catch (err: any) {
@@ -281,19 +289,15 @@ export default function OrdersAdminPage() {
     );
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} copié`);
-  };
-
   const filteredOrders = useMemo(() => orders.filter(order => {
-    const matchesSearch = searchQuery === '' || 
+    const u: any = typeof order.user === 'object' && order.user !== null ? order.user : {};
+    const matchesSearch = searchQuery === '' ||
       order.orderNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.user?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.shipping?.fullName?.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   }), [orders, searchQuery, statusFilter]);
 
@@ -516,13 +520,9 @@ export default function OrdersAdminPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div>
-                          <p className="font-medium text-sm">
-                            {order.user?.firstName 
-                              ? `${order.user.firstName} ${order.user.lastName || ''}`
-                              : order.user?.name || order.shipping?.fullName || 'Client'}
-                          </p>
+                          <p className="font-medium text-sm">{getUserDisplay(order).name}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {order.user?.email || order.shipping?.phone || '—'}
+                            {getUserDisplay(order).email}
                           </p>
                         </div>
                       </td>
@@ -631,11 +631,9 @@ export default function OrdersAdminPage() {
                         #{order.orderNumber || order._id?.slice(-6)}
                       </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {order.user?.firstName 
-                        ? `${order.user.firstName} ${order.user.lastName || ''}`
-                        : order.shipping?.fullName || 'Client'}
-                    </p>
+<p className="text-xs text-muted-foreground">
+                        {getUserDisplay(order).name}
+                      </p>
                   </div>
                   {getStatusBadge(order.status, 'sm')}
                 </div>
