@@ -1,0 +1,25 @@
+node_modules
+.next
+out
+build
+dist
+coverage
+
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+.vscode
+.idea
+
+README.md
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+.DS_Store

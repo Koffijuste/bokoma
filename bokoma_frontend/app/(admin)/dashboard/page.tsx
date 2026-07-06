@@ -15,7 +15,6 @@ import { formatPrice, formatDate } from '@/utils/helpers';
 import { ROUTES } from '@/constants';
 import { PaymentAlerts } from '@/components/admin/PaymentAlerts';
 import { usePaymentNotifications } from '@/hooks/usePaymentNotifications';
-// ✅ IMPORT DYNAMIQUE des composants de graphiques (client-only)
 import dynamic from 'next/dynamic';
 
 const RevenueChart = dynamic(

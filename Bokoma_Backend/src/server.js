@@ -1,4 +1,10 @@
 // src/server.js
+
+//const dns = require('dns');
+//dns.setDefaultResultOrder('ipv4first'); // ✅ Force IPv4 (résout ECONNREFUSED sur certains réseaux)
+//dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']); // ✅ Force Google DNS + Cloudflare
+
+
 require('dotenv').config();
 
 const express    = require('express');
@@ -23,9 +29,12 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       'default-src': ["'self'"],
-      'script-src':  ["'self'", "'unsafe-inline'", 'https:'],
+      // CinetPay injecte un script sur la page de paiement
+      'script-src':  ["'self'", "'unsafe-inline'", 'https:', 'https://cdn.cinetpay.com'],
       'img-src':     ["'self'", 'data:', 'blob:', 'https:', 'res.cloudinary.com'],
       'style-src':   ["'self'", "'unsafe-inline'", 'https:'],
+      // CinetPay redirige vers des URLs externes (frame + popup)
+      'frame-src':   ["'self'", 'https://*.cinetpay.com', 'https://*.cinetpay.net'],
       'connect-src': ["'self'", 'https:', 'http://localhost:*'],
     },
   },
@@ -34,12 +43,41 @@ app.use(helmet({
 }));
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
+// ✅ Autorise plusieurs origines : localhost (dev) + URL Railway frontend (prod)
+//    + toutes les previews Railway (*.up.railway.app)
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+].filter(Boolean);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // Server-to-server / curl sans Origin
+  if (allowedOrigins.includes(origin)) return true;
+  if (/\.up\.railway\.app$/.test(origin)) return true; // Previews Railway
+  if (/\.vercel\.app$/.test(origin))     return true; // Previews Vercel
+  return false;
+};
+
 app.use(cors({
-  origin:         process.env.CLIENT_URL || 'http://localhost:3000',
+  origin:         (origin, cb) => (isAllowedOrigin(origin) ? cb(null, true) : cb(new Error('Not allowed by CORS'))),
   credentials:    true,
   methods:        ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+// ─── Webhook raw body (avant express.json) ───────────────────────────────────
+// Le webhook CinetPay a besoin du body brut pour vérifier la signature HMAC.
+// On capture le raw body ici et on le rend dispo à req.rawBody dans le handler.
+app.use(
+  '/api/v1/webhook',
+  express.json({
+    limit: '1mb',
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  }),
+);
 
 // ─── Parsers ──────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));           // ✅ 100mb → 10mb (sécurité)
@@ -56,7 +94,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // ─── Rate Limiters ────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders:   false,
   message: { success: false, message: 'Trop de requêtes, réessayez plus tard.' },
@@ -64,7 +102,7 @@ const apiLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders:   false,
   message: { success: false, message: 'Trop de tentatives, réessayez dans quelques minutes.' },

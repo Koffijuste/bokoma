@@ -2,7 +2,8 @@
 const router = require('express').Router();
 const ctrl = require('../controllers/coupon.controller');
 const { protect, authorize } = require('../middlewares/auth');
-const validateObjectId = require('../middlewares/validateObjectId'); // ← NOUVEAU
+const validateObjectId = require('../middlewares/validateObjectId');
+const { validateCoupon } = require('../validators/coupon.validator');
 
 // Route publique (ou protégée) pour valider un code promo
 router.post('/validate', protect, ctrl.validateCoupon);
@@ -11,16 +12,17 @@ router.post('/validate', protect, ctrl.validateCoupon);
 router.use(protect, authorize('admin'));
 
 router.get('/', ctrl.getCoupons);
-router.post('/', ctrl.createCoupon);
+router.post('/', validateCoupon, ctrl.createCoupon);
 
-// ✅ VALIDATION: :id doit être un ObjectId valide
+// ✅ VALIDATION + ObjectId
 router.patch('/:id', 
-  validateObjectId('id'), // ← Middleware validation
+  validateObjectId('id'),
+  validateCoupon,
   ctrl.updateCoupon
 );
 
 router.delete('/:id', 
-  validateObjectId('id'), // ← Middleware validation
+  validateObjectId('id'),
   ctrl.deleteCoupon
 );
 

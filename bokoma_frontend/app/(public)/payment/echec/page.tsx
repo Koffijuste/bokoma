@@ -1,13 +1,19 @@
-// app/(public)/payment/failed/page.tsx
+// app/(public)/payment/echec/page.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { XCircle, RefreshCw, ShoppingCart, HeadphonesIcon } from 'lucide-react';
+import { XCircle, RefreshCw, ShoppingCart, HeadphonesIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { orderApi } from '@/services';
 import { ROUTES } from '@/constants';
+
+const POPUP_CLOSE_DELAY = 2000; // ms avant auto-close popup
+
+function isOpenedInPopup(): boolean {
+  if (typeof window === 'undefined') return false;
+  return Boolean(window.opener) && !window.opener.closed && window.opener !== window;
+}
 
 export default function PaymentFailedPage() {
   const params  = useSearchParams();
@@ -15,9 +21,11 @@ export default function PaymentFailedPage() {
   const orderId = params.get('orderId');
 
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const [openedInPopup, setOpenedInPopup] = useState(false);
+  const [closing, setClosing] = useState(false);
 
+  // ── Récupère le numéro de commande + détecte le mode d'ouverture ───────────
   useEffect(() => {
-    // Récupérer le numéro de commande depuis sessionStorage
     if (typeof sessionStorage !== 'undefined') {
       const stored = sessionStorage.getItem('bokoma_pending_order');
       if (stored) {
@@ -28,7 +36,24 @@ export default function PaymentFailedPage() {
         sessionStorage.removeItem('bokoma_pending_order');
       }
     }
+    setOpenedInPopup(isOpenedInPopup());
   }, []);
+
+  // ── Si ouvert en popup, on notifie le parent et on se ferme après 2s ───────
+  useEffect(() => {
+    if (!openedInPopup || !window.opener) return;
+    setClosing(true);
+    try {
+      window.opener.postMessage(
+        { type: 'bokoma_payment_failed', orderId, orderNumber },
+        window.location.origin,
+      );
+    } catch {}
+    const t = window.setTimeout(() => {
+      try { window.close(); } catch {}
+    }, POPUP_CLOSE_DELAY);
+    return () => clearTimeout(t);
+  }, [openedInPopup, orderId, orderNumber]);
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-background">
@@ -63,22 +88,30 @@ export default function PaymentFailedPage() {
             </ul>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button
-              variant="primary"
-              className="flex-1 gap-2"
-              onClick={() => router.push('/checkout')}
-            >
-              <RefreshCw className="w-4 h-4" />
-              Réessayer
-            </Button>
-            <Link href={ROUTES.HOME} className="flex-1">
-              <Button variant="outline" className="w-full gap-2">
-                <ShoppingCart className="w-4 h-4" />
-                Retour à l'accueil
+          {/* Si ouvert en popup : message de fermeture */}
+          {closing && openedInPopup ? (
+            <div className="flex items-center justify-center gap-2 p-3 bg-muted rounded-xl text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Cette fenêtre se ferme automatiquement...
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                variant="primary"
+                className="flex-1 gap-2"
+                onClick={() => router.push('/checkout')}
+              >
+                <RefreshCw className="w-4 h-4" />
+                Réessayer
               </Button>
-            </Link>
-          </div>
+              <Link href={ROUTES.HOME} className="flex-1">
+                <Button variant="outline" className="w-full gap-2">
+                  <ShoppingCart className="w-4 h-4" />
+                  Retour à l'accueil
+                </Button>
+              </Link>
+            </div>
+          )}
 
           <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
             <HeadphonesIcon className="w-3 h-3" />

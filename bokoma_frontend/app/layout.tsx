@@ -11,14 +11,14 @@ const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
   display: 'swap',
+  preload: true,
 });
 
 const poppins = Poppins({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700', '800'],
+  weight: ['400', '600', '700'],
   variable: '--font-poppins',
   display: 'swap',
-  adjustFontFallback: false, // ✅ désactive le calcul de fallback qui trigger le bug
   preload: true,
 });
 
@@ -53,8 +53,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    // suppressHydrationWarning évite le flash du thème sombre/clair
     <html lang="fr" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+      </head>
       <body
         className={`
           ${inter.variable} ${poppins.variable}

@@ -57,16 +57,34 @@ const sendWelcomeEmail = (user) =>
     `),
   });
 
-const sendPasswordReset = (user, resetUrl) =>
+const sendPasswordReset = (user, resetUrl, otpCode) =>
   sendEmail({
     to: user.email,
     subject: 'Réinitialisation de votre mot de passe',
     html: baseTemplate('Mot de passe oublié ?', `
       <p>Bonjour <strong>${user.firstName}</strong>,</p>
-      <p>Cliquez sur le bouton ci-dessous pour réinitialiser votre mot de passe.
-         Ce lien expire dans <strong>10 minutes</strong>.</p>
-      <a href="${resetUrl}" class="btn">Réinitialiser mon mot de passe</a>
-      <p style="font-size:13px;color:#999">Si vous n'avez pas fait cette demande, ignorez cet email.</p>
+      <p>Utilisez le <strong>code à 6 chiffres</strong> ci-dessous pour réinitialiser
+         votre mot de passe. Ce code expire dans <strong>10 minutes</strong>.</p>
+
+      <div style="background:#fafafa;border:2px dashed #1a1a1a;border-radius:8px;
+                  padding:20px;margin:20px auto;text-align:center;max-width:320px;">
+        <p style="margin:0 0 8px 0;font-size:12px;color:#666;letter-spacing:1px;text-transform:uppercase;">
+          Votre code OTP
+        </p>
+        <div style="font-size:36px;font-weight:bold;letter-spacing:8px;
+                    font-family:'Courier New',monospace;color:#1a1a1a;">
+          ${otpCode}
+        </div>
+      </div>
+
+      <p style="text-align:center;margin:24px 0;">
+        <a href="${resetUrl}" class="btn">Ou cliquez ici pour réinitialiser</a>
+      </p>
+
+      <p style="font-size:13px;color:#999">
+        Si vous n'avez pas fait cette demande, ignorez cet email.
+        Votre mot de passe restera inchangé.
+      </p>
     `),
   });
 

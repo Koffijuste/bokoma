@@ -1,12 +1,10 @@
-'use client';
-
 import React from 'react';
-import { motion } from 'framer-motion';
 
 interface BadgeProps {
   children: React.ReactNode;
-  variant?: 'default' | 'primary' | 'secondary' | 'accent' | 'destructive';
+  variant?: 'default' | 'primary' | 'secondary' | 'accent' | 'destructive' | 'outline';
   size?: 'sm' | 'md';
+  className?: string;
 }
 
 const variants = {
@@ -15,6 +13,7 @@ const variants = {
   secondary: 'bg-gray-500/10 text-gray-500',
   accent: 'bg-accent/10 text-accent',
   destructive: 'bg-destructive/10 text-destructive',
+  outline: 'border border-border bg-background text-foreground',
 };
 
 const sizes = {
@@ -26,18 +25,18 @@ export function Badge({
   children,
   variant = 'default',
   size = 'sm',
+  className,
 }: BadgeProps) {
   return (
-    <motion.span
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
+    <span
       className={`
         inline-block rounded-full font-medium
         ${variants[variant]}
         ${sizes[size]}
+        ${className || ''}
       `}
     >
       {children}
-    </motion.span>
+    </span>
   );
 }

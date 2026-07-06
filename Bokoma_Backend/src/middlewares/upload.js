@@ -73,13 +73,10 @@ const tempUpload = multer({
 
 const cleanupTempFiles = async (files) => {
   if (!files || files.length === 0) return;
-  
+
   const urls = files.map(f => f.path || f.url).filter(Boolean);
   if (urls.length > 0) {
-    console.log(`🗑️ [Upload] Cleaning up ${urls.length} file(s) from Cloudinary`);
-    await deleteImages(urls).catch(err => {
-      console.warn('⚠️ [Upload] Cleanup failed:', err.message);
-    });
+    await deleteImages(urls).catch(() => undefined);
   }
 };
 
@@ -90,8 +87,8 @@ const normalizePath = (filePath) => filePath?.replace(/\\/g, '/') || filePath;
 // ============================================================================
 
 const handleMulterError = (err, req, res, next) => {
-  if (req.files) cleanupTempFiles(req.files).catch(console.error);
-  else if (req.file) cleanupTempFiles([req.file]).catch(console.error);
+  if (req.files) cleanupTempFiles(req.files).catch(() => undefined);
+  else if (req.file) cleanupTempFiles([req.file]).catch(() => undefined);
 
   if (err instanceof multer.MulterError) {
     const errorMessages = {
@@ -102,7 +99,6 @@ const handleMulterError = (err, req, res, next) => {
     };
 
     const message = errorMessages[err.code] || err.message;
-    console.error('❌ [MulterError]', err.code, err.message);
 
     return res.status(400).json({
       success: false,
@@ -110,15 +106,14 @@ const handleMulterError = (err, req, res, next) => {
       error: err.code,
     });
   }
-  
+
   if (err.message) {
-    console.error('❌ [UploadError]', err.message);
     return res.status(400).json({
       success: false,
       message: err.message,
     });
   }
-  
+
   next(err);
 };
 
@@ -138,29 +133,10 @@ const createSafeNext = (res, next) => {
       };
 };
 
-// const uploadSingle = (req, res, next) => {
-//   const safeNext = createSafeNext(res, next);
-//   avatarUpload.single('avatar')(req, res, (err) => {
-//     if (err) return handleMulterError(err, req, res, safeNext);
-//     if (req.file) console.log('✅ [Upload] Avatar uploaded:', req.file.path);
-//     safeNext();
-//   });
-// };
-
 const uploadSingle = (req, res, next) => {
-  console.log('📥 [uploadSingle] Requête reçue');
-  console.log('📋 Content-Type:', req.headers['content-type']);
-  console.log('📋 Headers:', Object.keys(req.headers));
-  
   const safeNext = createSafeNext(res, next);
   avatarUpload.single('avatar')(req, res, (err) => {
-    if (err) {
-      console.log('❌ [uploadSingle] Erreur multer:', err.message, err.code);
-      return handleMulterError(err, req, res, safeNext);
-    }
-    console.log('📎 [uploadSingle] req.file:', req.file);
-    console.log('📎 [uploadSingle] req.body:', req.body);
-    if (req.file) console.log('✅ [Upload] Avatar uploaded:', req.file.path);
+    if (err) return handleMulterError(err, req, res, safeNext);
     safeNext();
   });
 };
@@ -169,10 +145,6 @@ const uploadMultiple = (req, res, next) => {
   const safeNext = createSafeNext(res, next);
   productUpload.array('images', 10)(req, res, (err) => {
     if (err) return handleMulterError(err, req, res, safeNext);
-    if (req.files && req.files.length > 0) {
-      console.log(`✅ [Upload] ${req.files.length} product image(s) uploaded to Cloudinary`);
-      req.files.forEach((file, i) => console.log(`   [${i + 1}] ${file.path}`));
-    }
     safeNext();
   });
 };
@@ -181,7 +153,6 @@ const uploadCategory = (req, res, next) => {
   const safeNext = createSafeNext(res, next);
   categoryUpload.single('image')(req, res, (err) => {
     if (err) return handleMulterError(err, req, res, safeNext);
-    if (req.file) console.log('✅ [Upload] Category image uploaded:', req.file.path);
     safeNext();
   });
 };
@@ -190,7 +161,6 @@ const uploadTemp = (req, res, next) => {
   const safeNext = createSafeNext(res, next);
   tempUpload.single('file')(req, res, (err) => {
     if (err) return handleMulterError(err, req, res, safeNext);
-    if (req.file) console.log('✅ [Upload] Temp file uploaded:', req.file.path);
     safeNext();
   });
 };

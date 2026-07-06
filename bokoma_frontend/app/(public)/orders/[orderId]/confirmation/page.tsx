@@ -1,14 +1,14 @@
 // app/(public)/orders/[orderId]/confirmation/page.tsx
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { 
   CheckCircle, Download, Printer, Share2, ArrowLeft, Package, 
   CreditCard, Truck, Calendar, Mail, Phone, MapPin, Copy, ExternalLink,
-  Clock, ShoppingBag, Sparkles, Gift, ShieldCheck, QrCode, Image as ImageIcon
+  Clock, ShoppingBag, Sparkles, Gift, ShieldCheck, Image as ImageIcon,
+  RefreshCw, XCircle, AlertCircle, Receipt
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -21,24 +21,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMounted } from '@/hooks/useMounted';
 import { orderApi } from '@/services';
 import { ROUTES } from '@/constants';
-import { formatPrice, formatDate } from '@/utils/helpers';
-import { cn } from '@/utils/helpers';
+import { formatPrice, formatDate, cn } from '@/utils/helpers';
 import type { Order } from '@/types';
-
-// ✅ QR Code avec chargement dynamique
-const QRCode = dynamic(() => import('react-qr-code'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-[160px] h-[160px] bg-muted animate-pulse rounded-xl flex items-center justify-center">
-      <QrCode className="w-8 h-8 text-muted-foreground" />
-    </div>
-  )
-});
 
 // ============================================================================
 // 🔹 COMPOSANT : Image Produit avec Fallback
 // ============================================================================
-const ProductImage = memo(({ 
+const ProductImage = React.memo(({ 
   src, 
   alt, 
   size = 'md' 
@@ -87,11 +76,54 @@ const ProductImage = memo(({
     </div>
   );
 });
+ProductImage.displayName = 'ProductImage';
+
+// ============================================================================
+// 🔹 COMPOSANT : QR Code via API externe (SANS dépendance)
+// ============================================================================
+const QRCodeImage = React.memo(({ value, size = 160 }: { value: string; size?: number }) => {
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&margin=10&color=1a1a1a&bgcolor=ffffff`;
+  
+  return (
+    <div className="relative group">
+      {/* Décorations */}
+      <div className="absolute -top-2 -left-2 w-6 h-6 border-t-2 border-l-2 border-accent rounded-tl-lg" />
+      <div className="absolute -top-2 -right-2 w-6 h-6 border-t-2 border-r-2 border-accent rounded-tr-lg" />
+      <div className="absolute -bottom-2 -left-2 w-6 h-6 border-b-2 border-l-2 border-accent rounded-bl-lg" />
+      <div className="absolute -bottom-2 -right-2 w-6 h-6 border-b-2 border-r-2 border-accent rounded-br-lg" />
+      
+      <div className="relative p-5 bg-white rounded-2xl shadow-xl shadow-accent/10 border border-border/50">
+        <img 
+          src={qrUrl} 
+          alt="QR Code"
+          width={size}
+          height={size}
+          className="rounded-lg"
+          loading="lazy"
+        />
+        
+        {/* Logo au centre */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center shadow-lg ring-4 ring-white">
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+        </div>
+      </div>
+      
+      {/* Badge de vérification */}
+      <div className="absolute -top-3 -right-3 bg-gradient-to-br from-emerald-500 to-green-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+        <ShieldCheck className="w-3 h-3" />
+        Vérifié
+      </div>
+    </div>
+  );
+});
+QRCodeImage.displayName = 'QRCodeImage';
 
 // ============================================================================
 // 🔹 COMPOSANT : Timeline de Statut
 // ============================================================================
-const StatusTimeline = memo(({ currentStatus }: { currentStatus: string }) => {
+const StatusTimeline = React.memo(({ currentStatus }: { currentStatus: string }) => {
   const steps = [
     { status: 'pending', label: 'Commande', icon: ShoppingBag },
     { status: 'confirmed', label: 'Confirmée', icon: CheckCircle },
@@ -169,53 +201,7 @@ const StatusTimeline = memo(({ currentStatus }: { currentStatus: string }) => {
     </div>
   );
 });
-
-// ============================================================================
-// 🔹 COMPOSANT : QR Code Personnalisé avec Logo
-// ============================================================================
-const CustomQRCode = memo(({ value, verifyUrl }: { value: string; verifyUrl: string }) => {
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(verifyUrl);
-      toast.success('Lien copié !');
-    } catch {
-      toast.error('Impossible de copier');
-    }
-  };
-
-  return (
-    <div className="relative group">
-      {/* Décorations */}
-      <div className="absolute -top-2 -left-2 w-6 h-6 border-t-2 border-l-2 border-accent rounded-tl-lg" />
-      <div className="absolute -top-2 -right-2 w-6 h-6 border-t-2 border-r-2 border-accent rounded-tr-lg" />
-      <div className="absolute -bottom-2 -left-2 w-6 h-6 border-b-2 border-l-2 border-accent rounded-bl-lg" />
-      <div className="absolute -bottom-2 -right-2 w-6 h-6 border-b-2 border-r-2 border-accent rounded-br-lg" />
-      
-      <div className="relative p-5 bg-white rounded-2xl shadow-xl shadow-accent/10 border border-border/50">
-        <QRCode 
-          value={value || verifyUrl}
-          size={160}
-          bgColor="#ffffff"
-          fgColor="#1a1a1a"
-          level="H"
-        />
-        
-        {/* Logo au centre */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center shadow-lg ring-4 ring-white">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-        </div>
-      </div>
-      
-      {/* Badge de vérification */}
-      <div className="absolute -top-3 -right-3 bg-gradient-to-br from-emerald-500 to-green-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
-        <ShieldCheck className="w-3 h-3" />
-        Vérifié
-      </div>
-    </div>
-  );
-});
+StatusTimeline.displayName = 'StatusTimeline';
 
 // ============================================================================
 // 🔹 COMPOSANT PRINCIPAL
@@ -231,151 +217,78 @@ export default function OrderConfirmationPage() {
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [qrCodeValue, setQrCodeValue] = useState('');
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   const verifyUrl = useMemo(() => {
     if (!order?._id) return '';
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
     return `${baseUrl}/verify/${order._id}`;
   }, [order?._id]);
 
   // ============================================================================
   // 🔹 FETCH ORDER DETAILS
   // ============================================================================
-  useEffect(() => {
-    if (!mounted || !orderId) return;
-    
-    const fetchOrder = async () => {
-      try {
-        setLoading(true);
-        const response = await orderApi.getOrder(orderId);
-        const orderData = response.data?.order || response.order;
-        
-        if (orderData.payment?.status === 'failed' || orderData.payment?.status === 'cancelled') {
-          router.replace(`/payment/echec?orderId=${orderId}`);
-          return;
-        }
-
-        setOrder(orderData);
-        
-        // Générer la valeur du QR Code
-        const qrData = JSON.stringify({
-          orderId: orderData?._id,
-          orderNumber: orderData?.orderNumber,
-          total: orderData?.total,
-          date: orderData?.createdAt,
-          customer: user?.email,
-          verifyUrl: `${process.env.NEXT_PUBLIC_APP_URL}/verify/${orderData?._id}`,
-        });
-        setQrCodeValue(qrData);
-        
-      } catch (err) {
-        console.error('❌ Failed to fetch order:', err);
-        toast.error('Impossible de charger les détails de la commande');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchOrder();
-  }, [mounted, orderId, user, router]);
-
-  // ============================================================================
-  // 🔹 DOWNLOAD RECEIPT AS PDF
-  // ============================================================================
-  const downloadReceipt = async () => {
-    if (!order || !receiptRef.current) return;
-    
-    setIsGeneratingPdf(true);
+  const fetchOrder = useCallback(async (showLoader = true) => {
+    if (!orderId) return;
     
     try {
-      const { default: jsPDF } = await import('jspdf');
-      await import('jspdf-autotable');
+      if (showLoader) setLoading(true);
+      const response = await orderApi.getOrder(orderId);
+      const orderData = response.data?.order || response.order;
       
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-      
-      // En-tête
-      doc.setFontSize(20);
-      doc.setFont('helvetica', 'bold');
-      doc.text('REÇU DE COMMANDE', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Bokoma Store`, 105, 30, { align: 'center' });
-      doc.text(`Commande #${order.orderNumber}`, 105, 38, { align: 'center' });
-      
-      // Date
-      doc.setFontSize(10);
-      doc.text(`Date: ${formatDate(order.createdAt)}`, 20, 50);
-      doc.text(`Statut: ${order.status}`, 20, 56);
-      
-      // Client
-      doc.setFont('helvetica', 'bold');
-      doc.text('Client:', 20, 70);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${order.shipping?.fullName || 'N/A'}`, 20, 76);
-      doc.text(`${order.shipping?.street || order.shipping?.address || 'N/A'}`, 20, 82);
-      doc.text(`${order.shipping?.city}, ${order.shipping?.country}`, 20, 88);
-      doc.text(`Tél: ${order.shipping?.phone || 'N/A'}`, 20, 94);
-      
-      // Items tableau
-      const tableData = (order.items || []).map((item: any) => [
-        item.name || 'Produit',
-        `${item.quantity} x ${formatPrice(item.price)}`,
-        formatPrice((item.price || 0) * (item.quantity || 1)),
-      ]);
-      
-      (doc as any).autoTable({
-        startY: 105,
-        head: [['Article', 'Prix unitaire', 'Sous-total']],
-        body: tableData,
-        theme: 'grid',
-        headStyles: { fillColor: [168, 85, 247], textColor: 255 },
-        styles: { fontSize: 9 },
-      });
-      
-      // Totaux
-      const finalY = (doc as any).lastAutoTable.finalY + 10;
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Sous-total: ${formatPrice(order.subtotal)}`, 140, finalY);
-      doc.text(`Livraison: ${formatPrice(order.shippingCost || 0)}`, 140, finalY + 6);
-      if (order.discount > 0) {
-        doc.text(`Remise: -${formatPrice(order.discount)}`, 140, finalY + 12);
+      if (orderData.payment?.status === 'failed' || orderData.status === 'cancelled') {
+        if (showLoader) {
+          router.replace(`/payment/failed?orderId=${orderId}`);
+          return;
+        }
       }
-      doc.setFontSize(14);
-      doc.text(`TOTAL: ${formatPrice(order.total)}`, 140, finalY + 22);
-      
-      // QR Code info
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Scan pour vérifier la commande:', 20, finalY + 40);
-      doc.text(verifyUrl, 20, finalY + 46);
-      
-      // Pied de page
-      doc.setFontSize(9);
-      doc.setTextColor(100);
-      doc.text('Merci pour votre achat !', 105, 280, { align: 'center' });
-      doc.text('Bokoma Store - contact@bokoma.com', 105, 286, { align: 'center' });
-      
-      doc.save(`recu-commande-${order.orderNumber}.pdf`);
-      toast.success('Reçu téléchargé avec succès');
-      
+
+      setOrder(orderData);
+      setLastUpdate(new Date());
     } catch (err) {
-      console.error('❌ PDF generation failed:', err);
-      toast.error('Erreur lors de la génération du PDF');
+      console.error('❌ Failed to fetch order:', err);
+      if (showLoader) toast.error('Impossible de charger les détails');
     } finally {
-      setIsGeneratingPdf(false);
+      setLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, [orderId, router]);
+
+  useEffect(() => {
+    if (!mounted || !orderId) return;
+    fetchOrder();
+  }, [mounted, orderId, fetchOrder]);
 
   // ============================================================================
-  // 🔹 SHARE ORDER
+  // 🔹 POLLING pour mise à jour en temps réel
   // ============================================================================
+  useEffect(() => {
+    if (!order || !mounted) return;
+    
+    // Arrêter le polling si la commande est déjà livrée/annulée
+    if (['delivered', 'cancelled', 'refunded'].includes(order.status)) return;
+    
+    const interval = setInterval(() => {
+      fetchOrder(false);
+    }, 10000); // Toutes les 10 secondes
+    
+    return () => clearInterval(interval);
+  }, [order?.status, mounted, fetchOrder]);
+
+  // ============================================================================
+  // 🔹 ACTIONS
+  // ============================================================================
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchOrder(false);
+    toast.success('Commande actualisée');
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   const shareOrder = async () => {
     if (!order) return;
     
@@ -391,12 +304,17 @@ export default function OrderConfirmationPage() {
         toast.success('Commande partagée !');
       } else {
         await navigator.clipboard.writeText(shareData.url);
-        toast.success('Lien copié dans le presse-papiers');
+        toast.success('Lien copié !');
       }
-    } catch (err) {
+    } catch {
       await navigator.clipboard.writeText(shareData.url);
-      toast.success('Lien copié dans le presse-papiers');
+      toast.success('Lien copié !');
     }
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copié`);
   };
 
   // ============================================================================
@@ -404,7 +322,7 @@ export default function OrderConfirmationPage() {
   // ============================================================================
   if (!mounted || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-background to-accent/5">
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
             <div className="w-16 h-16 border-4 border-accent/20 rounded-full" />
@@ -417,9 +335,6 @@ export default function OrderConfirmationPage() {
     );
   }
 
-  // ============================================================================
-  // 🔹 ERROR STATE
-  // ============================================================================
   if (!order) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
@@ -433,14 +348,10 @@ export default function OrderConfirmationPage() {
           </p>
           <div className="flex gap-3 justify-center">
             <Button asChild>
-              <Link href={ROUTES.USER.PROFILE}>
-                Voir mes commandes
-              </Link>
+              <Link href={ROUTES.USER.PROFILE}>Voir mes commandes</Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link href={ROUTES.PRODUCTS}>
-                Continuer mes achats
-              </Link>
+              <Link href={ROUTES.PRODUCTS}>Continuer mes achats</Link>
             </Button>
           </div>
         </div>
@@ -469,14 +380,34 @@ export default function OrderConfirmationPage() {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5 print:bg-white">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40 print:hidden">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <Link href={ROUTES.USER.PROFILE} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Mes commandes</span>
           </Link>
+          
           <div className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-emerald-500" />
-            <span className="text-sm font-medium text-emerald-600">Paiement confirmé</span>
+            {lastUpdate && (
+              <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>
+                  {new Date(lastUpdate).toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+            )}
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="gap-1.5"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
+              <span className="hidden sm:inline">Actualiser</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -485,7 +416,6 @@ export default function OrderConfirmationPage() {
         
         {/* Success Banner */}
         <div className="mb-8 relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500/10 via-accent/10 to-purple-500/10 border border-emerald-500/20 text-center p-8 animate-in fade-in slide-in-from-top-4 duration-500">
-          {/* Decorative circles */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-accent/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
           
@@ -498,8 +428,6 @@ export default function OrderConfirmationPage() {
             </h1>
             <p className="text-muted-foreground max-w-xl mx-auto">
               Votre commande <span className="font-bold text-foreground">#{order.orderNumber}</span> a été confirmée avec succès.
-              <br className="hidden sm:inline" />
-              Un email de confirmation a été envoyé à <span className="font-medium">{user?.email}</span>
             </p>
           </div>
         </div>
@@ -507,21 +435,25 @@ export default function OrderConfirmationPage() {
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-3 mb-8 justify-center print:hidden animate-in fade-in duration-500 delay-100">
           <Button 
-            onClick={downloadReceipt} 
-            disabled={isGeneratingPdf} 
-            className="gap-2 bg-gradient-to-r from-accent to-purple-500 hover:from-accent/90 hover:to-purple-500/90 shadow-lg shadow-accent/20"
+            onClick={handlePrint}
+            variant="outline" 
+            className="gap-2"
           >
-            {isGeneratingPdf ? (
-              <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Génération...</>
-            ) : (
-              <><Download className="w-4 h-4" /> Télécharger le reçu</>
-            )}
-          </Button>
-          <Button variant="outline" onClick={() => window.print()} className="gap-2">
             <Printer className="w-4 h-4" /> Imprimer
           </Button>
           <Button variant="outline" onClick={shareOrder} className="gap-2">
             <Share2 className="w-4 h-4" /> Partager
+          </Button>
+          <Button 
+            onClick={() => {
+              const text = `Commande #${order.orderNumber}\nTotal: ${formatPrice(order.total)}\nDate: ${formatDate(order.createdAt)}\nStatut: ${status.label}\n\nArticles:\n${order.items?.map(i => `- ${i.name} x${i.quantity}: ${formatPrice(i.price * i.quantity)}`).join('\n')}\n\nVérifier: ${verifyUrl}`;
+              navigator.clipboard.writeText(text);
+              toast.success('Reçu copié !');
+            }}
+            variant="outline"
+            className="gap-2"
+          >
+            <Receipt className="w-4 h-4" /> Copier le reçu
           </Button>
         </div>
 
@@ -557,7 +489,7 @@ export default function OrderConfirmationPage() {
 
               <Separator />
               
-              {/* Items avec images améliorées */}
+              {/* Items */}
               <div>
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4 text-accent" />
@@ -576,20 +508,13 @@ export default function OrderConfirmationPage() {
                         key={item._id || index} 
                         className="group flex gap-4 p-4 rounded-xl bg-gradient-to-br from-muted/50 to-muted/20 border border-border/50 hover:border-accent/30 hover:shadow-md transition-all duration-300"
                       >
-                        {/* Image améliorée */}
-                        <ProductImage 
-                          src={productImage} 
-                          alt={productName}
-                          size="md"
-                        />
+                        <ProductImage src={productImage} alt={productName} size="md" />
                         
-                        {/* Infos produit */}
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-base line-clamp-2 group-hover:text-accent transition-colors">
                             {productName}
                           </h4>
                           
-                          {/* Variantes */}
                           {(item.size || item.color) && (
                             <div className="flex flex-wrap gap-2 mt-2">
                               {item.size && (
@@ -605,7 +530,6 @@ export default function OrderConfirmationPage() {
                             </div>
                           )}
                           
-                          {/* Prix et quantité */}
                           <div className="flex items-center justify-between mt-3">
                             <p className="text-sm text-muted-foreground">
                               <span className="font-medium text-foreground">{item.quantity}</span> × {formatPrice(item.price)}
@@ -657,15 +581,48 @@ export default function OrderConfirmationPage() {
                       {formatPrice(order.total)}
                     </span>
                   </div>
-                  {order.payment?.method === 'cash_on_delivery' && order.payment?.amountPaid > 0 && (
-                    <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400">
-                      <p className="font-medium">💰 Paiement à la livraison</p>
-                      <p className="mt-1">
-                        {formatPrice(order.payment.amountPaid)} payés maintenant • 
-                        Reste {formatPrice(order.total - order.payment.amountPaid)} à la livraison
-                      </p>
-                    </div>
-                  )}
+{order.payment?.remainingAmount && order.payment.remainingAmount > 0 && (
+  <div className="mt-4 p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-2 border-amber-500/30 rounded-xl">
+    <div className="flex items-start gap-3">
+      <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+        <span className="text-2xl">💰</span>
+      </div>
+      <div className="flex-1">
+        <p className="font-bold text-sm text-amber-700 dark:text-amber-400 mb-3">
+          Paiement partiel - À la livraison
+        </p>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between items-center p-2 bg-emerald-500/10 rounded-lg">
+            <span className="text-muted-foreground flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-600" />
+              Acompte payé maintenant
+            </span>
+            <span className="font-bold text-emerald-600">
+              {formatPrice(order.payment.amountPaid ?? 0)}
+            </span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-amber-500/20 rounded-lg border-2 border-amber-500/30">
+            <span className="font-medium flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-600" />
+              Reste à payer à la livraison
+            </span>
+            <span className="font-bold text-xl text-amber-700 dark:text-amber-400">
+              {formatPrice(order.payment.remainingAmount)}
+            </span>
+          </div>
+        </div>
+        <div className="mt-3 p-2 bg-background/50 rounded-lg border border-border/50">
+          <p className="text-xs text-muted-foreground flex items-start gap-2">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            <span>
+              Le montant restant de <strong>{formatPrice(order.payment.remainingAmount)}</strong> sera collecté en espèces lors de la livraison.
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
                 </div>
               </div>
             </CardContent>
@@ -759,17 +716,15 @@ export default function OrderConfirmationPage() {
             </Card>
           </div>
 
-          {/* QR Code Section - PERSONNALISÉ */}
+          {/* QR Code Section */}
           <Card className="border-2 border-dashed border-accent/30 bg-gradient-to-br from-accent/5 to-purple-500/5 overflow-hidden">
             <CardContent className="pt-8 pb-8">
               <div className="flex flex-col sm:flex-row items-center gap-8">
-                {/* QR Code personnalisé */}
-                <CustomQRCode 
-                  value={qrCodeValue}
-                  verifyUrl={verifyUrl}
+                <QRCodeImage 
+                  value={verifyUrl}
+                  size={160}
                 />
                 
-                {/* QR Info */}
                 <div className="text-center sm:text-left flex-1">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium mb-3">
                     <ShieldCheck className="w-3 h-3" />
@@ -788,10 +743,7 @@ export default function OrderConfirmationPage() {
                       variant="ghost" 
                       size="icon" 
                       className="h-7 w-7 flex-shrink-0"
-                      onClick={() => {
-                        navigator.clipboard.writeText(verifyUrl);
-                        toast.success('Lien copié !');
-                      }}
+                      onClick={() => copyToClipboard(verifyUrl, 'Lien')}
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -832,14 +784,10 @@ export default function OrderConfirmationPage() {
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Button asChild variant="outline">
-              <Link href={ROUTES.USER.PROFILE}>
-                Voir toutes mes commandes
-              </Link>
+              <Link href={ROUTES.USER.PROFILE}>Voir toutes mes commandes</Link>
             </Button>
             <Button asChild className="bg-gradient-to-r from-accent to-purple-500 hover:from-accent/90 hover:to-purple-500/90 shadow-lg shadow-accent/20">
-              <Link href={ROUTES.PRODUCTS}>
-                Continuer mes achats
-              </Link>
+              <Link href={ROUTES.PRODUCTS}>Continuer mes achats</Link>
             </Button>
           </div>
         </div>
@@ -862,18 +810,11 @@ export default function OrderConfirmationPage() {
             text-decoration: none !important;
           }
           
-          canvas { 
-            image-rendering: pixelated; 
+          @page {
+            margin: 1cm;
           }
         }
       `}</style>
     </div>
   );
-}
-
-// ============================================================================
-// 🔹 HELPER: memo
-// ============================================================================
-function memo<T extends React.ComponentType<any>>(Component: T): T {
-  return React.memo(Component) as T;
 }

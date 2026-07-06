@@ -11,9 +11,6 @@ const { protect, restrictTo } = require('../middlewares/auth');
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('❌ Validation errors:', errors.array());
-    }
     return res.status(422).json({
       success: false,
       message: 'Données invalides',
@@ -34,20 +31,6 @@ const passwordRule = body('password')
   .notEmpty().withMessage('Mot de passe requis')
   .isLength({ min: 6 }).withMessage('Minimum 6 caractères');
 
-// 🔍 DEBUG : Vérifier ce qui est exporté
-console.log('\n🔍 [DEBUG] Exports du contrôleur auth:');
-console.log('  - register:', typeof ctrl.register);
-console.log('  - login:', typeof ctrl.login);
-console.log('  - refreshToken:', typeof ctrl.refreshToken);
-console.log('  - logout:', typeof ctrl.logout);
-console.log('  - getMe:', typeof ctrl.getMe);
-console.log('  - updateProfile:', typeof ctrl.updateProfile);
-console.log('  - updatePassword:', typeof ctrl.updatePassword);
-console.log('  - forgotPassword:', typeof ctrl.forgotPassword);
-console.log('  - resetPassword:', typeof ctrl.resetPassword);
-console.log('  - verifyEmail:', typeof ctrl.verifyEmail);
-console.log('🔍 [DEBUG] ═══════════════════════════════════════\n');
-
 // ───────── ROUTES PUBLIQUES ─────────
 
 // POST /auth/register
@@ -64,8 +47,15 @@ router.post('/login', [emailRule, passwordRule], validate, ctrl.login);
 // POST /auth/forgot-password
 router.post('/forgot-password', [emailRule], validate, ctrl.forgotPassword);
 
-// PATCH /auth/reset-password/:token
+// PATCH /auth/reset-password/:token   (lien cliquable — rétro-compat)
 router.patch('/reset-password/:token', [passwordRule], validate, ctrl.resetPassword);
+
+// ✅ POST /auth/reset-password-otp   (code OTP 6 chiffres)
+router.post('/reset-password-otp', [
+  body('email').trim().notEmpty().withMessage('Email requis').isEmail().withMessage('Format invalide').normalizeEmail(),
+  body('otp').trim().notEmpty().withMessage('Code OTP requis').isLength({ min: 6, max: 6 }).withMessage('Le code doit contenir 6 chiffres'),
+  body('password').notEmpty().withMessage('Mot de passe requis').isLength({ min: 8 }).withMessage('Minimum 8 caractères'),
+], validate, ctrl.resetPasswordWithOtp);
 
 // POST /auth/verify-email
 router.post('/verify-email', ctrl.verifyEmail);

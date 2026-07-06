@@ -3,6 +3,9 @@
 const nextConfig = {
   reactStrictMode: true,
   
+  // 🐳 Standalone build pour Docker / Railway (image ~10x plus légère)
+  output: process.env.DOCKER_BUILD === '1' ? 'standalone' : undefined,
+  
   // 🗑️ Supprime console.log en production pour réduire le bundle
   compiler: { 
     removeConsole: process.env.NODE_ENV === 'production' 

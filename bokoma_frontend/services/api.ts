@@ -216,10 +216,13 @@ export const authApi = {
     apiClient.post<ApiResponse<{ accessToken: string }>>('/auth/refresh'),
 
   forgotPassword: (email: string) =>
-    apiClient.post<ApiResponse>('/auth/forgot-password', { email }),
+    apiClient.post<ApiResponse & { devOtp?: string; expiresIn?: number }>('/auth/forgot-password', { email }),
 
   resetPassword: (token: string, password: string) =>
     apiClient.patch<ApiResponse<AuthResponse>>(`/auth/reset-password/${token}`, { password }),
+
+  resetPasswordWithOtp: (payload: { email: string; otp: string; password: string }) =>
+    apiClient.post<ApiResponse>('/auth/reset-password-otp', payload),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────

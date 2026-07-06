@@ -140,15 +140,17 @@ export default function AnalyticsAdminPage() {
       color: STATUS_COLORS[s._id] || '#6B7280',
     }));
 
+  const PAYMENT_COLORS = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b'];
   const paymentChartData = (analytics.stats.byPayment || [])
     .filter(p => p.count > 0)
-    .map(p => ({
+    .map((p, i) => ({
       name: p.method === 'mobile_money' ? 'Mobile Money' :
             p.method === 'cash_on_delivery' ? 'Paiement à la livraison' :
             p.method === 'card' ? 'Carte bancaire' :
             p.method === 'bank_transfer' ? 'Virement' :
             p.method || 'Autre',
       value: p.count,
+      color: PAYMENT_COLORS[i % PAYMENT_COLORS.length],
     }));
 
   return (

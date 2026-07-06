@@ -88,10 +88,16 @@ export const authApi = {
   logout: () => apiClient.post<ApiResponse>(API_ENDPOINTS.AUTH.LOGOUT),
 
   forgotPassword: (email: string) =>
-    apiClient.post<ApiResponse>(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, { email }),
+    apiClient.post<ApiResponse & { devOtp?: string; expiresIn?: number }>(
+      API_ENDPOINTS.AUTH.FORGOT_PASSWORD,
+      { email }
+    ),
 
   resetPassword: (token: string, password: string) =>
     apiClient.patch<ApiResponse<AuthResponse>>(API_ENDPOINTS.AUTH.RESET_PASSWORD(token), { password }),
+
+  resetPasswordWithOtp: (payload: { email: string; otp: string; password: string }) =>
+    apiClient.post<ApiResponse>('/auth/reset-password-otp', payload),
 };
 
 // ============================================================================

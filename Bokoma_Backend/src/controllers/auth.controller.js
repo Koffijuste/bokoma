@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto'); // ✅ AJOUT : Import crypto
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
-const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/email.service');
+const { sendVerificationEmail, sendPasswordReset } = require('../services/email.service');
 const jwtConfig = require('../config/jwt');
 
 // ============================================================================
@@ -15,10 +15,6 @@ const jwtConfig = require('../config/jwt');
 // ============================================================================
 exports.register = async (req, res, next) => {
   try {
-    console.log('\n📝 [Auth] ═══════════════════════════════════════');
-    console.log('📝 [Auth] REGISTER - Début');
-    console.log('📝 [Auth] Body reçu:', req.body);
-    
     const { firstName, lastName, email, password, phone } = req.body;
 
     if (!firstName || !lastName || !email || !password) {
@@ -57,14 +53,11 @@ exports.register = async (req, res, next) => {
       ...cookieOptions,
       maxAge: 60 * 60 * 1000,
     });
-    
+
     res.cookie('bokoma_refresh_token', refreshToken, {
       ...cookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-
-    console.log('✅ [Auth] Register réussi pour:', user.email);
-    console.log('📝 [Auth] ═══════════════════════════════════════\n');
 
     res.status(201).json({
       success: true,
@@ -76,13 +69,11 @@ exports.register = async (req, res, next) => {
     });
 
   } catch (err) {
-    console.error('❌ [AuthController] register error:', err);
-    
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(e => e.message);
       return next(new AppError(messages.join(', '), 422));
     }
-    
+
     next(err);
   }
 };
@@ -143,7 +134,6 @@ exports.login = async (req, res, next) => {
     });
 
   } catch (err) {
-    console.error('❌ [AuthController] login error:', err);
     next(err);
   }
 };
@@ -210,7 +200,6 @@ exports.logout = async (req, res, next) => {
       message: 'Déconnexion réussie',
     });
   } catch (err) {
-    console.error('❌ [Auth] logout error:', err);
     next(err);
   }
 };
@@ -234,7 +223,6 @@ exports.getMe = async (req, res, next) => {
       user,
     });
   } catch (err) {
-    console.error('❌ [Auth] getMe error:', err);
     next(err);
   }
 };
@@ -273,13 +261,11 @@ exports.updateProfile = async (req, res, next) => {
     });
 
   } catch (err) {
-    console.error('❌ [AuthController] updateProfile error:', err);
-    
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(e => e.message);
       return next(new AppError(messages.join(', '), 422));
     }
-    
+
     next(err);
   }
 };
@@ -323,13 +309,13 @@ exports.updatePassword = async (req, res, next) => {
     });
 
   } catch (err) {
-    console.error('❌ [AuthController] updatePassword error:', err);
     next(err);
   }
 };
 
 // ============================================================================
 // POST /auth/forgot-password — Mot de passe oublié
+// ✅ Envoie un mail avec un code OTP 6 chiffres + un lien cliquable
 // ============================================================================
 exports.forgotPassword = async (req, res, next) => {
   try {
@@ -343,32 +329,50 @@ exports.forgotPassword = async (req, res, next) => {
       });
     }
 
+    // 1) Token (lien cliquable, conservé pour rétro-compat)
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenHash = crypto
       .createHash('sha256')
       .update(resetToken)
       .digest('hex');
 
+    // 2) OTP 6 chiffres (le nouveau chemin principal)
+    const otpCode = String(Math.floor(100000 + Math.random() * 900000));
+    const otpHash = crypto
+      .createHash('sha256')
+      .update(otpCode)
+      .digest('hex');
+
     user.resetPasswordToken = resetTokenHash;
     user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+    user.resetOtpCode = otpHash;
+    user.resetOtpExpires = Date.now() + 10 * 60 * 1000;
+    user.resetOtpAttempts = 0;
     await user.save({ validateBeforeSave: false });
 
-    const resetUrl = `${process.env.CLIENT_URL}/auth/reset-password/${resetToken}`;
-    console.log('📧 [Auth] Reset URL:', resetUrl);
+    const resetUrl = `${process.env.CLIENT_URL}/auth/reset-password?token=${resetToken}`;
 
-    res.json({
+    // Envoi du mail avec le code OTP en clair + lien (le hash est en DB)
+    await sendPasswordReset(user, resetUrl, otpCode);
+
+    // En dev uniquement : on renvoie l'OTP au front pour faciliter les tests
+    const payload = {
       success: true,
       message: 'Email de réinitialisation envoyé',
       resetUrl,
-    });
+      expiresIn: 600, // 10 min
+    };
+    if (process.env.NODE_ENV !== 'production') {
+      payload.devOtp = otpCode;
+    }
+    res.json(payload);
   } catch (err) {
-    console.error('❌ [Auth] forgotPassword error:', err);
     next(err);
   }
 };
 
 // ============================================================================
-// PATCH /auth/reset-password/:token — Réinitialiser le mot de passe
+// PATCH /auth/reset-password/:token — Réinitialiser le mot de passe via le LIEN
 // ✅ UNE SEULE DÉFINITION (la duplication a été supprimée)
 // ============================================================================
 exports.resetPassword = async (req, res, next) => {
@@ -401,17 +405,79 @@ exports.resetPassword = async (req, res, next) => {
     user.password = password;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+    user.resetOtpCode = undefined;
+    user.resetOtpExpires = undefined;
     user.refreshToken = null;
     await user.save();
-
-    console.log('✅ [Auth] Password reset successful for:', user.email);
 
     res.json({
       success: true,
       message: 'Mot de passe réinitialisé avec succès',
     });
   } catch (err) {
-    console.error('❌ [Auth] resetPassword error:', err);
+    next(err);
+  }
+};
+
+// ============================================================================
+// POST /auth/reset-password-otp — Réinitialiser via le CODE OTP 6 chiffres
+// Body : { email, otp, password }
+// ============================================================================
+exports.resetPasswordWithOtp = async (req, res, next) => {
+  try {
+    const { email, otp, password } = req.body;
+
+    if (!email || !otp || !password) {
+      return next(new AppError('Email, code OTP et mot de passe requis', 400));
+    }
+
+    if (password.length < 8) {
+      return next(new AppError('Le mot de passe doit contenir au moins 8 caractères', 400));
+    }
+
+    const otpHash = crypto
+      .createHash('sha256')
+      .update(String(otp).trim())
+      .digest('hex');
+
+    const user = await User.findOne({ email: email.toLowerCase() })
+      .select('+resetOtpCode +resetOtpExpires +resetOtpAttempts +password');
+
+    if (!user) {
+      return next(new AppError('Email introuvable', 404));
+    }
+
+    // Anti-brute-force : 5 tentatives max par OTP
+    if ((user.resetOtpAttempts || 0) >= 5) {
+      return next(new AppError('Trop de tentatives. Demandez un nouveau code.', 429));
+    }
+
+    const otpValid = user.resetOtpCode === otpHash;
+    const otpExpired = !user.resetOtpExpires || user.resetOtpExpires < Date.now();
+
+    if (!otpValid || otpExpired) {
+      user.resetOtpAttempts = (user.resetOtpAttempts || 0) + 1;
+      await user.save({ validateBeforeSave: false });
+      return next(new AppError(
+        otpExpired ? 'Code expiré. Demandez un nouveau code.' : 'Code invalide',
+        400
+      ));
+    }
+
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.resetOtpCode = undefined;
+    user.resetOtpExpires = undefined;
+    user.resetOtpAttempts = 0;
+    user.refreshToken = null;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Mot de passe réinitialisé avec succès',
+    });
+  } catch (err) {
     next(err);
   }
 };
@@ -448,9 +514,6 @@ exports.verifyEmail = async (req, res, next) => {
     });
 
   } catch (err) {
-    console.error('❌ [AuthController] verifyEmail error:', err);
     next(err);
   }
 };
-
-// console.log('✅ [Auth] resetPassword exporté:', typeof exports.resetPassword);

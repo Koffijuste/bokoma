@@ -2,21 +2,19 @@
 // ============================================================================
 // 📦 ORDER ROUTES
 // RÈGLE D'OR : routes spécifiques AVANT routes paramétrées (/:id)
+// ⚠️ Le webhook CinetPay est dans src/routes/webhook.routes.js (signature vérifiée)
 // ============================================================================
 
 const router = require('express').Router();
-const ctrl   = require('../controllers/order.controller');
+const ctrl = require('../controllers/order.controller');
 const { protect, authorize } = require('../middlewares/auth');
-const validate         = require('../middlewares/validate');
+const validate = require('../middlewares/validate');
 const validateObjectId = require('../middlewares/validateObjectId');
-const { orderRules }   = require('../validators/order.validator');
-const orderController = require('../controllers/order.controller');
+const { orderRules } = require('../validators/order.validator');
+
 // ============================================================================
 // 🔹 1. PUBLIQUES — Aucune authentification requise
 // ============================================================================
-
-// Webhook CinetPay (appelé par le serveur CinetPay, pas par le client)
-router.post('/webhook/cinetpay', ctrl.cinetpayWebhook);
 
 // Vérification publique après paiement (page /payment/success)
 router.get('/verify/:orderId', ctrl.verifyOrderPublic);
@@ -47,22 +45,21 @@ router.post('/', orderRules, validate, ctrl.createOrder);
 // ============================================================================
 
 // PATCH /:id/status — Mettre à jour statut (admin/manager)
-// ⚠️ Doit être avant GET /:id
 router.patch('/:id/status', authorize('admin', 'manager'), validateObjectId('id'), ctrl.updateOrderStatus);
 
-// PATCH /:id/cancel — Annuler ma commande (client, ownership vérifié dans le ctrl)
+// PATCH /:id/cancel — Annuler ma commande (ownership vérifié dans le service)
 router.patch('/:id/cancel', validateObjectId('id'), ctrl.cancelOrder);
 
-// GET /:id — Détails commande (ownership vérifié dans le ctrl)
+// PATCH /:id/delivered — Confirmer réception (client)
+router.patch('/:id/delivered', validateObjectId('id'), ctrl.markAsDelivered);
+
+// PATCH /:id/archive — Archiver (client)
+router.patch('/:id/archive', validateObjectId('id'), ctrl.archiveOrder);
+
+// GET /:id — Détails commande (ownership vérifié dans le contrôleur)
 router.get('/:id', validateObjectId('id'), ctrl.getOrder);
 
 // DELETE /:id — Supprimer (admin uniquement)
 router.delete('/:id', authorize('admin'), validateObjectId('id'), ctrl.deleteOrder);
-
-// ✅ Confirmer réception (client)
-router.patch('/:id/delivered', protect, validateObjectId('id'), orderController.markAsDelivered);
-
-// Dans la section "ROUTES CLIENT", ajouter :
-router.patch('/:id/archive', validateObjectId('id'), ctrl.archiveOrder);
 
 module.exports = router;

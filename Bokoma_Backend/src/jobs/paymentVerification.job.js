@@ -10,8 +10,6 @@ const MAX_PENDING_HOURS = 24;
 async function verifyPendingPayments() {
   try {
     const now = new Date();
-    console.log(`\n🔍 [PaymentVerification] ═══════════════════════════════════════`);
-    console.log(`🔍 [PaymentVerification] Vérification à ${now.toISOString()}`);
 
     // 1️⃣ Nettoyer les vieilles commandes (> 24h)
     const maxPendingDate = new Date(now.getTime() - MAX_PENDING_HOURS * 60 * 60 * 1000);
@@ -20,22 +18,18 @@ async function verifyPendingPayments() {
       createdAt: { $lt: maxPendingDate },
     });
 
-    if (oldOrders.length > 0) {
-      console.log(`🧹 Nettoyage de ${oldOrders.length} vieille(s) commande(s)`);
-      for (const order of oldOrders) {
-        try {
-          order.markAsExpired();
-          await order.save();
-          console.log(`🗑️ #${order.orderNumber} annulée (> 24h)`);
-        } catch (err) {
-          console.error(`❌ Erreur nettoyage:`, err.message);
-        }
+    for (const order of oldOrders) {
+      try {
+        order.markAsExpired();
+        await order.save();
+      } catch {
+        // best effort
       }
     }
 
     // 2️⃣ Récupérer les commandes récentes à vérifier
     const recentPendingDate = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-    
+
     const pendingOrders = await Order.find({
       'payment.status': 'pending',
       'payment.transactionId': { $exists: true, $ne: null },
@@ -48,10 +42,7 @@ async function verifyPendingPayments() {
       ],
     }).populate('user', 'firstName lastName email');
 
-    console.log(`📦 ${pendingOrders.length} commande(s) à vérifier`);
-
     if (pendingOrders.length === 0) {
-      console.log(`✅ Aucune commande à vérifier\n`);
       return { verified: 0, updated: 0, skipped: 0 };
     }
 
@@ -62,7 +53,6 @@ async function verifyPendingPayments() {
     for (const order of pendingOrders) {
       try {
         const attempt = (order.payment.verificationAttempts || 0) + 1;
-        console.log(`\n🔍 Vérification #${order.orderNumber} (tentative ${attempt}/${MAX_VERIFICATION_ATTEMPTS})`);
 
         // ✅ Utiliser paymentService (MÊME API que createOrder)
         const result = await paymentService.verifyPayment(order.payment.transactionId);
@@ -77,7 +67,6 @@ async function verifyPendingPayments() {
           order.status = 'confirmed';
           await order.save();
 
-          console.log(`✅ #${order.orderNumber} CONFIRMÉE`);
           updatedCount++;
 
           if (order.user) {
@@ -106,7 +95,6 @@ async function verifyPendingPayments() {
           order.status = 'cancelled';
           await order.save();
 
-          console.log(`❌ #${order.orderNumber} ÉCHOUÉE (${result.status})`);
           failedCount++;
 
           if (order.user) {
@@ -121,10 +109,7 @@ async function verifyPendingPayments() {
           }
 
         } else if (result.status === 'ERROR') {
-          console.log(`⚠️ Erreur API pour #${order.orderNumber}: ${result.error}`);
-          
           if (attempt >= MAX_VERIFICATION_ATTEMPTS) {
-            console.log(`🛑 Max tentatives atteint, blocage`);
             order.payment.verificationBlocked = true;
             order.payment.verificationBlockedReason = result.error || 'API indisponible';
             await order.save();
@@ -134,31 +119,25 @@ async function verifyPendingPayments() {
           }
 
         } else {
-          console.log(`⏳ #${order.orderNumber} toujours en attente (${result.status})`);
           await order.save();
         }
 
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-      } catch (err) {
-        console.error(`❌ Erreur pour #${order.orderNumber}:`, err.message);
+      } catch {
+        // best effort - commande traitée au prochain tick
       }
     }
 
-    console.log(`\n✅ Résultat: ${updatedCount} confirmées, ${failedCount} échouées, ${skippedCount} ignorées`);
-    console.log(`✅ [PaymentVerification] ═══════════════════════════════════════\n`);
-
     return { verified: pendingOrders.length, updated: updatedCount, failed: failedCount, skipped: skippedCount };
-  } catch (err) {
-    console.error('❌ [PaymentVerification] Erreur globale:', err);
+  } catch {
     return { verified: 0, updated: 0, failed: 0, skipped: 0 };
   }
 }
 
 function startPaymentVerificationJob() {
-  console.log('🚀 [PaymentVerification] Démarrage (toutes les 2 minutes)');
-  setTimeout(verifyPendingPayments, 15000);
-  setInterval(verifyPendingPayments, 2 * 60 * 1000);
+  setTimeout(verifyPendingPayments, 5000);
+  setInterval(verifyPendingPayments, 30 * 1000);
 }
 
 module.exports = { verifyPendingPayments, startPaymentVerificationJob };

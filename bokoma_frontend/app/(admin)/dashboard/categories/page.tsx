@@ -272,7 +272,7 @@ const CategoryFormDialog: React.FC<CategoryFormDialogProps> = ({
     
     const payload = {
       ...formData,
-      parent: formData.parent || undefined,
+      parent: formData.parent || '',
     };
     
     try {
@@ -570,10 +570,9 @@ export default function DashboardCategoriesPage() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
   const { 
-    data: apiResponse, 
-    loading: fetching, 
-    error, 
-    refetch 
+    data: apiResponse,
+    loading: fetching,
+    refetch
   } = useFetch<ApiResponse<{ categories: Category[] }>>(
     () => categoryApi.getCategories(),
     []

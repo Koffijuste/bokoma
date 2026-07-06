@@ -242,11 +242,10 @@ export default function HomePage() {
 
             {/* Trust Badges */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-8 border-t border-border">
-              {trustBadges.map((badge, i) => (
+              {trustBadges.map((badge) => (
                 <div
                   key={badge.label}
-                  className="flex flex-col items-center sm:items-start text-center sm:text-left animate-in fade-in slide-in-from-bottom-4 duration-500"
-                  style={{ animationDelay: `${400 + i * 100}ms` }}
+                  className="flex flex-col items-center sm:items-start text-center sm:text-left animate-in fade-in"
                 >
                   <badge.icon className="w-5 h-5 text-accent mb-2" />
                   <p className="text-sm font-medium">{badge.label}</p>
@@ -263,8 +262,8 @@ export default function HomePage() {
                 <div
                   key={cat.slug}
                   className={`absolute inset-0 transition-all duration-500 ${
-                    i === activeCategory 
-                      ? 'opacity-100 scale-100 z-10' 
+                    i === activeCategory
+                      ? 'opacity-100 scale-100 z-10'
                       : 'opacity-0 scale-95 z-0 pointer-events-none'
                   }`}
                 >
@@ -334,12 +333,11 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {categories.map((cat, i) => (
+            {categories.map((cat) => (
               <Link
                 key={cat.slug}
                 href={`/products?category=${cat.slug}`}
-                className="group relative h-72 rounded-3xl overflow-hidden cursor-pointer hover:scale-105 transition-transform duration-300 animate-in fade-in slide-in-from-bottom-4 duration-500"
-                style={{ animationDelay: `${i * 100}ms` }}
+                className="group relative h-72 rounded-3xl overflow-hidden cursor-pointer hover:scale-105 transition-transform duration-300 animate-in fade-in"
               >
                 <div className="absolute inset-0">
                   <SafeImage 
@@ -397,12 +395,11 @@ export default function HomePage() {
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredProducts.map((product, i) => (
+            {featuredProducts.map((product) => (
               <Link
                 key={product.id}
                 href={`/products/${product.id}`}
-                className="group bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-500"
-                style={{ animationDelay: `${i * 100}ms` }}
+                className="group bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 animate-in fade-in"
               >
                 <div className="relative aspect-square">
                   <SafeImage 
@@ -457,11 +454,10 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((t, i) => (
+            {testimonials.map((t) => (
               <div
                 key={t.name}
-                className="bg-card border border-border rounded-2xl p-6 hover:border-accent/50 hover:shadow-lg transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-500"
-                style={{ animationDelay: `${i * 100}ms` }}
+                className="bg-card border border-border rounded-2xl p-6 hover:border-accent/50 hover:shadow-lg transition-all duration-300 animate-in fade-in"
               >
                 {/* Étoiles */}
                 <div className="flex items-center gap-1 mb-4">

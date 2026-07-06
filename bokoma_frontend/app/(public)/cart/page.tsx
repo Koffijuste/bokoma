@@ -91,7 +91,7 @@ export default function CartPage() {
     fullName: '', phone: '', address: '', country: '', city: '', postalCode: '',
   });
   
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money' | 'cash_on_delivery' | 'bank_transfer'>('mobile_money');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money' | 'cash_on_delivery' >('mobile_money');
   
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -490,8 +490,7 @@ export default function CartPage() {
                 <div className="space-y-3">
                   {[
                     { id: 'mobile_money' as const, label: 'Mobile Money / Carte', icon: Smartphone, desc: 'Orange Money, MTN, Wave, Visa, Mastercard...' },
-                    { id: 'cash_on_delivery' as const, label: 'Paiement à la livraison', icon: Banknote, desc: 'Payez 50% maintenant via la popup, le reste à la livraison' },
-                    { id: 'bank_transfer' as const, label: 'Virement bancaire', icon: Banknote, desc: 'Transfert bancaire classique' }
+                    { id: 'cash_on_delivery' as const, label: 'Paiement à la livraison', icon: Banknote, desc: 'Payez 50% maintenant via la popup, le reste à la livraison' }
                   ].map((method) => (
                     <div key={method.id}>
                       <label className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === method.id ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'}`}>

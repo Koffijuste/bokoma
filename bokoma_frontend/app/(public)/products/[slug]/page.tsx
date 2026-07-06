@@ -1,10 +1,13 @@
 // app/(public)/products/[slug]/page.tsx
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Heart, ShoppingCart, Star, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { 
+  ArrowLeft, Heart, ShoppingCart, Star, Check, AlertCircle, Loader2,
+  Ruler, Sparkles, Shirt, Footprints
+} from 'lucide-react';
 import { useFetch } from '@/hooks';
 import { productApi } from '@/services';
 import { useCart } from '@/hooks/useCart';
@@ -12,9 +15,13 @@ import { useWishlist } from '@/hooks/useWishlist';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants';
-import { formatPrice } from '@/utils/helpers';
+import { formatPrice, cn } from '@/utils/helpers';
 import { toast } from 'sonner';
 import type { Product } from '@/types';
+
+// ═══════════════════════════════════════════════════════════════
+// 🔹 HELPERS
+// ═══════════════════════════════════════════════════════════════
 
 const extractProduct = (data: any): Product | null => {
   if (!data) return null;
@@ -24,7 +31,32 @@ const extractProduct = (data: any): Product | null => {
   return null;
 };
 
-const AVAILABLE_SIZES = Array.from({ length: 21 }, (_, i) => (25 + i).toString());
+// ✅ Détection par CATÉGORIE (pas par type)
+const getCategorySlug = (category: any): string => {
+  if (!category) return '';
+  if (typeof category === 'string') return category.toLowerCase();
+  if (category.slug) return category.slug.toLowerCase();
+  if (category.name) return category.name.toLowerCase();
+  return '';
+};
+
+const isFootwearCategory = (category: any): boolean => {
+  const slug = getCategorySlug(category);
+  return slug.includes('chaussure') || slug.includes('sandal') || 
+         slug.includes('basket') || slug.includes('shoe') || 
+         slug.includes('footwear');
+};
+
+const isClothingCategory = (category: any): boolean => {
+  const slug = getCategorySlug(category);
+  return slug.includes('vetement') || slug.includes('vêtement') || 
+         slug.includes('clothing') || slug.includes('habit');
+};
+
+// ✅ Tailles standards
+const CLOTHING_SIZES = ['S', 'M', 'L', 'XL', 'XXL'];
+const SIZE_MIN = 28;
+const SIZE_MAX = 47;
 const PLACEHOLDER_IMAGE = 'https://placehold.co/800x800/e2e8f0/64748b?text=Produit&font=montserrat';
 
 export default function ProductDetailsPage() {
@@ -37,7 +69,8 @@ export default function ProductDetailsPage() {
   const { isInWishlist, toggleWishlist } = useWishlist();
   
   const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedSize, setSelectedSize] = useState<string>('');
+  const [selectedSize, setSelectedSize] = useState<string>(''); // Pour vêtements
+  const [customSize, setCustomSize] = useState<string>(''); // Pour chaussures
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -49,10 +82,11 @@ export default function ProductDetailsPage() {
   const product = useMemo(() => extractProduct(apiResponse), [apiResponse]);
   const productId = product?._id || (product as any)?.id;
 
-  const wishlisted = useMemo(() => {
-    if (!productId) return false;
-    return isInWishlist(productId);
-  }, [productId, isInWishlist]);
+  // ✅ Détection par catégorie
+  const isFootwearProduct = useMemo(() => isFootwearCategory(product?.category), [product?.category]);
+  const isClothingProduct = useMemo(() => isClothingCategory(product?.category), [product?.category]);
+
+  const wishlisted = useMemo(() => productId ? isInWishlist(productId) : false, [productId, isInWishlist]);
 
   const currentImage = useMemo(() => {
     if (!product?.images?.length) return null;
@@ -64,62 +98,85 @@ export default function ProductDetailsPage() {
     return img.url;
   }, [product?.images, selectedImage]);
 
+  // ✅ Validation pointure
+  const isValidSize = (value: string): boolean => {
+    const num = parseInt(value);
+    return !isNaN(num) && num >= SIZE_MIN && num <= SIZE_MAX;
+  };
+
+  const handleCustomSizeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '');
+    setCustomSize(value);
+  }, []);
+
   const handleAddToCart = useCallback(async () => {
     if (!productId) {
-      toast.error('Produit non chargé correctement');
+      toast.error('Produit non chargé');
       return;
     }
 
-    const hasSizeVariants = product.variants?.some((v: any) => v.size);
-    if (hasSizeVariants && !selectedSize) {
-      toast.error('Veuillez sélectionner une pointure');
-      return;
+    // ✅ Validation selon catégorie
+    if (isFootwearProduct) {
+      if (!customSize) {
+        toast.error('Veuillez indiquer votre pointure');
+        return;
+      }
+      if (!isValidSize(customSize)) {
+        toast.error(`Pointure invalide (${SIZE_MIN}-${SIZE_MAX})`);
+        return;
+      }
+    } else if (isClothingProduct) {
+      if (!selectedSize) {
+        toast.error('Veuillez sélectionner une taille');
+        return;
+      }
     }
 
     setIsAdding(true);
     try {
       await addItem({
         product: productId,
-        size: selectedSize || undefined,
+        // ✅ Envoie la bonne taille selon la catégorie
+        size: isFootwearProduct ? customSize : (isClothingProduct ? selectedSize : undefined),
         quantity,
       });
-      toast.success('Produit ajouté au panier 🛒');
-    } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || 'Impossible d\'ajouter au panier';
       
+      const sizeInfo = isFootwearProduct 
+        ? ` (Pointure ${customSize})` 
+        : isClothingProduct 
+          ? ` (Taille ${selectedSize})` 
+          : '';
+      
+      toast.success(`Ajouté au panier${sizeInfo} 🛒`);
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || "Erreur d'ajout";
       if (message.includes('déjà') || message.includes('exist')) {
-        toast.info('Quantité augmentée dans le panier');
+        toast.info('Quantité augmentée');
       } else {
         toast.error(message);
       }
     } finally {
       setIsAdding(false);
     }
-  }, [product, productId, selectedSize, quantity, addItem]);
+  }, [productId, selectedSize, customSize, quantity, addItem, isFootwearProduct, isClothingProduct]);
 
   const handleWishlist = useCallback(async () => {
-    if (!productId) {
-      toast.error('Produit non chargé');
-      return;
-    }
+    if (!productId) return;
 
     if (!isAuthenticated) {
-      toast.error('Veuillez vous connecter pour ajouter aux favoris');
+      toast.error('Connexion requise');
       router.push(`/auth/login?from=/products/${slug}`);
       return;
     }
 
     try {
       const success = await toggleWishlist(productId, product || undefined);
-      
       if (success) {
         const wasInWishlist = isInWishlist(productId);
         toast.success(wasInWishlist ? 'Retiré des favoris' : 'Ajouté aux favoris ❤️');
-      } else {
-        toast.error('Erreur lors de la mise à jour des favoris');
       }
-    } catch (error) {
-      toast.error('Erreur lors de la mise à jour des favoris');
+    } catch {
+      toast.error('Erreur lors de la mise à jour');
     }
   }, [productId, product, isAuthenticated, toggleWishlist, isInWishlist, router, slug]);
 
@@ -127,162 +184,145 @@ export default function ProductDetailsPage() {
     setQuantity((prev) => Math.max(1, Math.min(prev + delta, product?.totalStock || 10)));
   }, [product?.totalStock]);
 
-  const handleBack = useCallback(() => {
-    router.push(ROUTES.PRODUCTS);
-  }, [router]);
+  // ═══════════════════════════════════════════════════════════════
+  // 🔹 RENDER
+  // ═══════════════════════════════════════════════════════════════
 
   if (loading) {
     return (
-      <div className="min-h-screen px-4 py-12 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-16 h-16 text-accent animate-spin mx-auto" />
-          <p className="text-muted-foreground">Chargement du produit...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-16 h-16 text-accent animate-spin" />
       </div>
     );
   }
 
-  if (error) {
+  if (error || !product) {
     return (
       <div className="min-h-screen px-4 py-12 flex items-center justify-center">
-        <div className="max-w-md w-full rounded-3xl border border-destructive/50 bg-destructive/10 p-8 text-center space-y-4 animate-in fade-in zoom-in duration-300">
-          <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
-          <h2 className="text-xl font-bold text-destructive">Erreur de chargement</h2>
-          <p className="text-muted-foreground">{error.message}</p>
-          <div className="flex gap-3 justify-center">
-            <Button onClick={() => refetch()} disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Réessayer
-            </Button>
-            <Button variant="outline" onClick={handleBack}>Retour</Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!product) {
-    return (
-      <div className="min-h-screen px-4 py-12 flex items-center justify-center">
-        <div className="max-w-md w-full rounded-3xl border border-border bg-card p-12 text-center space-y-4 animate-in fade-in zoom-in duration-300">
+        <div className="max-w-md w-full rounded-3xl border border-border bg-card p-8 text-center space-y-4">
           <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto" />
-          <h2 className="text-xl font-bold">Produit introuvable</h2>
-          <p className="text-muted-foreground">Ce produit n'existe pas ou a été supprimé.</p>
-          <Button variant="outline" onClick={handleBack}>Retour aux produits</Button>
+          <h2 className="text-xl font-bold">{error ? 'Erreur' : 'Produit introuvable'}</h2>
+          <p className="text-muted-foreground">{error?.message || 'Ce produit n\'existe pas.'}</p>
+          <Button onClick={() => error ? refetch() : router.push(ROUTES.PRODUCTS)}>
+            {error ? 'Réessayer' : 'Retour aux produits'}
+          </Button>
         </div>
       </div>
     );
   }
 
-  const hasSizeVariants = product.variants?.some((v: any) => v.size);
   const categoryName = typeof product.category === 'object' ? product.category?.name : 'Catégorie';
 
   return (
-    <div className="min-h-screen px-4 py-12">
+    <div className="min-h-screen px-4 py-8 sm:py-12">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+        {/* Header */}
+        <div className="mb-8 flex items-center justify-between">
           <button
-            onClick={handleBack}
-            className="text-sm font-medium text-accent hover:text-accent/80 inline-flex items-center transition"
+            onClick={() => router.push(ROUTES.PRODUCTS)}
+            className="text-sm font-medium text-accent hover:text-accent/80 inline-flex items-center"
           >
-            <ArrowLeft className="mr-2 h-4 w-4" /> Retour aux produits
+            <ArrowLeft className="mr-2 h-4 w-4" /> Retour
           </button>
           <span className="text-sm text-muted-foreground">{categoryName}</span>
         </div>
 
         <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-500">
+          {/* IMAGE */}
+          <div className="space-y-4">
             <div className="rounded-3xl border border-border bg-card p-6">
               <div className="relative aspect-square overflow-hidden rounded-3xl bg-muted">
                 <img
                   src={currentImage || PLACEHOLDER_IMAGE}
                   alt={product.name}
-                  className="w-full h-full object-cover transition-transform hover:scale-105"
-                  loading="eager"
+                  className="w-full h-full object-cover"
                   onError={(e) => {
                     const t = e.target as HTMLImageElement;
                     if (t.src !== PLACEHOLDER_IMAGE) t.src = PLACEHOLDER_IMAGE;
                   }}
                 />
+                
+                {/* Badge Sur Mesure pour chaussures */}
+                {isFootwearProduct && (
+                  <div className="absolute top-4 left-4 px-3 py-1.5 bg-gradient-to-r from-accent to-purple-500 text-white text-xs font-bold rounded-full flex items-center gap-1 shadow-lg">
+                    <Footprints className="w-3 h-3" />
+                    Sur Mesure
+                  </div>
+                )}
+
+                {/* Badge Vêtements */}
+                {isClothingProduct && (
+                  <div className="absolute top-4 left-4 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-bold rounded-full flex items-center gap-1 shadow-lg">
+                    <Shirt className="w-3 h-3" />
+                    Collection Mode
+                  </div>
+                )}
               </div>
 
               {product.images && product.images.length > 1 && (
                 <div className="mt-4 grid grid-cols-4 gap-3">
-                  {product.images.map((img, idx) => {
-                    const thumb = img.url?.includes('res.cloudinary.com')
-                      ? img.url.replace('/upload/', '/upload/f_auto,q_auto,w_200,h_200,c_fill/')
-                      : img.url;
-                    const isSelected = idx === selectedImage;
-                    
-                    return (
-                      <button
-                        key={img.url || idx}
-                        type="button"
-                        onClick={() => setSelectedImage(idx)}
-                        className={`overflow-hidden rounded-3xl border p-1 transition hover:scale-105 ${
-                          isSelected 
-                            ? 'border-accent ring-2 ring-accent/20' 
-                            : 'border-border hover:border-accent/50'
-                        }`}
-                      >
-                        <div className="relative h-24 w-full bg-muted">
-                          <img
-                            src={thumb || PLACEHOLDER_IMAGE}
-                            alt={img.alt || product.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {product.images.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedImage(idx)}
+                      className={cn(
+                        "aspect-square rounded-xl overflow-hidden border-2 transition",
+                        idx === selectedImage ? 'border-accent' : 'border-transparent hover:border-accent/50'
+                      )}
+                    >
+                      <img
+                        src={img.url || PLACEHOLDER_IMAGE}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500 delay-200">
+          {/* INFO */}
+          <div className="space-y-6">
             <div className="rounded-3xl border border-border bg-card p-6 space-y-4">
+              {/* Titre + Wishlist */}
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h1 className="text-3xl font-bold">{product.name}</h1>
-                  <p className="text-sm text-muted-foreground">
-                    {product.type} · {product.brand || 'Marque premium'}
+                  <h1 className="text-2xl sm:text-3xl font-bold">{product.name}</h1>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {categoryName} · {product.brand || 'Marque premium'}
                   </p>
                 </div>
                 <button
                   onClick={handleWishlist}
-                  className={`rounded-full border p-3 transition hover:scale-110 ${
+                  className={cn(
+                    "rounded-full border p-3 transition",
                     wishlisted 
-                      ? 'border-pink-500 bg-pink-500 text-white hover:bg-pink-600' 
-                      : 'border-border bg-background text-accent hover:border-accent'
-                  }`}
-                  aria-label={wishlisted ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                      ? 'border-pink-500 bg-pink-500 text-white' 
+                      : 'border-border hover:border-accent'
+                  )}
                 >
                   <Heart className="h-5 w-5" fill={wishlisted ? 'currentColor' : 'none'} />
                 </button>
               </div>
 
+              {/* Rating */}
               <div className="flex items-center gap-2 text-sm">
-                <div className="flex items-center gap-0.5">
-                  {[...Array(5)].map((_, i) => {
-                    const rating = product.rating?.average || 0;
-                    const isFilled = i < Math.floor(rating);
-                    return (
-                      <Star
-                        key={i}
-                        className="h-4 w-4"
-                        fill={isFilled ? 'currentColor' : 'none'}
-                        color={isFilled ? '#fbbf24' : '#6b7280'}
-                      />
-                    );
-                  })}
+                <div className="flex gap-0.5">
+                  {[...Array(5)].map((_, i) => (
+                    <Star
+                      key={i}
+                      className="h-4 w-4"
+                      fill={i < Math.floor(product.rating?.average || 0) ? '#fbbf24' : 'none'}
+                      color={i < Math.floor(product.rating?.average || 0) ? '#fbbf24' : '#6b7280'}
+                    />
+                  ))}
                 </div>
-                <span className="text-muted-foreground">
-                  ({product.rating?.count || 0} avis)
-                </span>
+                <span className="text-muted-foreground">({product.rating?.count || 0})</span>
               </div>
 
-              <div className="space-y-1">
+              {/* Prix */}
+              <div>
                 <p className="text-3xl font-bold text-accent">
                   {formatPrice(Number(product.basePrice) || 0)}
                 </p>
@@ -293,49 +333,79 @@ export default function ProductDetailsPage() {
                 )}
               </div>
 
-              <span 
-                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm ${
-                  product.totalStock > 0 
-                    ? 'bg-emerald-500/10 text-emerald-600' 
-                    : 'bg-destructive/10 text-destructive'
-                }`}
-              >
-                <div className={`w-2 h-2 rounded-full ${product.totalStock > 0 ? 'bg-emerald-600' : 'bg-destructive'}`} />
-                {product.totalStock > 0 ? `${product.totalStock} en stock` : 'Rupture de stock'}
+              {/* Stock */}
+              <span className={cn(
+                "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium",
+                product.totalStock > 0 
+                  ? 'bg-emerald-500/10 text-emerald-600' 
+                  : 'bg-destructive/10 text-destructive'
+              )}>
+                <div className={cn(
+                  "w-2 h-2 rounded-full",
+                  product.totalStock > 0 ? 'bg-emerald-600' : 'bg-destructive'
+                )} />
+                {product.totalStock > 0 ? `${product.totalStock} en stock` : 'Rupture'}
               </span>
 
-              {hasSizeVariants && (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">
-                    Pointure <span className="text-destructive">*</span>
+              {/* ═══════════════════════════════════════════════════════════════
+                  CHAUSSURES / SANDALES - Pointure personnalisée (28-47)
+                 ═══════════════════════════════════════════════════════════════ */}
+              {isFootwearProduct && (
+                <div className="space-y-3 p-4 bg-gradient-to-br from-accent/5 to-purple-500/5 border-2 border-accent/20 rounded-xl">
+                  <label className="text-sm font-semibold flex items-center gap-2">
+                    <Footprints className="w-4 h-4 text-accent" />
+                    Votre pointure <span className="text-destructive">*</span>
                   </label>
-                  <div className="grid grid-cols-7 gap-2">
-                    {AVAILABLE_SIZES.map((size) => {
-                      const variant = product.variants?.find((v: any) => v.size === size);
-                      const inStock = variant?.stock > 0;
+
+                  <input
+                    type="number"
+                    min={SIZE_MIN}
+                    max={SIZE_MAX}
+                    value={customSize}
+                    onChange={handleCustomSizeChange}
+                    placeholder={`Ex: 38 (${SIZE_MIN}-${SIZE_MAX})`}
+                    className={cn(
+                      "w-full h-11 px-4 border-2 rounded-xl text-base font-medium transition",
+                      "focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent",
+                      customSize && !isValidSize(customSize)
+                        ? "border-destructive bg-destructive/5"
+                        : "border-border hover:border-accent/50"
+                    )}
+                  />
+
+                  <p className="text-xs text-muted-foreground">
+                    💡 Chaussures fabriquées sur mesure selon votre pointure
+                  </p>
+                </div>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════════
+                  VÊTEMENTS - Tailles standards (S à XXL)
+                 ═══════════════════════════════════════════════════════════════ */}
+              {isClothingProduct && !isFootwearProduct && (
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold flex items-center gap-2">
+                    <Shirt className="w-4 h-4 text-blue-600" />
+                    Taille <span className="text-destructive">*</span>
+                  </label>
+                  <div className="grid grid-cols-5 gap-2">
+                    {CLOTHING_SIZES.map((size) => {
                       const isSelected = selectedSize === size;
                       
                       return (
                         <button
                           key={size}
-                          type="button"
-                          onClick={() => {
-                            if (inStock) setSelectedSize(size);
-                          }}
-                          disabled={!inStock}
-                          className={`
-                            relative h-10 rounded-lg border text-sm font-medium transition hover:scale-105
-                            ${isSelected 
-                              ? 'border-accent bg-accent/10 text-accent ring-2 ring-accent/20' 
-                              : inStock
-                                ? 'border-border bg-background hover:border-accent/50'
-                                : 'border-border/50 bg-muted/50 text-muted-foreground cursor-not-allowed line-through'
-                            }
-                          `}
+                          onClick={() => setSelectedSize(size)}
+                          className={cn(
+                            "h-12 rounded-xl border-2 text-sm font-bold transition-all",
+                            isSelected 
+                              ? 'border-blue-500 bg-gradient-to-br from-blue-500/15 to-cyan-500/15 text-blue-700 shadow-md scale-105' 
+                              : 'border-border hover:border-blue-500/50 hover:bg-blue-500/5'
+                          )}
                         >
                           {size}
                           {isSelected && (
-                            <Check className="absolute -top-1 -right-1 h-4 w-4 text-accent bg-background rounded-full" />
+                            <Check className="w-3 h-3 mx-auto mt-0.5 text-blue-600" />
                           )}
                         </button>
                       );
@@ -344,11 +414,11 @@ export default function ProductDetailsPage() {
                 </div>
               )}
 
+              {/* Quantité */}
               <div className="flex items-center gap-4">
                 <label className="text-sm font-medium">Quantité</label>
                 <div className="flex items-center gap-2">
                   <Button
-                    type="button"
                     variant="outline"
                     size="icon"
                     onClick={() => handleQuantityChange(-1)}
@@ -359,7 +429,6 @@ export default function ProductDetailsPage() {
                   </Button>
                   <span className="w-8 text-center font-medium">{quantity}</span>
                   <Button
-                    type="button"
                     variant="outline"
                     size="icon"
                     onClick={() => handleQuantityChange(1)}
@@ -371,34 +440,46 @@ export default function ProductDetailsPage() {
                 </div>
               </div>
 
+              {/* Description */}
               <div className="pt-4 border-t border-border">
                 <p className="text-sm font-medium mb-2">Description</p>
                 <p className="text-sm text-muted-foreground whitespace-pre-line">
-                  {product.description || 'Aucune description disponible.'}
+                  {product.description || 'Aucune description.'}
                 </p>
               </div>
 
-              <div className="flex flex-col gap-3 pt-4 border-t border-border">
-                <Button
-                  onClick={handleAddToCart}
-                  className="w-full h-12 text-base hover:scale-105 transition-transform"
-                  disabled={product.totalStock === 0 || (hasSizeVariants && !selectedSize) || isAdding}
-                >
-                  {isAdding ? (
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  ) : (
-                    <ShoppingCart className="mr-2 h-5 w-5" />
-                  )}
-                  {product.totalStock === 0 
-                    ? 'Rupture de stock' 
-                    : hasSizeVariants && !selectedSize 
-                      ? 'Sélectionnez une pointure' 
-                      : isAdding
-                        ? 'Ajout en cours...'
-                        : `Ajouter au panier — ${formatPrice((product.basePrice || 0) * quantity)}`
-                  }
-                </Button>
-              </div>
+              {/* Bouton Ajouter */}
+              <Button
+                onClick={handleAddToCart}
+                className={cn(
+                  "w-full h-12 text-base transition-all",
+                  isFootwearProduct 
+                    ? "bg-gradient-to-r from-accent to-purple-500 hover:from-accent/90 hover:to-purple-500/90"
+                    : isClothingProduct
+                      ? "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-500/90 hover:to-cyan-500/90"
+                      : "bg-accent hover:bg-accent/90"
+                )}
+                disabled={
+                  product.totalStock === 0 || 
+                  (isFootwearProduct && !customSize) ||
+                  (isClothingProduct && !selectedSize) ||
+                  isAdding
+                }
+              >
+                {isAdding ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                ) : (
+                  <ShoppingCart className="mr-2 h-5 w-5" />
+                )}
+                {product.totalStock === 0 
+                  ? 'Rupture de stock' 
+                  : isFootwearProduct && !customSize
+                    ? 'Indiquez votre pointure'
+                    : isClothingProduct && !selectedSize
+                      ? 'Sélectionnez une taille' 
+                      : `Ajouter au panier — ${formatPrice((product.basePrice || 0) * quantity)}`
+                }
+              </Button>
             </div>
           </div>
         </div>

@@ -6,8 +6,10 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Search, ShoppingBag, User, Heart, Menu, X, LogOut, Package,
-  LayoutDashboard, ChevronDown, Sparkles, Settings, Crown
+  LayoutDashboard, ChevronDown, Sparkles, Settings, Crown,
+  Sun, Moon
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -40,6 +42,15 @@ export function Header() {
   const { wishlist } = useWishlist();
   const cart = useCartStore((state) => state.cart);
   const cartCount = cart?.items?.length || 0;
+
+  // ✅ Toggle thème Night/Light — branché sur next-themes (déjà câblé
+  // dans providers.tsx). On attend `mounted` pour éviter le mismatch SSR.
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = mounted && resolvedTheme === 'dark';
+
+  const toggleTheme = useCallback(() => {
+    setTheme(isDark ? 'light' : 'dark');
+  }, [isDark, setTheme]);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -209,6 +220,21 @@ export function Header() {
             {/* ACTIONS */}
             <div className="flex items-center gap-1 sm:gap-2">
               
+              {/* ✅ Bouton Night/Light — toujours visible (desktop + tablette) */}
+              <button
+                onClick={toggleTheme}
+                className="flex w-10 h-10 items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+                aria-label={isDark ? 'Passer en mode clair' : 'Passer en mode sombre'}
+                aria-pressed={isDark}
+                title={isDark ? 'Light' : 'Night'}
+              >
+                {isDark ? (
+                  <Sun className="w-5 h-5 transition-transform duration-300 hover:rotate-45" />
+                ) : (
+                  <Moon className="w-5 h-5 transition-transform duration-300 hover:-rotate-12" />
+                )}
+              </button>
+
               {/* Search */}
               <button
                 onClick={() => router.push('/search')}
@@ -477,8 +503,26 @@ export function Header() {
 
               {/* Actions rapides */}
               <div className="space-y-1 mb-6 pt-6 border-t border-border/50">
-                <Link 
-                  href="/search" 
+                {/* ✅ Bouton thème dans le menu mobile, pour garder la parité desktop */}
+                <button
+                  onClick={toggleTheme}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
+                  aria-label={isDark ? 'Passer en mode clair' : 'Passer en mode sombre'}
+                >
+                  {isDark ? (
+                    <>
+                      <Sun className="w-5 h-5" />
+                      <span>Mode clair</span>
+                    </>
+                  ) : (
+                    <>
+                      <Moon className="w-5 h-5" />
+                      <span>Mode sombre</span>
+                    </>
+                  )}
+                </button>
+                <Link
+                  href="/search"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors"
                 >

@@ -11,6 +11,7 @@ import { ROUTES } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
 import { Loader2, ShoppingBag, MapPin, Phone, User, Truck, CreditCard } from 'lucide-react';
 import { cn } from '@/utils/helpers';
+import { toast } from 'sonner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,19 +102,23 @@ export default function CheckoutPage() {
           city:       shipping.city.trim(),
           country:    shipping.country.trim(),
           phone:      shipping.phone.trim(),
-          postalCode: shipping.postalCode.trim(),
-          method:     shipping.method,
-        },
-        payment: {
-          method: paymentMethod,
-        },
-      });
+          zipCode:    shipping.postalCode.trim(),
+        } as any,
+        shippingMethod: shipping.method,
+        paymentMethod: paymentMethod,
+      } as any);
 
       const data = (response as any)?.data ?? response;
 
-      // ✅ CinetPay retourne un paymentUrl → rediriger vers la page de paiement
+      // ✅ CinetPay retourne un paymentUrl → ouvrir dans une POPUP centrée
+      // (au lieu de rediriger et perdre la page checkout). La popup reste
+      // ouverte pendant que l'utilisateur paye. Quand elle se ferme, on
+      // détecte via window.focus()/interval et on redirige vers la page
+      // de succès qui poll le backend pour confirmer le paiement.
       if (data?.payment?.paymentUrl) {
         // Stocker l'orderId en session pour la page de succès/échec
+        // (utile aussi si l'utilisateur revient manuellement après avoir
+        // fermé l'onglet CinetPay : il sera redirigé vers la bonne page).
         if (typeof sessionStorage !== 'undefined') {
           sessionStorage.setItem('bokoma_pending_order', JSON.stringify({
             orderId:     data.order?._id,
@@ -121,13 +126,57 @@ export default function CheckoutPage() {
             total:       data.order?.total,
           }));
         }
-        window.location.href = data.payment.paymentUrl;
+
+        if (typeof window !== 'undefined') {
+          // ── Popup centrée 900×800 ────────────────────────────────────
+          const w = 900;
+          const h = 800;
+          const dualScreenLeft  = window.screenLeft  ?? window.screenX;
+          const dualScreenTop   = window.screenTop   ?? window.screenY;
+          const screenWidth     = window.innerWidth;
+          const screenHeight    = window.innerHeight;
+          const left = (screenWidth  - w) / 2 + dualScreenLeft;
+          const top  = (screenHeight - h) / 2 + dualScreenTop;
+
+          const popup = window.open(
+            data.payment.paymentUrl,
+            'bokoma_payment',
+            `width=${w},height=${h},top=${top},left=${left},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes`
+          );
+
+          // ── Fallback si le navigateur bloque les popups ───────────────
+          if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+            toast.warning('Popup bloquée — ouverture dans un nouvel onglet');
+            window.open(data.payment.paymentUrl, '_blank', 'noopener,noreferrer');
+          }
+
+          // ── Quand la popup se ferme → on redirige vers la page succès ──
+          const pollPopup = window.setInterval(() => {
+            if (popup && popup.closed) {
+              window.clearInterval(pollPopup);
+              // On n'ajoute PAS &status=confirmed ici volontairement :
+              // la page /payment/success POLL le backend pour vérifier
+              // le statut réel (cf. bug où la page affichait un succès trompeur).
+              const orderId = data.order?._id;
+              if (orderId) {
+                router.push(`/payment/success?orderId=${orderId}`);
+              }
+            }
+          }, 600);
+
+          // Sécurité : on arrête le poll après 30 min max
+          window.setTimeout(() => window.clearInterval(pollPopup), 30 * 60 * 1000);
+        }
         return;
       }
 
-      // Pas de paiement en ligne (pickup sans acompte)
+      // Pas de paiement en ligne (ex: total = 0 ou mode hors CinetPay).
+      // ⚠️ On NE met PAS `&status=confirmed` ici : on force le passage par
+      // /payment/success?orderId=X qui POLL le backend. Sinon on afficherait
+      // "Paiement confirmé !" même si le backend n'a jamais validé la
+      // commande (cf. bug où la page affichait un succès trompeur).
       if (data?.order?._id) {
-        router.push(`/payment/success?orderId=${data.order._id}&status=confirmed`);
+        router.push(`/payment/success?orderId=${data.order._id}`);
       }
 
     } catch (err: any) {

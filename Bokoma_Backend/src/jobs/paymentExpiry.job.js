@@ -3,32 +3,41 @@ const Order = require('../models/Order');
 const NotificationService = require('../services/notification.service');
 const paymentService = require('../services/payment.service');
 
+// ✅ Configuration optimisée
+const EXPIRY_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes au lieu de 30s
+const MAX_CONCURRENT_CHECKS = 3; // Max 3 vérifications simultanées
+
+let isProcessing = false; // ✅ Flag pour éviter les exécutions concurrentes
+
 async function checkExpiredPayments() {
+  // ✅ Éviter les exécutions simultanées
+  if (isProcessing) {
+    return { expired: 0, reminders: 0 };
+  }
+
+  isProcessing = true;
+
   try {
     const now = new Date();
-    console.log(`\n🔍 [PaymentExpiryJob] ═══════════════════════════════════════`);
-    console.log(`🔍 [PaymentExpiryJob] Vérification à ${now.toISOString()}`);
 
     const expiredOrders = await Order.getExpiredPendingPayments();
-    console.log(`⏰ ${expiredOrders.length} paiement(s) expiré(s)`);
 
-    for (const order of expiredOrders) {
+    // ✅ Limiter le nombre de vérifications simultanées
+    const ordersToProcess = expiredOrders.slice(0, MAX_CONCURRENT_CHECKS);
+
+    for (const order of ordersToProcess) {
       try {
-        // ✅ VÉRIFIER D'ABORD avec paymentService (MÊME API)
+        // ✅ Vérifier avec paymentService si configuré
         if (order.payment.transactionId && paymentService.isConfigured()) {
-          console.log(`🔍 Vérification avant annulation: #${order.orderNumber}`);
-          
           const result = await paymentService.verifyPayment(order.payment.transactionId);
-          
+
           if (result.success) {
-            console.log(`✅ Paiement trouvé ! #${order.orderNumber} NON annulée`);
-            
             order.payment.status = 'paid';
             order.payment.paidAt = new Date();
             order.payment.amountPaid = result.amount || order.total;
             order.status = 'confirmed';
             await order.save();
-            
+
             if (order.user) {
               await NotificationService.notifyCustomer({
                 userId: order.user._id,
@@ -39,7 +48,7 @@ async function checkExpiredPayments() {
                 relatedOrder: order._id,
               });
             }
-            
+
             await NotificationService.notifyAdmins({
               type: 'payment_success',
               title: `💰 Paiement confirmé - #${order.orderNumber}`,
@@ -47,15 +56,13 @@ async function checkExpiredPayments() {
               data: { orderId: order._id, orderNumber: order.orderNumber, amount: order.total },
               relatedOrder: order._id,
             });
-            
+
             continue;
           }
         }
-        
+
         order.markAsExpired();
         await order.save();
-
-        console.log(`❌ #${order.orderNumber} expirée`);
 
         if (order.user) {
           await NotificationService.notifyCustomer({
@@ -75,13 +82,13 @@ async function checkExpiredPayments() {
           data: { orderId: order._id, orderNumber: order.orderNumber, amount: order.total },
           relatedOrder: order._id,
         });
-      } catch (err) {
-        console.error(`❌ Erreur traitement ${order._id}:`, err.message);
+      } catch {
+        // best effort
       }
     }
 
+    // Rappels
     const reminderOrders = await Order.getPaymentsToRemind();
-    console.log(`⏰ ${reminderOrders.length} rappel(s)`);
 
     for (const order of reminderOrders) {
       try {
@@ -98,24 +105,22 @@ async function checkExpiredPayments() {
             relatedOrder: order._id,
           });
         }
-      } catch (err) {
-        console.error(`❌ Erreur rappel:`, err.message);
+      } catch {
+        // best effort
       }
     }
 
-    console.log(`✅ [PaymentExpiryJob] ═══════════════════════════════════════\n`);
-
     return { expired: expiredOrders.length, reminders: reminderOrders.length };
-  } catch (err) {
-    console.error('❌ [PaymentExpiryJob] Erreur globale:', err);
+  } catch {
     return { expired: 0, reminders: 0 };
+  } finally {
+    isProcessing = false; // ✅ Toujours libérer le flag
   }
 }
 
 function startPaymentExpiryJob() {
-  console.log('🚀 [PaymentExpiryJob] Démarrage (toutes les 30 secondes)');
   setTimeout(checkExpiredPayments, 10000);
-  setInterval(checkExpiredPayments, 30 * 1000);
+  setInterval(checkExpiredPayments, EXPIRY_CHECK_INTERVAL);
 }
 
 module.exports = { checkExpiredPayments, startPaymentExpiryJob };

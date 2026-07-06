@@ -13,13 +13,17 @@ interface ModalProps {
   description?: string;
   children?: React.ReactNode;
   actions?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full';
 }
 
-const sizes = {
-  sm: 'max-w-sm',
-  md: 'max-w-md',
-  lg: 'max-w-lg',
+const sizes: Record<NonNullable<ModalProps['size']>, string> = {
+  sm:   'max-w-sm',
+  md:   'max-w-md',
+  lg:   'max-w-lg',
+  xl:   'max-w-2xl',
+  '2xl':'max-w-4xl',
+  '3xl':'max-w-6xl',
+  full: 'max-w-[95vw]',
 };
 
 export function Modal({ isOpen, onClose, title, description, children, actions, size = 'lg' }: ModalProps) {
@@ -30,6 +34,16 @@ export function Modal({ isOpen, onClose, title, description, children, actions, 
     if (isOpen) document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
+
+  // Fermeture par la touche Échap — convention modale standard.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
 
   // Empêche le rendu côté serveur pour éviter l'erreur d'hydratation
   if (!mounted) return null;
@@ -54,17 +68,24 @@ export function Modal({ isOpen, onClose, title, description, children, actions, 
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
           >
-            <div className={`${sizes[size]} w-full bg-card border border-border rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col`}>
-              {/* Header */}
+            <div className={`${sizes[size]} w-full bg-card border border-border rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col relative`}>
+              {/* Bouton fermer — TOUJOURS visible, même sans header (sinon la modale est piégée) */}
+              <button
+                onClick={onClose}
+                aria-label="Fermer la modale"
+                title="Fermer (Échap)"
+                className="absolute top-3 right-3 z-10 p-2 bg-background/80 hover:bg-muted border border-border/60 rounded-lg transition-colors backdrop-blur-sm shadow-sm"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Header (optionnel — affiché seulement si title ou description) */}
               {(title || description) && (
-                <div className="flex items-start justify-between px-6 py-4 border-b border-border">
+                <div className="flex items-start justify-between gap-10 px-6 py-4 border-b border-border pr-14">
                   <div>
                     {title && <h2 className="text-lg font-bold">{title}</h2>}
                     {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
                   </div>
-                  <button onClick={onClose} className="p-1 hover:bg-muted rounded-lg transition-colors">
-                    <X className="w-5 h-5" />
-                  </button>
                 </div>
               )}
 

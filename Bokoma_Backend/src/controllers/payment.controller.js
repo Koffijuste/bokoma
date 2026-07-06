@@ -1,5 +1,6 @@
 // src/controllers/payment.controller.js
 const Order = require('../models/Order');
+const Notification = require('../models/Notification');
 const NotificationService = require('../services/notification.service');
 
 /**
@@ -35,7 +36,6 @@ exports.getPendingPayments = async (req, res) => {
       orders: formatted,
     });
   } catch (err) {
-    console.error('❌ getPendingPayments error:', err);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des paiements en attente',
@@ -78,7 +78,6 @@ exports.getFailedPayments = async (req, res) => {
       orders: formatted,
     });
   } catch (err) {
-    console.error('❌ getFailedPayments error:', err);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des paiements échoués',
@@ -122,7 +121,6 @@ exports.getSuccessPayments = async (req, res) => {
       orders: formatted,
     });
   } catch (err) {
-    console.error('❌ getSuccessPayments error:', err);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des paiements réussis',
@@ -183,7 +181,6 @@ exports.rejectPayment = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('❌ rejectPayment error:', err);
     res.status(500).json({
       success: false,
       message: 'Erreur lors du rejet du paiement',
@@ -227,7 +224,6 @@ exports.getPaymentNotifications = async (req, res) => {
       notifications,
     });
   } catch (err) {
-    console.error('❌ getPaymentNotifications error:', err);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des notifications',
@@ -250,7 +246,6 @@ exports.markNotificationAsRead = async (req, res) => {
 
     res.json({ success: true, notification });
   } catch (err) {
-    console.error('❌ markNotificationAsRead error:', err);
     res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour' });
   }
 };
@@ -267,7 +262,6 @@ exports.markAllNotificationsAsRead = async (req, res) => {
       message: `${result.modifiedCount} notification(s) marquée(s) comme lue(s)`,
     });
   } catch (err) {
-    console.error('❌ markAllNotificationsAsRead error:', err);
     res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour' });
   }
 };

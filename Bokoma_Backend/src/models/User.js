@@ -80,6 +80,12 @@ const userSchema = new mongoose.Schema(
     refreshToken: { type: String, select: false },
     resetPasswordToken: { type: String, select: false },
     resetPasswordExpires: { type: Date, select: false },
+
+    // ✅ OTP 6 chiffres pour la récup de mot de passe (en plus du lien)
+    resetOtpCode: { type: String, select: false },
+    resetOtpExpires: { type: Date, select: false },
+    resetOtpAttempts: { type: Number, default: 0, select: false },
+
     emailVerificationToken: { type: String, select: false },
     emailVerificationExpires: { type: Date, select: false }
   },
