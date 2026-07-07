@@ -1,68 +1,76 @@
 // src/services/payment.service.js
 // ============================================================================
-// 💳 CINETPAY SERVICE — Init / verify paiement
+// 💳 CINETPAY SERVICE — Wrapper fin autour du SDK officiel `cinetpay-js`
 // ============================================================================
-// ⚠️  Réécrit pour corriger le bug "Erreur de paiement silencieuse" sur Railway.
-//     L'ancienne version utilisait un faux endpoint OAuth (`/v1/oauth/login`)
-//     que CinetPay ne reconnaît pas → Bearer token jamais obtenu → 500 muet.
-//     La bonne API CinetPay accepte directement `apikey` + `password` dans
-//     le payload de `/v2/payment`, sans OAuth préalable.
+// ⚠️  RÉÉCRIT POUR CORRIGER L'ERREUR `1002 / INVALID_TOKEN` SUR RAILWAY.
 //
-//     Voir : https://docs.cinetpay.com/api/1-payment-init
+// L'ancienne version parlait directement à `POST /v1/payment` en envoyant
+// `apikey` + `password` dans le payload. Or, depuis l'API v1 moderne de
+// CinetPay, cet endpoint exige un **token JWT Bearer** envoyé dans le header
+// `Authorization`. Pour obtenir ce token, il faut d'abord appeler
+//   POST /v1/oauth/login  (api_key + api_password)
+// puis utiliser `access_token` sur chaque appel `POST /v1/payment` (TTL ~24h,
+// auto-refresh). La lib officielle `cinetpay-js` (cinetpay/cinetpay-js) gère
+// tout : OAuth, cache token, retry sur EXPIRED_TOKEN (1003), validation des
+// payloads, détection sandbox/prod depuis le préfixe de la clé.
 //
-//     Tous les points d'échec sont désormais tracés via le logger structuré :
-//       - env vars manquantes        → tag=payment event=missing_env
-//       - timeout / DNS / réseau     → tag=payment event=network_error
-//       - credentials invalides      → tag=payment event=auth_failed
-//       - payload rejeté par CinetPay → tag=payment event=rejected
-//       - 5xx CinetPay               → tag=payment event=upstream_5xx
-//     Un correlationId est généré par tentative pour suivre la transaction
-//     dans les logs Railway (à grepper avec ce token).
+// Cette refacto CONSERVE LA MÊME SIGNATURE PUBLIQUE pour ne rien casser :
+//   - isConfigured()
+//   - initializePayment({ transactionId, amount, description, customer,
+//     orderId, payment_method })
+//       → { success, paymentToken, paymentUrl, transactionId,
+//           notifyToken, _correlationId }
+//   - verifyPayment(transactionId)
+//       → { success, status, amount, transactionId }
+//   - authenticate() / getAccessToken()  (shims rétro-compat)
+//
+// Le contrat `throws AppError` est également préservé pour que les callers
+// (order.service, payment-flow.service, webhook, jobs, controller) gardent
+// leur comportement de log/rollback actuel.
 // ============================================================================
 
-const axios = require('axios');
 const crypto = require('crypto');
+const {
+  CinetPayClient,
+  CinetPayError,
+  ApiError,
+  AuthenticationError,
+  NetworkError,
+  TimeoutError,
+  ValidationError,
+} = require('cinetpay-js');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 
 class PaymentService {
   constructor() {
-    this.apiKey     = process.env.CINETPAY_API_KEY;
+    this.apiKey      = process.env.CINETPAY_API_KEY;
     this.apiPassword = process.env.CINETPAY_API_PASSWORD_CI;
-    // ⚠️ CinetPay a DEUX APIs distinctes :
-    //   - "Checkout v2" : api-checkout.cinetpay.com + /v2/payment (nouvelle API)
-    //   - "API v1"      : api.cinetpay.net (sandbox) / api.cinetpay.co (prod)
-    //                     avec /v1/payment — utilisée par le SDK officiel cinetpay-js
-    //
-    // Si ta clé commence par sk_test_ → c'est du sandbox → api.cinetpay.net
-    // Si sk_live_ → c'est de la prod   → api.cinetpay.co
-    // On auto-détecte en fonction du préfixe de la clé, ce qui évite de se
-    // planter dans la config Railway.
-    const isLive = (this.apiKey || '').startsWith('sk_live_');
-    const defaultBase = isLive ? 'https://api.cinetpay.co' : 'https://api.cinetpay.net';
-    this.baseUrl   = (process.env.CINETPAY_API_URL || defaultBase).replace(/\/+$/, '');
-    this.apiPath   = '/v1/payment';
-    this.checkPath = '/v1/payment/check';
-    this.clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
-    this.apiUrl    = process.env.API_URL || this.clientUrl;
-    this.mode      = process.env.CINETPAY_MODE || (isLive ? 'production' : 'sandbox');
+    // 🇬🇼 Pays actif : on ne couvre que la Côte d'Ivoire pour l'instant.
+    // Pour ajouter un pays (SN, CM…) il suffira de lire les variables
+    // CINETPAY_API_PASSWORD_<PAYS> correspondantes et d'enregistrer le pays
+    // dans `clientCredentials` ci-dessous.
+    this.country     = 'CI';
+    this.clientUrl   = process.env.CLIENT_URL  || 'http://localhost:3000';
+    this.apiUrl      = process.env.API_URL     || this.clientUrl;
+    // CINETPAY_API_URL peut surcharger l'auto-détection du SDK. Vide = auto.
+    this.baseUrl     = (process.env.CINETPAY_API_URL || '').replace(/\/+$/, '') || undefined;
+    this.mode        = process.env.CINETPAY_MODE  || 'sandbox';
+
+    // Client SDK paresseusement instancié — ne pas planter à l'import si
+    // les variables d'env manquent (le backend doit pouvoir démarrer pour
+    // servir les routes non-paiement même si CinetPay est mal configuré).
+    this._sdk = null;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  //  CONFIG
+  //  CONFIG / HELPERS
   // ───────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Vérifie que les variables d'env CinetPay sont présentes.
-   * Log explicitement celles qui manquent (Railway debug).
-   * @returns {boolean}
-   */
   isConfigured() {
     const missing = [];
     if (!this.apiKey)      missing.push('CINETPAY_API_KEY');
     if (!this.apiPassword) missing.push('CINETPAY_API_PASSWORD_CI');
-    if (!this.baseUrl)     missing.push('CINETPAY_API_URL');
-
     if (missing.length > 0) {
       logger.error('payment', 'missing_env', {
         missing,
@@ -73,12 +81,68 @@ class PaymentService {
     return true;
   }
 
-  /**
-   * Génère un ID court et unique pour corréler tous les logs d'une même
-   * tentative de paiement dans Railway. Ex: "cp-1f3a9b2c4d".
-   */
   _newCorrelationId() {
     return 'cp-' + crypto.randomBytes(6).toString('hex');
+  }
+
+  /**
+   * Crée le client SDK une fois pour toutes et le cache. On lui injecte notre
+   * logger structuré via l'interface Logger du SDK (3 méthodes : debug/warn/error)
+   * pour centraliser les logs et garder une trace grep-friendly côté Railway.
+   */
+  _getClient() {
+    if (this._sdk) return this._sdk;
+    const sdkLogger = {
+      debug: (msg, data) => logger.debug('cinetpay-sdk', msg, data || {}),
+      warn:  (msg, data) => logger.warn('cinetpay-sdk', msg, data || {}),
+      error: (msg, data) => logger.error('cinetpay-sdk', msg, data || {}),
+    };
+
+    const config = {
+      credentials: {
+        [this.country]: { apiKey: this.apiKey, apiPassword: this.apiPassword },
+      },
+      logger: sdkLogger,
+      // tokenTtl par défaut = 82800s (23h, marge sous les ~24h renvoyées par
+      // l'API). retry sur EXPIRED_TOKEN (1003) géré en interne par le SDK.
+    };
+
+    if (this.baseUrl) config.baseUrl = this.baseUrl;
+
+    this._sdk = new CinetPayClient(config);
+    return this._sdk;
+  }
+
+  /**
+   * Convertit une erreur du SDK en AppError, en gardant `err.cause` chaîné
+   * pour le diagnostic Railway (logs.error dans order.service lit cause.*).
+   */
+  _wrapSdkError(err, defaultStatus, correlationId) {
+    let status = defaultStatus;
+    let message = err?.message || 'Erreur CinetPay inconnue';
+
+    if (err instanceof AuthenticationError) {
+      status = 500;
+      message = `Identifiants CinetPay invalides: ${message}`;
+    } else if (err instanceof ApiError) {
+      status = 400;
+      message = err.description || err.message || message;
+    } else if (err instanceof TimeoutError) {
+      status = 504;
+      message = `CinetPay timeout: ${message}`;
+    } else if (err instanceof NetworkError) {
+      status = 502;
+      message = `CinetPay réseau injoignable: ${message}`;
+    } else if (err instanceof ValidationError) {
+      status = 400;
+      message = `Données de paiement invalides: ${message}`;
+    } else if (err instanceof CinetPayError) {
+      status = 502;
+    }
+
+    const wrapped = new AppError(message, status, err);
+    wrapped._correlationId = correlationId;
+    return wrapped;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -86,18 +150,19 @@ class PaymentService {
   // ───────────────────────────────────────────────────────────────────────────
 
   /**
-   * Initialise une transaction CinetPay.
+   * Initialise une transaction CinetPay (init → URL de paiement → redirect).
    *
-   * @param {object} params
-   * @param {string} params.transactionId - ID interne (généré par order.service)
-   * @param {number} params.amount        - Montant en FCFA
-   * @param {string} params.description   - Description affichée au client
-   * @param {object} params.customer      - { name, surname, email, phone }
-   * @param {string} [params.orderId]     - ID Mongo de la commande
-   * @param {string} [params.payment_method] - 'OM_CI' | 'MTN_CI' | 'WAVE_CI' | ...
+   * @param {object}  params
+   * @param {string}  params.transactionId  - ID interne (≤30 chars, généré avant)
+   * @param {number}  params.amount         - Montant en FCFA
+   * @param {string}  params.description    - Description affichée au client
+   * @param {object}  params.customer       - { name, surname, email, phone }
+   * @param {string}  [params.orderId]      - ID Mongo de la commande
+   * @param {string}  [params.payment_method] - 'OM_CI' | 'MTN_CI' | 'WAVE_CI' …
    *
-   * @returns {Promise<{ success: true, paymentToken, paymentUrl, transactionId, notifyToken }>}
-   * @throws  {AppError} avec cause chaînée (voir payment-flow.service / order.service)
+   * @returns {Promise<{ success, paymentToken, paymentUrl, transactionId,
+   *                     notifyToken, _correlationId }>}
+   * @throws  {AppError} (cause = erreur SDK d'origine)
    */
   async initializePayment({
     transactionId,
@@ -109,7 +174,7 @@ class PaymentService {
   }) {
     const correlationId = this._newCorrelationId();
 
-    // ── Garde-fou env ───────────────────────────────────────────────────────
+    // Garde-fou env
     if (!this.isConfigured()) {
       throw new AppError('CinetPay non configuré (variables d\'env manquantes)', 500);
     }
@@ -121,29 +186,7 @@ class PaymentService {
     const failedUrl  = `${this.clientUrl}/payment/echec?orderId=${orderId}`;
     const notifyUrl  = `${this.apiUrl}/api/v1/webhook/cinetpay`;
 
-    const payload = {
-      apikey:               this.apiKey,
-      password:             this.apiPassword,
-      transaction_id:       transactionId,
-      amount:               safeAmount,
-      currency:             'XOF',
-      description:          (description || `Commande ${transactionId}`).slice(0, 255),
-      notify_url:           notifyUrl,
-      return_url:           successUrl,
-      cancel_url:           failedUrl,
-      channels:             'ALL',
-      customer_name:        String(customer?.name    || 'Client').slice(0, 100),
-      customer_surname:     String(customer?.surname || 'Bokoma').slice(0, 100),
-      customer_email:       customer?.email || 'client@bokoma.ci',
-      customer_phone_number: customer?.phone  || '+2250707070700',
-      metadata:             JSON.stringify({ orderId, correlationId }),
-      lang:                 'fr',
-      mode:                 this.mode,
-    };
-
-    const initUrl = `${this.baseUrl}${this.apiPath}`;
-
-    // ── Log d'entrée : indispensable pour tracer une transaction ───────────
+    // 🔎 On logge ce qu'on s'apprête à faire pour pouvoir grepper côté Railway
     logger.info('payment', 'init_start', {
       correlationId,
       transactionId,
@@ -151,183 +194,176 @@ class PaymentService {
       amount: safeAmount,
       payment_method,
       mode: this.mode,
-      endpoint: initUrl,
+      endpoint: this.baseUrl ? `${this.baseUrl}/v1/payment` : 'https://api.cinetpay.net/v1/payment (auto)',
       apiKeyPresent: !!this.apiKey,
       apiPasswordPresent: !!this.apiPassword,
+      viaSdk: 'cinetpay-js',
     });
 
     try {
-      const response = await axios.post(initUrl, payload, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 20_000,
-        // On ne throw pas sur 4xx : on veut inspecter la réponse CinetPay
-        validateStatus: () => true,
-      });
+      const client = this._getClient();
+      const payment = await client.payment.initialize(
+        {
+          currency: 'XOF',
+          merchantTransactionId: transactionId,
+          amount: safeAmount,
+          lang: 'fr',
+          designation: (description || `Commande ${transactionId}`).slice(0, 255),
+          clientEmail:      customer?.email || 'client@bokoma.ci',
+          clientFirstName:  String(customer?.name    || 'Client').slice(0, 100),
+          clientLastName:   String(customer?.surname || 'Bokoma').slice(0, 100),
+          clientPhoneNumber: customer?.phone || '+2250707070707',
+          successUrl,
+          failedUrl,
+          notifyUrl,
+          channel: 'PUSH',  // SDK v1: 'PUSH' | 'OTP' | 'QRCODE'
+          // paymentMethod est facultatif dans le SDK v1 ; s'il est fourni on le
+          // passe pour forcer un opérateur (OM_CI, MTN_CI, WAVE_CI, …).
+          ...(payment_method ? { paymentMethod: payment_method } : {}),
+        },
+        this.country,
+      );
 
-      const data = response.data;
-      const isHttpOk = response.status >= 200 && response.status < 300;
-      const isCinetOk = data?.code === '201' || data?.code === 201;
-
-      if (isHttpOk && isCinetOk) {
-        const paymentToken = data?.data?.payment_token;
-        const paymentUrl   = data?.data?.payment_url
-          || (paymentToken ? `https://secure.cinetpay.net/checkout/${paymentToken}` : null);
-
-        logger.info('payment', 'init_ok', {
-          correlationId,
-          transactionId,
-          orderId,
-          httpStatus: response.status,
-          cinetpayCode: data?.code,
-          hasPaymentUrl: !!paymentUrl,
-        });
-
-        return {
-          success: true,
-          paymentToken,
-          paymentUrl,
-          transactionId: data?.data?.transaction_id || transactionId,
-          notifyToken: data?.data?.notify_token,
-          _correlationId: correlationId,
-        };
-      }
-
-      // ── Cas défavorable : on a une réponse mais elle n'est pas OK ─────────
-      // CinetPay renvoie un 200/201 avec code applicatif différent en cas
-      // de rejet (credentials invalides, payload invalide, etc.). On doit
-      // distinguer ces cas pour pouvoir les diagnostiquer côté Railway.
-      logger.error('payment', 'rejected', {
+      logger.info('payment', 'init_ok', {
         correlationId,
         transactionId,
         orderId,
-        httpStatus: response.status,
-        cinetpayCode: data?.code,
-        message: data?.message,
-        description: data?.description || data?.data?.description,
-        // On log la payload CinetPay brute (sans secrets) pour debug
-        responseBody: data,
+        paymentTokenPresent: !!payment.paymentToken,
+        paymentUrlPresent: !!payment.paymentUrl,
+        mustBeRedirected: payment.details?.mustBeRedirected,
+        apiCode: payment.code,
+        apiStatus: payment.status,
+        cinetpayTransactionId: payment.transactionId,
       });
 
-      throw new AppError(
-        data?.description || data?.message || `CinetPay a refusé l'initialisation (code ${data?.code})`,
-        400,
-      );
+      return {
+        success: true,
+        paymentToken: payment.paymentToken,
+        paymentUrl:   payment.paymentUrl,
+        transactionId: payment.transactionId,
+        notifyToken:  payment.notifyToken,
+        _correlationId: correlationId,
+      };
     } catch (err) {
-      // Si c'est déjà une AppError (rejet applicatif ci-dessus), on remonte
-      if (err instanceof AppError) throw err;
-
-      // Erreur réseau / timeout / DNS — distinguer le type pour Railway
-      const axiosCode = err.code;          // 'ETIMEDOUT' | 'ECONNREFUSED' | 'ENOTFOUND' | ...
-      const axiosSyscall = err.syscall;
-      const isNetworkError = axiosCode && (
-        axiosCode === 'ETIMEDOUT' ||
-        axiosCode === 'ECONNREFUSED' ||
-        axiosCode === 'ECONNRESET' ||
-        axiosCode === 'ENOTFOUND' ||
-        axiosCode === 'EAI_AGAIN'
-      );
-
-      logger.error('payment', isNetworkError ? 'network_error' : 'upstream_error', {
+      logger.error('payment', 'init_failed', {
         correlationId,
         transactionId,
         orderId,
-        endpoint: initUrl,
-        axiosCode,
-        axiosSyscall,
-        httpStatus: err.response?.status,
-        description: err.response?.data?.description || err.response?.data?.message,
-        message: err.message,
-        stack: err.stack?.split('\n').slice(0, 5).join('\n'), // top 5 frames
+        errorClass: err?.constructor?.name,
+        message: err?.message,
+        description: err?.description,
+        apiCode: err instanceof ApiError ? err.apiCode : undefined,
+        apiStatus: err instanceof ApiError ? err.apiStatus : undefined,
       });
-
-      // On relance avec un message explicite mais l'erreur originale reste
-      // disponible via err.cause pour le global error handler.
-      const wrapped = new AppError(
-        `Échec de l'appel à CinetPay (${axiosCode || err.response?.status || 'unknown'})`,
-        502,
-        err,
-      );
-      wrapped._correlationId = correlationId;
-      throw wrapped;
+      throw this._wrapSdkError(err, 400, correlationId);
     }
-  }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  //  AUTH (rétro-compat) — conservé pour ne pas casser les anciens imports.
-  //  CinetPay n'utilise plus OAuth sur /v2/payment : la vraie authentification
-  //  est portée par `apikey` + `password` dans le payload. Cette méthode
-  //  renvoie toujours un token factice et logge un avertissement si elle
-  //  est appelée.
-  // ───────────────────────────────────────────────────────────────────────────
-
-  async authenticate() {
-    logger.warn('payment', 'auth_called_but_deprecated', {
-      hint: 'CinetPay /v2/payment ne nécessite pas d\'OAuth : apikey+password sont dans le payload.',
-    });
-    return 'no-token-required';
-  }
-
-  async getAccessToken() {
-    return 'no-token-required';
   }
 
   // ───────────────────────────────────────────────────────────────────────────
   //  VERIFY
   // ───────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Vérifie le statut d'une transaction existante.
+   * Tente d'abord via `transaction_id`, fallback sur l'identifiant tel quel.
+   *
+   * @returns {Promise<{ success, status, amount, transactionId, error? }>}
+   *   - status ∈ SUCCESS | FAILED | REFUSED | EXPIRED | CANCELED |
+     INSUFFICIENT_BALANCE | PENDING | INITIATED | UNKNOWN | ERROR
+   */
   async verifyPayment(transactionId) {
     const correlationId = this._newCorrelationId();
+
     if (!this.isConfigured()) {
       throw new AppError('CinetPay non configuré', 500);
     }
 
-    const verifyUrl = `${this.baseUrl}${this.checkPath}`;
-    const payload = {
-      apikey:         this.apiKey,
-      password:       this.apiPassword,
-      transaction_id: transactionId,
-    };
-
-    logger.info('payment', 'verify_start', { correlationId, transactionId, endpoint: verifyUrl });
-
     try {
-      const response = await axios.post(verifyUrl, payload, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 15_000,
-        validateStatus: () => true,
+      const client = this._getClient();
+      const status = await client.payment.getStatus(transactionId, this.country);
+
+      const apiStatus = String(status.status || '').toUpperCase();
+      const ok       = apiStatus === 'SUCCESS';
+      const failed   = ['FAILED', 'REFUSED', 'EXPIRED', 'CANCELED', 'INSUFFICIENT_BALANCE'].includes(apiStatus);
+      const pending  = ['PENDING', 'INITIATED'].includes(apiStatus);
+
+      const mappedStatus = ok
+        ? 'SUCCESS'
+        : failed
+          ? apiStatus
+          : pending
+            ? 'PENDING'
+            : apiStatus || 'UNKNOWN';
+
+      logger.info('payment', ok ? 'verify_ok' : failed ? 'verify_failed' : 'verify_pending', {
+        correlationId,
+        transactionId,
+        apiCode: status.code,
+        apiStatus,
       });
 
-      const data = response.data;
-      const isHttpOk = response.status >= 200 && response.status < 300;
-
-      if (!isHttpOk) {
-        logger.error('payment', 'verify_http_error', {
-          correlationId, transactionId,
-          httpStatus: response.status, data,
-        });
-        return { success: false, status: 'ERROR', error: `HTTP ${response.status}`, transactionId };
-      }
-
-      const code = String(data?.code ?? '');
-      const status = String(data?.status ?? '').toUpperCase();
-
-      if (code === '00' || status === 'ACCEPTED' || status === 'SUCCESS') {
-        logger.info('payment', 'verify_ok', { correlationId, transactionId, status: status || 'ACCEPTED' });
-        return { success: true, status: 'SUCCESS', amount: data?.amount, transactionId };
-      }
-      if (['FAILED', 'REFUSED', 'EXPIRED', 'CANCELED'].includes(status)) {
-        logger.warn('payment', 'verify_failed', { correlationId, transactionId, status, data });
-        return { success: false, status, transactionId };
-      }
-
-      logger.info('payment', 'verify_pending', { correlationId, transactionId, status: status || code });
-      return { success: false, status: status || 'PENDING', transactionId };
+      return {
+        success: ok,
+        status: mappedStatus,
+        amount: undefined, // PaymentStatus ne contient pas le montant → les callers
+                           // fallback déjà sur order.total
+        transactionId: status.transactionId || transactionId,
+      };
     } catch (err) {
-      logger.error('payment', 'verify_network_error', {
-        correlationId, transactionId,
-        axiosCode: err.code, message: err.message,
+      logger.error('payment', 'verify_error', {
+        correlationId,
+        transactionId,
+        errorClass: err?.constructor?.name,
+        message: err?.message,
+        apiCode: err instanceof ApiError ? err.apiCode : undefined,
       });
-      return { success: false, status: 'ERROR', error: err.message, transactionId };
+
+      // Forme attendue par les callers (webhook, jobs, controller)
+      return {
+        success: false,
+        status: 'ERROR',
+        error: err?.message || 'Erreur inconnue',
+        transactionId,
+      };
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  //  COMPAT RETRO — shims pour ne pas casser d'anciens imports
+  //  (test.cinetpay.routes.js, scripts, etc.)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * ⚠️ DEPRECATED — conservé en shim pour ne pas péter les routes de test.
+   * Avec cinetpay-js, il n'y a PAS de token "exposé" : l'Authenticator du SDK
+   * gère son cache JWT en interne. On log un warning si quelqu'un appelle.
+   */
+  async authenticate() {
+    logger.warn('payment', 'auth_called_but_deprecated', {
+      hint: 'Avec cinetpay-js, l\'authentification est gérée en interne (POST /v1/oauth/login + cache JWT du SDK). Aucun token à manipuler.',
+    });
+    return 'use-sdk-internal-auth';
+  }
+
+  async getAccessToken() {
+    return 'use-sdk-internal-auth';
+  }
+
+  /** Permet aux tests / à la console de vérifier que le client est bien construit. */
+  async testConnection() {
+    if (!this.isConfigured()) {
+      return { success: false, error: 'CinetPay non configuré' };
+    }
+    try {
+      const client = this._getClient();
+      // Juste demander un token — c'est l'opération la plus simple pour
+      // vérifier que api_key + api_password sont valides.
+      const clientWithAuth = client.authenticators?.get(this.country);
+      if (!clientWithAuth) return { success: false, error: 'Authenticator absent' };
+      await clientWithAuth.getToken();
+      return { success: true, message: 'Connexion à CinetPay établie', mode: this.mode };
+    } catch (err) {
+      return { success: false, error: err?.message || 'Erreur inconnue' };
     }
   }
 }
