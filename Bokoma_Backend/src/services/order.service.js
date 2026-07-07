@@ -224,9 +224,31 @@ const createOrder = async (req) => {
       order.payment.remainingAmount = paymentData.remainingAmount;
       await order.save();
     } catch (err) {
+      // 🪵 Log structuré — la cause originale est INDISPENSABLE pour debug
+      // côté Railway (env vars CinetPay manquantes, credentials invalides,
+      // payload rejeté, timeout réseau, etc.).
+      console.error('[order] ❌ Initialisation paiement CinetPay échouée', {
+        orderNumber: order.orderNumber,
+        transactionId,
+        paymentMethod,
+        total,
+        operator: payment?.details?.operator,
+        cause: err?.message,
+        status: err?.statusCode || err?.response?.status,
+        description: err?.response?.data?.description,
+      });
+
       // Rollback : restaurer le stock et annuler la commande
       await rollbackOrder(order, items, `Erreur initialisation paiement: ${err.message}`);
-      throw new AppError('Erreur de paiement, veuillez réessayer', 500);
+
+      // On relance une AppError qui chaîne la cause originale.
+      // → Logs Railway : on verra les deux stacks.
+      // → Réponse client : reste générique pour ne rien exposer.
+      throw new AppError(
+        'Erreur de paiement, veuillez réessayer',
+        500,
+        err,
+      );
     }
   }
 

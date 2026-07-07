@@ -1,4 +1,11 @@
 // src/services/payment.service.js
+// ============================================================================
+// 💳 CINETPAY SERVICE — Auth + init + verify paiement
+// ============================================================================
+// ✅ Logs explicites à chaque étape pour diagnostiquer rapidement les 5xx
+//    côté Railway (variables d'env manquantes, credentials invalides, etc.)
+// ============================================================================
+
 const axios = require('axios');
 const AppError = require('../utils/AppError');
 
@@ -13,8 +20,24 @@ class PaymentService {
     this.tokenExpiry = null;
   }
 
+  /**
+   * Indique si les variables CinetPay sont configurées.
+   * On log explicitement celles qui manquent pour aider au debug.
+   */
   isConfigured() {
-    return !!(this.apiKey && this.apiPassword && this.baseUrl);
+    const missing = [];
+    if (!this.apiKey) missing.push('CINETPAY_API_KEY');
+    if (!this.apiPassword) missing.push('CINETPAY_API_PASSWORD_CI');
+    if (!this.baseUrl) missing.push('CINETPAY_API_URL');
+
+    if (missing.length > 0) {
+      console.error(
+        `[payment] ⚠️ CinetPay non configuré. Variables manquantes : ${missing.join(', ')}. ` +
+        `Définissez-les sur Railway (Dashboard → Variables) puis redéployez.`,
+      );
+      return false;
+    }
+    return true;
   }
 
   async authenticate() {
@@ -26,12 +49,27 @@ class PaymentService {
       );
 
       const token = response.data.access_token || response.data.token;
-      if (!token) throw new AppError('Token CinetPay non reçu', 401);
+      if (!token) {
+        console.error('[payment] ❌ Auth CinetPay: aucun token dans la réponse', {
+          status: response.status,
+          body: response.data,
+        });
+        throw new AppError('Token CinetPay non reçu', 401);
+      }
 
       this.accessToken = token;
       this.tokenExpiry = Date.now() + (response.data.expires_in ?? 3600) * 1000;
       return token;
     } catch (err) {
+      // 🪵 Log structuré pour Railway — affiche la vraie cause du 401
+      const status = err.response?.status;
+      const description = err.response?.data?.description || err.response?.data?.message;
+      console.error('[payment] ❌ Auth CinetPay échouée', {
+        status,
+        description,
+        url: `${this.baseUrl}/v1/oauth/login`,
+        error: err.message,
+      });
       throw err;
     }
   }
@@ -75,29 +113,55 @@ class PaymentService {
       direct_pay: false,
     };
 
-    const response = await axios.post(
-      `${this.baseUrl}/v1/payment`,
-      payload,
-      {
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        timeout: 15_000,
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/v1/payment`,
+        payload,
+        {
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          timeout: 15_000,
+        }
+      );
+
+      const data = response.data;
+
+      if (data.code === 200 || data.status === 'OK') {
+        const paymentUrl = data.payment_url || `https://secure.cinetpay.net/checkout/${data.payment_token}`;
+        return {
+          success: true,
+          paymentToken: data.payment_token,
+          paymentUrl,
+          transactionId: data.merchant_transaction_id || transactionId,
+          notifyToken: data.notify_token,
+        };
       }
-    );
 
-    const data = response.data;
+      // ⚠️ CinetPay a répondu mais a refusé l'init. On log tout.
+      console.error('[payment] ❌ Init CinetPay refusée', {
+        transactionId,
+        amount: safeAmount,
+        payment_method,
+        response: data,
+      });
+      throw new AppError(
+        data.description || `CinetPay a refusé l'init (code ${data.code})`,
+        400,
+      );
+    } catch (err) {
+      // Si c'est déjà une AppError, on ne la double-pas
+      if (err instanceof AppError) throw err;
 
-    if (data.code === 200 || data.status === 'OK') {
-      const paymentUrl = data.payment_url || `https://secure.cinetpay.net/checkout/${data.payment_token}`;
-      return {
-        success: true,
-        paymentToken: data.payment_token,
-        paymentUrl,
-        transactionId: data.merchant_transaction_id || transactionId,
-        notifyToken: data.notify_token,
-      };
+      // Erreur réseau ou HTTP non géré ci-dessus
+      console.error('[payment] ❌ Init CinetPay - erreur réseau/HTTP', {
+        transactionId,
+        amount: safeAmount,
+        payment_method,
+        status: err.response?.status,
+        description: err.response?.data?.description || err.response?.data?.message,
+        error: err.message,
+      });
+      throw err;
     }
-
-    throw new AppError(data.description || 'Erreur initialisation paiement', 400);
   }
 
   // ✅ Amélioration : gestion robuste des erreurs

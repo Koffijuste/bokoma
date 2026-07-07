@@ -25,7 +25,12 @@ const errorHandler = (err, req, res, next) => {
   if (err.name === 'JsonWebTokenError')  { statusCode = 401; message = 'Token invalide'; }
   if (err.name === 'TokenExpiredError')  { statusCode = 401; message = 'Token expiré, reconnectez-vous'; }
 
+  // 🪵 Log structuré — la cause chaînée (err.cause) est désormais visible
+  // dans les logs Railway, ce qui était le but de l'AppError refacto.
   console.error('Global error handler:', err && err.stack ? err.stack : err);
+  if (err && err.cause) {
+    console.error('↳ caused by:', err.cause.stack || err.cause);
+  }
 
   res.status(statusCode).json({
     success: false,
