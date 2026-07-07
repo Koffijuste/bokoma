@@ -593,7 +593,7 @@ export default function DashboardCategoriesPage() {
     }
   );
 
-  const updateMutation = useMutation<ApiResponse<{ category: Category }>, CategoryFormData & { id: string }>(
+  const updateMutation = useMutation<ApiResponse<{ category: Category }>, Partial<CategoryFormData> & { id: string }>(
     ({ id, ...data }) => categoryApi.updateCategory(id, data),
     {
       onSuccess: () => {
