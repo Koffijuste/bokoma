@@ -1,13 +1,17 @@
 // src/services/payment-flow.service.js
 // ============================================================================
-// 💳 PAYMENT FLOW SERVICE — Logique d'orchestration du paiement CinetPay
+// 💳 PAYMENT FLOW SERVICE — Orchestration du paiement CinetPay
 // ============================================================================
-// Extrait du contrôleur order.controller.js pour alléger celui-ci et rendre
-// la logique testable de manière isolée.
+// Refacto : ajout de logs structurés (logger) à chaque étape clé pour que
+// les erreurs Railway soient traçables. Le correlationId généré par
+// payment.service est propagé dans le résultat pour permettre un grep
+// facile côté ops.
 // ============================================================================
 
+const crypto = require('crypto');
 const paymentService = require('./payment.service');
 const AppError = require('../utils/AppError');
+const logger = require('../utils/logger');
 
 // Mapping des méthodes de paiement vers les canaux CinetPay
 const OPERATOR_MAP = {
@@ -53,7 +57,7 @@ const normalizePhoneNumber = (rawPhone) => {
   if (phone.startsWith('+225')) nationalNumber = phone.slice(4);
   else if (phone.startsWith('00225')) nationalNumber = phone.slice(5);
   else if (phone.startsWith('225')) nationalNumber = phone.slice(3);
-  else if (phone.startsWith('0')) nationalNumber = phone;
+  else if (phone.startsWith('0')) nationalNumber = phone.slice(0);
 
   if (nationalNumber.length === 10 && /^\d+$/.test(nationalNumber)) {
     return `+225${nationalNumber}`;
@@ -92,7 +96,7 @@ const buildPaymentDescription = (orderNumber, total, isPartial, remainingAmount)
  * @param {String} params.paymentMethod  - 'card' | 'mobile_money' | 'cash_on_delivery'
  * @param {String} [params.operator]     - 'OM' | 'MTN' | 'WAVE' | 'MOOV'
  *
- * @returns {Promise<{ paymentToken, paymentUrl, paymentAmount, remainingAmount, isPartialPayment, cinetpayMethod }>}
+ * @returns {Promise<{ paymentToken, paymentUrl, paymentAmount, remainingAmount, isPartialPayment, cinetpayMethod, correlationId }>}
  */
 const initializeCinetPayPayment = async ({
   transactionId,
@@ -103,8 +107,15 @@ const initializeCinetPayPayment = async ({
   paymentMethod,
   operator,
 }) => {
+  // ID de corrélation généré ICI aussi — visible dès l'entrée du flow
+  const flowId = 'flow-' + crypto.randomBytes(5).toString('hex');
+
+  // Garde-fou env vars
   if (!paymentService.isConfigured()) {
-    throw new AppError('CinetPay non configuré', 500);
+    logger.error('payment-flow', 'config_missing', {
+      flowId, transactionId, orderId,
+    });
+    throw new AppError('CinetPay non configuré (variables d\'env manquantes)', 500);
   }
 
   const { paymentAmount, remainingAmount, isPartialPayment } =
@@ -120,28 +131,70 @@ const initializeCinetPayPayment = async ({
   const customerPhone = normalizePhoneNumber(user?.phone);
   const cinetpayMethod = resolveCinetPayMethod(paymentMethod, operator);
 
-  const result = await paymentService.initializePayment({
+  // Log d'entrée — première chose visible dans Railway si ça plante plus bas
+  logger.info('payment-flow', 'init_start', {
+    flowId,
     transactionId,
-    amount: paymentAmount,
-    description,
     orderId,
-    customer: {
-      name: user?.firstName || 'Client',
-      surname: user?.lastName || 'Bokoma',
-      email: user?.email || 'client@bokoma.ci',
-      phone: customerPhone,
-    },
-    payment_method: cinetpayMethod,
-  });
-
-  return {
-    paymentToken: result.paymentToken,
-    paymentUrl: result.paymentUrl,
+    orderNumber,
+    total: amount,
     paymentAmount,
     remainingAmount,
     isPartialPayment,
+    paymentMethod,
+    operator,
     cinetpayMethod,
-  };
+    customerPhone,
+  });
+
+  try {
+    const result = await paymentService.initializePayment({
+      transactionId,
+      amount: paymentAmount,
+      description,
+      orderId,
+      customer: {
+        name:    user?.firstName || 'Client',
+        surname: user?.lastName  || 'Bokoma',
+        email:   user?.email     || 'client@bokoma.ci',
+        phone:   customerPhone,
+      },
+      payment_method: cinetpayMethod,
+    });
+
+    logger.info('payment-flow', 'init_ok', {
+      flowId,
+      transactionId,
+      orderId,
+      correlationId: result._correlationId,
+      hasPaymentUrl: !!result.paymentUrl,
+      hasPaymentToken: !!result.paymentToken,
+    });
+
+    return {
+      paymentToken: result.paymentToken,
+      paymentUrl: result.paymentUrl,
+      paymentAmount,
+      remainingAmount,
+      isPartialPayment,
+      cinetpayMethod,
+      correlationId: result._correlationId || flowId,
+    };
+  } catch (err) {
+    // On remonte l'erreur telle quelle (déjà typée par payment.service) mais
+    // on ajoute un log au niveau "flow" pour pouvoir filtrer facilement.
+    logger.error('payment-flow', 'init_failed', {
+      flowId,
+      transactionId,
+      orderId,
+      correlationId: err._correlationId,
+      appErrorMessage: err.message,
+      appErrorStatus: err.statusCode,
+      // La cause brute sera déjà loggée par payment.service.js
+      hasCause: !!err.cause,
+    });
+    throw err;
+  }
 };
 
 /**
@@ -156,7 +209,6 @@ const initializeCinetPayPayment = async ({
 const verifyWebhookSignature = (rawBody, providedSignature, secret) => {
   if (!rawBody || !providedSignature || !secret) return false;
 
-  const crypto = require('crypto');
   const body = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody);
 
   const expected = crypto

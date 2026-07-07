@@ -11,6 +11,7 @@ const Cart = require('../models/Cart');
 const Coupon = require('../models/Coupon');
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
+const logger = require('../utils/logger');
 const {
   decrementStock,
   restoreStock,
@@ -222,33 +223,50 @@ const createOrder = async (req) => {
       order.payment.paymentToken = paymentData.paymentToken;
       order.payment.amountPaid = paymentData.paymentAmount;
       order.payment.remainingAmount = paymentData.remainingAmount;
+      order.payment.correlationId = paymentData.correlationId;
       await order.save();
     } catch (err) {
       // 🪵 Log structuré — la cause originale est INDISPENSABLE pour debug
       // côté Railway (env vars CinetPay manquantes, credentials invalides,
-      // payload rejeté, timeout réseau, etc.).
-      console.error('[order] ❌ Initialisation paiement CinetPay échouée', {
+      // payload rejeté, timeout réseau, etc.). Le logger redact les secrets
+      // automatiquement. Le correlationId permet de grepper la transaction
+      // dans tous les logs Railway associés.
+      logger.error('order', 'payment_init_failed', {
         orderNumber: order.orderNumber,
+        orderId: order._id.toString(),
         transactionId,
         paymentMethod,
         total,
         operator: payment?.details?.operator,
-        cause: err?.message,
-        status: err?.statusCode || err?.response?.status,
-        description: err?.response?.data?.description,
+        correlationId: err._correlationId || paymentData?.correlationId,
+        appErrorMessage: err.message,
+        appErrorStatus: err.statusCode,
+        httpStatus: err.response?.status,
+        axiosCode: err.code,
+        description: err.response?.data?.description || err.response?.data?.message,
+        // La cause originelle (Axios / réseau / rejet CinetPay) est déjà loggée
+        // par payment.service.js, mais on logge aussi sa stack ici pour avoir
+        // le chemin complet d'exécution sans grepper plusieurs fichiers.
+        causeMessage: err.cause?.message,
+        causeCode: err.cause?.code,
+        stack: err.stack?.split('\n').slice(0, 8).join('\n'),
       });
 
       // Rollback : restaurer le stock et annuler la commande
       await rollbackOrder(order, items, `Erreur initialisation paiement: ${err.message}`);
 
       // On relance une AppError qui chaîne la cause originale.
-      // → Logs Railway : on verra les deux stacks.
+      // → Logs Railway : on verra les deux stacks (via errorHandler.js).
       // → Réponse client : reste générique pour ne rien exposer.
-      throw new AppError(
+      // → Mais on stocke le correlationId dans la cause pour debug avancé.
+      const wrapped = new AppError(
         'Erreur de paiement, veuillez réessayer',
         500,
         err,
       );
+      wrapped._correlationId = err._correlationId || paymentData?.correlationId;
+      wrapped._orderNumber = order.orderNumber;
+      throw wrapped;
     }
   }
 

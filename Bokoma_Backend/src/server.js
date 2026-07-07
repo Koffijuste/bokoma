@@ -15,6 +15,7 @@ const morgan     = require('morgan');
 const rateLimit  = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const connectDB  = require('./config/db');
+const logger     = require('./utils/logger');
 
 const app = express();
 
@@ -168,17 +169,43 @@ const PORT = process.env.PORT || 5000;
 const { startPaymentExpiryJob }       = require('./jobs/paymentExpiry.job');
 const { startPaymentVerificationJob } = require('./jobs/paymentVerification.job');
 
+// 🪵 Snapshot des variables CinetPay au démarrage — visible dès les
+// premières secondes dans les logs Railway. Sans valeur, juste présent/absent.
+logger.info('boot', 'env_snapshot', {
+  nodeEnv: process.env.NODE_ENV,
+  port: PORT,
+  cinetpay: {
+    apiKeyPresent:      !!process.env.CINETPAY_API_KEY,
+    apiPasswordPresent: !!process.env.CINETPAY_API_PASSWORD_CI,
+    baseUrl:            process.env.CINETPAY_API_URL || null,
+    mode:               process.env.CINETPAY_MODE     || null,
+    fullyConfigured: !!(
+      process.env.CINETPAY_API_KEY &&
+      process.env.CINETPAY_API_PASSWORD_CI &&
+      process.env.CINETPAY_API_URL
+    ),
+  },
+  clientUrl: process.env.CLIENT_URL || null,
+  apiUrl:    process.env.API_URL    || null,
+});
+
 connectDB()
   .then(() => {
-    console.log('✅ MongoDB connecté');
+    logger.info('boot', 'mongo_connected', { ok: true });
     startPaymentExpiryJob();
     startPaymentVerificationJob();
     app.listen(PORT, () => {
+      logger.info('boot', 'server_listening', {
+        url: `http://localhost:${PORT}`,
+        health: `http://localhost:${PORT}/api/v1/health`,
+      });
+      // Conserver aussi les logs "console.log" pour les outils qui les grep
       console.log(`🚀 Serveur : http://localhost:${PORT}`);
       console.log(`🏥 Health  : http://localhost:${PORT}/api/v1/health`);
     });
   })
   .catch((err) => {
+    logger.error('boot', 'mongo_failed', { error: err.message });
     console.error('❌ MongoDB erreur:', err.message);
     process.exit(1);
   });

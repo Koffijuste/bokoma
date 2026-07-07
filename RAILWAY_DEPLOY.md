@@ -109,7 +109,9 @@ JWT_AUDIENCE=bokoma-users
 # Va sur https://cinetpay.com → crée un compte → récupère ta clé API sandbox
 CINETPAY_API_KEY=<TA_CLE_CINETPAY_SANDBOX_ICI>
 CINETPAY_API_PASSWORD_CI=<TON_MOT_DE_PASSE_CINETPAY_ICI>
-CINETPAY_API_URL=https://api.cinetpay.net
+# ⚠️ URL CORRECTE : api-checkout.cinetpay.com (fonctionne pour sandbox ET prod)
+# L'ancienne URL api.cinetpay.net renvoie 404 NOT_FOUND "EndPoint does not exist"
+CINETPAY_API_URL=https://api-checkout.cinetpay.com
 CINETPAY_MODE=sandbox
 
 # ─── Cloudinary ───────────────────────────────────────────
@@ -248,6 +250,55 @@ Railway dashboard → ton service → onglet **Deployments** → clique sur le d
 2. 2FA doit être activée sur le compte Gmail pour générer un App Password
 3. Si "less secure" est désactivé, c'est normal depuis 2022 : il faut OBLIGATOIREMENT un App Password
 4. Alternative : utilise [Mailtrap.io](https://mailtrap.io) (gratuit) ou [Brevo](https://brevo.com) (gratuit jusqu'à 300 emails/jour)
+
+### 💳 Paiement CinetPay échoue (`POST /api/v1/orders` renvoie 500)
+
+Tous les events paiement sont loggés en JSON structuré, préfixés `[bokoma]`, donc grep-friendly :
+
+```bash
+# Dans Railway → Deployments → View Logs, ou via le CLI :
+railway logs --service bokoma-backend | grep '"tag":"payment"'
+railway logs --service bokoma-backend | grep '"tag":"order"'  # erreurs au niveau order.service
+railway logs --service bokoma-backend | grep '"event":"rejected"'  # rejet CinetPay applicatif
+railway logs --service bokoma-backend | grep '"event":"network_error"'  # DNS/timeout
+railway logs --service bokoma-backend | grep 'cp-[a-f0-9]'  # une transaction précise (correlationId)
+```
+
+**Diagnostic par event :**
+
+| Event dans les logs | Signification | Action |
+|---|---|---|
+| `missing_env` (au boot) | `CINETPAY_API_KEY`, `CINETPAY_API_PASSWORD_CI` ou `CINETPAY_API_URL` manquent | Ajouter les 3 vars sur Railway → Variables, redéployer |
+| `rejected` `httpStatus=404 description="EndPoint does not exist"` | L'URL CinetPay est mauvaise (`api.cinetpay.net` au lieu de `api-checkout.cinetpay.com`) | Corriger `CINETPAY_API_URL=https://api-checkout.cinetpay.com` |
+| `rejected` `cinetpayCode=624` ou `description` contient "Invalid credentials" | API key / password invalides | Vérifier sur https://cinetpay.com → Dashboard → Mes sites → API |
+| `rejected` `cinetpayCode=602` ou "Invalid phone number" | Numéro client mal formé | Le service normalise déjà (`+225XXXXXXXXXX`) — vérifier `user.phone` |
+| `rejected` `cinetpayCode=607` "Amount must be ≥ 100 XOF" | Montant trop faible (CinetPay min = 100 XOF, multiple de 5) | Vérifier le total de la commande |
+| `network_error` `axiosCode=ENOTFOUND` | DNS ne résout pas l'URL CinetPay depuis Railway | Tester `https://api-checkout.cinetpay.com` dans un navigateur depuis Railway (improbable, sandbox CinetPay est public) |
+| `network_error` `axiosCode=ETIMEDOUT` | CinetPay ne répond pas dans les 20s | Réessayer, ou contacter le support CinetPay |
+| `network_error` `axiosCode=ECONNREFUSED` | Pare-feu Railway bloque le port 443 sortant | Rare — ouvrir un ticket Railway |
+| `init_ok` puis rien | L'init a réussi — le 500 vient d'ailleurs | Vérifier `tag:"order"` ou `tag:"http"` dans les logs |
+
+**Workflow de debug express :**
+
+1. **Au boot**, tu dois voir cette ligne :
+   ```
+   [bokoma] {"tag":"boot","event":"env_snapshot","cinetpay":{"fullyConfigured":true,...}}
+   ```
+   Si `fullyConfigured:false`, c'est mort avant même de commencer.
+
+2. **Sur une commande qui plante**, copy le `correlationId` retourné dans la réponse HTTP (champ `correlationId` du JSON d'erreur), puis :
+   ```bash
+   railway logs | grep "<correlationId>"
+   ```
+   Tu verras TOUT : `init_start` → `init_failed` → `payment_init_failed` → `request_failed`, avec la cause originelle (`axiosCode`, `httpStatus`, `description`, `stack`).
+
+3. **Pour vérifier rapidement si CinetPay répond** (sans passer commande), tape dans ton terminal Railway :
+   ```bash
+   curl -X POST https://api-checkout.cinetpay.com/v2/payment \
+     -H "Content-Type: application/json" \
+     -d '{"apikey":"<TA_KEY>","password":"<TON_PASS>","transaction_id":"PING-'"$(date +%s)"'","amount":100,"currency":"XOF","description":"ping","channels":"ALL"}'
+   ```
+   → `201` = OK ; `404 NOT_FOUND` = mauvaise URL ; `401`/`624` = credentials.
 
 ### CORS bloqué après déploiement
 Si le frontend ne peut pas appeler le backend :
