@@ -91,16 +91,18 @@ export function useMutation<T, D = void>(
   });
 
   const mutate = useCallback(
-    async (data: D) => {
+    async (data: D, callOptions?: UseMutationOptions<T, D>) => {
       setState({ data: null, loading: true, error: null, success: false });
       try {
         const result = await mutationFn(data);
         setState({ data: result, loading: false, error: null, success: true });
         options?.onSuccess?.(result, data);
+        callOptions?.onSuccess?.(result, data);
         return result;
       } catch (error: any) {
         setState({ data: null, loading: false, error, success: false });
         options?.onError?.(error as ApiError, data);
+        callOptions?.onError?.(error as ApiError, data);
         throw error;
       }
     },
