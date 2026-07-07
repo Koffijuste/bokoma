@@ -74,7 +74,15 @@ interface UseMutationState<T> {
   success: boolean;
 }
 
-export function useMutation<T, D>(mutationFn: (data: D) => Promise<T>) {
+interface UseMutationOptions<T, D> {
+  onSuccess?: (data: T, variables: D) => void;
+  onError?: (error: ApiError, variables: D) => void;
+}
+
+export function useMutation<T, D = void>(
+  mutationFn: (data: D) => Promise<T>,
+  options?: UseMutationOptions<T, D>
+) {
   const [state, setState] = useState<UseMutationState<T>>({
     data: null,
     loading: false,
@@ -88,12 +96,15 @@ export function useMutation<T, D>(mutationFn: (data: D) => Promise<T>) {
       try {
         const result = await mutationFn(data);
         setState({ data: result, loading: false, error: null, success: true });
+        options?.onSuccess?.(result, data);
         return result;
       } catch (error: any) {
         setState({ data: null, loading: false, error, success: false });
+        options?.onError?.(error as ApiError, data);
         throw error;
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [mutationFn]
   );
 
