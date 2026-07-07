@@ -2,11 +2,17 @@
 // ============================================================================
 // 🔐 AUTH HOOKS — Session via cookie httpOnly, state via Zustand
 // ============================================================================
+// Important : on ne fetchUser() QUE sur les routes privées. Sur les pages
+// publiques (/, /products, etc.), appeler /auth/me ferait perdre ~100ms +
+// afficherait un spinner d'auth inutile. La persistance Zustand fournit
+// déjà le user s'il a une session active.
+// Source de vérité partagée : constants/index.ts → PUBLIC_PATHS.
+// ============================================================================
 'use client';
 
 import { useEffect, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { ROUTES } from '@/constants';
+import { ROUTES, PUBLIC_PATHS } from '@/constants';
 import { useAuthStore } from '@/store';
 import type { RegisterData } from '@/types';
 
@@ -16,6 +22,13 @@ const r = (route: string | undefined, fallback: string) =>
 
 const AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/forgot', '/auth/reset'];
 const isAuthPath = (path: string) => AUTH_PATHS.some(p => path.startsWith(p));
+
+const isPublicPath = (path: string): boolean => {
+  if (!path) return false;
+  return PUBLIC_PATHS.some(
+    (p) => path === p || path.startsWith(p + '/'),
+  );
+};
 
 // ============================================================================
 // 🔹 useAuth — Hook principal
@@ -27,9 +40,23 @@ export function useAuth() {
   const fetchedRef = useRef(false);
 
   // ── Restauration de session au montage ────────────────────────────────────
+  // ✅ Ne déclenche /auth/me que sur les routes privées. Sur les pages
+  // publiques, l'auth state est lu depuis la persistance Zustand
+  // (user hydraté = null si non connecté → pas besoin de roundtrip API).
   useEffect(() => {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
+
+    // Pendant la 1re render côté serveur, pathname peut être vide ;
+    // on traite ce cas comme "public" pour éviter tout appel pendant
+    // l'hydratation côté serveur.
+    const onPublic =
+      typeof window === 'undefined'
+        ? true
+        : isPublicPath(window.location.pathname);
+
+    if (onPublic) return; // Pas de /auth.me → pas de spinner d'auth inutile
+
     store.fetchUser();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

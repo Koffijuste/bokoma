@@ -16,6 +16,7 @@ import type {
   Review, CreateReviewPayload, Coupon,
   DashboardStats, AnalyticsFilters,
 } from '@/types';
+import { isPublicPath } from '@/constants';
 
 // ─── Types internes ───────────────────────────────────────────────────────────
 
@@ -30,30 +31,11 @@ type ExtendedConfig = InternalAxiosRequestConfig & {
 };
 
 // ============================================================================
-// 🔹 PUBLIC PATHS — Mirror exact de middleware.ts (côté Edge)
+// 🔹 PUBLIC PATHS — Source de vérité unique : @/constants (PUBLIC_PATHS)
+// ⚠️  Le Edge middleware (`middleware.ts`) DOIT rester en miroir.
+//     Si tu modifies cette liste, vérifie aussi `middleware.ts`.
 // ============================================================================
-// ⚠️ Si tu ajoutes une route publique dans middleware.ts, AJOUTE-LA ICI aussi.
-//    Sinon l'interceptor va rediriger les visiteurs non-authentifiés hors de
-//    cette route, alors que le middleware Edge les laissait passer.
-// ============================================================================
-const PUBLIC_PATHS: readonly string[] = [
-  '/',
-  '/products',
-  '/search',
-  '/categories',
-  '/auth/login',
-  '/auth/register',
-  '/auth/forgot',
-  '/auth/reset-password',
-  '/api/v1/health',
-];
-
-const isPublicPath = (path: string): boolean => {
-  if (!path) return false;
-  return PUBLIC_PATHS.some(
-    (p) => path === p || path.startsWith(p + '/'),
-  );
-};
+// (déjà importé depuis '@/constants' plus haut)
 
 // ============================================================================
 // 🔹 API CLIENT
@@ -106,8 +88,11 @@ class ApiClient {
         }
 
         // Routes auth exclues du refresh automatique
+        // /auth/me inclus : un 401 sur /me signifie "pas de session",
+        // il n'y a rien à refresh. Empêche une cascade inutile
+        // me→refresh→401 sur chaque page publique.
         const isAuthRoute = ['/auth/login', '/auth/register', '/auth/refresh',
-          '/auth/forgot-password', '/auth/reset-password']
+          '/auth/me', '/auth/logout', '/auth/forgot-password', '/auth/reset-password']
           .some(r => config?.url?.includes(r));
 
         // ── Auto-refresh sur 401 ────────────────────────────────────────────

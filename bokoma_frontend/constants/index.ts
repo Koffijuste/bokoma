@@ -25,12 +25,37 @@ export const STORAGE_KEYS = {
   AUTH_TOKEN: 'bokoma_access_token',      // Cookie: access token
   REFRESH_TOKEN: 'bokoma_refresh_token',  // Cookie: refresh token (HttpOnly)
   USER: 'bokoma_user',                    // localStorage: user info
-  
+
   // UI
   CART: 'bokoma_cart',
   THEME: 'bokoma_theme',
   LOCALE: 'bokoma_locale',
 } as const;
+
+// ============================================================================
+// 🔹 PUBLIC PATHS — Source de vérité unique pour les routes publiques
+// ⚠️ Tout ce qui appelle ce tableau DOIT aussi mettre à jour middleware.ts
+// si tu ajoutes une nouvelle route publique (sinon l'utilisateur se fait
+// rediriger à tort par l'Edge avant même que le client ne se charge).
+// ============================================================================
+export const PUBLIC_PATHS: readonly string[] = [
+  '/',
+  '/products',
+  '/search',
+  '/categories',
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot',
+  '/auth/reset-password',
+  '/api/v1/health',
+] as const;
+
+export const isPublicPath = (path: string): boolean => {
+  if (!path) return false;
+  return PUBLIC_PATHS.some(
+    (p) => path === p || path.startsWith(p + '/'),
+  );
+};
 
 // ============================================================================
 // 🔹 ROUTES (pages frontend — pour <Link href={...}>)
