@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import {
   Mail, Phone, MapPin, Facebook, Twitter, Instagram, Linkedin,
-  Sparkles, CreditCard, Truck, Shield, Headphones, ArrowRight, ImageIcon, MessageSquare
+  Sparkles, CreditCard, Truck, Shield, Headphones, ArrowRight, ImageIcon, MessageSquare, BookOpen
 } from 'lucide-react';
 import { ROUTES } from '@/constants';
 import { CookiePreferencesButton } from '@/components/legal/CookiePreferencesButton';
@@ -124,6 +124,7 @@ export function Footer() {
             <h4 className="font-semibold mb-4 text-sm uppercase tracking-wider">Communauté</h4>
             <ul className="space-y-2 text-sm">
               {[
+                { icon: BookOpen, label: "Guide d'achat", href: '/guide', desc: 'Comment acheter sur Bokoma' },
                 { icon: ImageIcon, label: 'Galerie', href: ROUTES.GALLERY, desc: 'Nos créations en images & vidéos' },
                 { icon: MessageSquare, label: 'Votre avis', href: ROUTES.FEEDBACK, desc: 'Suggestions, retours, difficultés' },
                 { icon: Headphones, label: 'FAQ', href: ROUTES.FAQ, desc: 'Questions fréquentes' },
@@ -192,6 +193,9 @@ export function Footer() {
             </Link>
             <Link href={ROUTES.TERMS || '/terms'} className="hover:text-accent transition-colors">
               Conditions
+            </Link>
+            <Link href="/guide" className="hover:text-accent transition-colors">
+              Guide d'achat
             </Link>
             <Link href={ROUTES.FAQ || '/faq'} className="hover:text-accent transition-colors">
               FAQ
