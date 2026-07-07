@@ -27,6 +27,7 @@ const NEVER_COOLDOWN_DAYS = 7;
 interface ProductLite {
   _id: string;
   name: string;
+  slug?: string;
   image?: string;
   rating?: { average?: number; count?: number };
 }
@@ -144,7 +145,7 @@ export default function RateProductDialog({
         body: comment.trim() || 'Aucune description fournie.',
       };
 
-      await reviewApi.createReview(product._id, payload);
+      await reviewApi.createReview(product.slug || product._id, payload as any);
 
       onRated?.(product._id);
 
@@ -173,8 +174,6 @@ export default function RateProductDialog({
       isOpen={open}
       onClose={onClose}
       size="md"
-      title={null}
-      description={null}
     >
       <div className="space-y-5 pt-2">
         {/* Header contextuel : produit ajouté */}

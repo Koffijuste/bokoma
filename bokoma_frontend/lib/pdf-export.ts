@@ -9,6 +9,8 @@ export async function exportToPDF(elementId: string, filename: string) {
   const canvas = await html2canvas(element);
   const imgData = canvas.toDataURL('image/png');
   const pdf = new jsPDF();
-  pdf.addImage(imgData, 'PNG', 0, 0);
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
   pdf.save(filename);
 }

@@ -11,6 +11,11 @@ node_modules
 /out
 *.swp
 
+# Build / typecheck logs (debug artifacts)
+/build-output.txt
+/build-output-new.txt
+/tsc-output.txt
+
 # Production
 /build
 
@@ -27,12 +32,14 @@ yarn-error.log*
 # Local env files
 .env
 .env.local
-.env.example
 .env.development
 .env.test
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Env example is committed for documentation
+!.env.example
 
 # IDE
 .vscode
