@@ -114,10 +114,55 @@ class PaymentService {
   }
 
   /**
+   * Détecte une erreur CinetPay "IP not whitelisted" (apiCode 2011) et,
+   * si oui, récupère l'IP sortante de Railway via un service d'echo IP public
+   * pour faciliter le diagnostic côté ops : l'user n'a qu'à copier l'IP du
+   * log et la coller dans la whitelist du dashboard CinetPay.
+   *
+   * @returns {Promise<{ isWhitelistError: boolean, egressIp: string|null,
+   *                     description: string }>}
+   */
+  async _diagnoseIpWhitelistError(err) {
+    const description = err?.description || err?.cause?.description || '';
+    const isWhitelistError =
+      /ip\s*(is\s*)?(not\s*)?(with)?listed/i.test(description) ||
+      err?.apiCode === 2011 ||
+      String(err?.apiStatus || '').toUpperCase() === 'NOT_ALLOWED';
+
+    if (!isWhitelistError) {
+      return { isWhitelistError: false, egressIp: null, description };
+    }
+
+    let egressIp = null;
+    try {
+      // ipify est gratuit, pas de clé, et largement suffisant pour un diagnostic.
+      // On l'appelle avec un AbortController de 3s pour ne pas bloquer le flow
+      // si l'echo service est down — l'erreur principale (paiement refusé)
+      // reste prioritaire.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      const r = await fetch('https://api.ipify.org?format=json', {
+        signal: controller.signal,
+        headers: { Accept: 'application/json' },
+      });
+      clearTimeout(timer);
+      if (r.ok) egressIp = (await r.json())?.ip || null;
+    } catch {
+      // best-effort — on continue sans IP si l'echo a planté
+    }
+
+    return { isWhitelistError: true, egressIp, description };
+  }
+
+  /**
    * Convertit une erreur du SDK en AppError, en gardant `err.cause` chaîné
    * pour le diagnostic Railway (logs.error dans order.service lit cause.*).
+   *
+   * Cas particulier : erreur de WHITELIST IP (apiCode 2011). On log alors
+   * l'IP sortante à whitelister côté dashboard CinetPay + l'URL du dashboard,
+   * pour que l'équipe ops sache exactement quoi faire.
    */
-  _wrapSdkError(err, defaultStatus, correlationId) {
+  async _wrapSdkError(err, defaultStatus, correlationId) {
     let status = defaultStatus;
     let message = err?.message || 'Erreur CinetPay inconnue';
 
@@ -140,8 +185,26 @@ class PaymentService {
       status = 502;
     }
 
+    // 🩺 Diagnostic spécial : IP sortante non whitelistée
+    const diag = await this._diagnoseIpWhitelistError(err);
+    if (diag.isWhitelistError) {
+      logger.error('payment', 'ip_not_whitelisted', {
+        correlationId,
+        egressIp: diag.egressIp,
+        description: diag.description,
+        fixUrl: 'https://app-new.cinetpay.com/login → Intégrations → modifier la clé API → "Adresses IP autorisées"',
+        hint: diag.egressIp
+          ? `Ajoute l'IP ${diag.egressIp} à la whitelist puis redéploie (ou redémarre le service pour vider le cache token).`
+          : "Récupère l'IP sortante Railway (depuis n'importe quel endpoint qui fait un `curl api.ipify.org`) et ajoute-la à la whitelist CinetPay.",
+      });
+      message = diag.egressIp
+        ? `IP sortante Railway (${diag.egressIp}) non autorisée par CinetPay. Ajoute-la à la whitelist de ta clé API sur le dashboard CinetPay, puis redéploie.`
+        : `IP sortante non whitelistée chez CinetPay. Ajoute l'IP publique Railway à la whitelist sur le dashboard CinetPay, puis redéploie.`;
+    }
+
     const wrapped = new AppError(message, status, err);
     wrapped._correlationId = correlationId;
+    wrapped._egressIp = diag.isWhitelistError ? diag.egressIp : undefined;
     return wrapped;
   }
 
@@ -255,7 +318,7 @@ class PaymentService {
         apiCode: err instanceof ApiError ? err.apiCode : undefined,
         apiStatus: err instanceof ApiError ? err.apiStatus : undefined,
       });
-      throw this._wrapSdkError(err, 400, correlationId);
+      throw await this._wrapSdkError(err, 400, correlationId);
     }
   }
 
