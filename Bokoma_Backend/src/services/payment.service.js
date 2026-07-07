@@ -29,11 +29,23 @@ class PaymentService {
   constructor() {
     this.apiKey     = process.env.CINETPAY_API_KEY;
     this.apiPassword = process.env.CINETPAY_API_PASSWORD_CI;
-    // ✅ URL de base SANS /v2 (le path est ajouté dans chaque méthode)
-    this.baseUrl    = (process.env.CINETPAY_API_URL || 'https://api-checkout.cinetpay.com').replace(/\/+$/, '');
-    this.clientUrl  = process.env.CLIENT_URL || 'http://localhost:3000';
-    this.apiUrl     = process.env.API_URL || this.clientUrl;
-    this.mode       = process.env.CINETPAY_MODE || 'sandbox';
+    // ⚠️ CinetPay a DEUX APIs distinctes :
+    //   - "Checkout v2" : api-checkout.cinetpay.com + /v2/payment (nouvelle API)
+    //   - "API v1"      : api.cinetpay.net (sandbox) / api.cinetpay.co (prod)
+    //                     avec /v1/payment — utilisée par le SDK officiel cinetpay-js
+    //
+    // Si ta clé commence par sk_test_ → c'est du sandbox → api.cinetpay.net
+    // Si sk_live_ → c'est de la prod   → api.cinetpay.co
+    // On auto-détecte en fonction du préfixe de la clé, ce qui évite de se
+    // planter dans la config Railway.
+    const isLive = (this.apiKey || '').startsWith('sk_live_');
+    const defaultBase = isLive ? 'https://api.cinetpay.co' : 'https://api.cinetpay.net';
+    this.baseUrl   = (process.env.CINETPAY_API_URL || defaultBase).replace(/\/+$/, '');
+    this.apiPath   = '/v1/payment';
+    this.checkPath = '/v1/payment/check';
+    this.clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    this.apiUrl    = process.env.API_URL || this.clientUrl;
+    this.mode      = process.env.CINETPAY_MODE || (isLive ? 'production' : 'sandbox');
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -129,7 +141,7 @@ class PaymentService {
       mode:                 this.mode,
     };
 
-    const initUrl = `${this.baseUrl}/v2/payment`;
+    const initUrl = `${this.baseUrl}${this.apiPath}`;
 
     // ── Log d'entrée : indispensable pour tracer une transaction ───────────
     logger.info('payment', 'init_start', {
@@ -269,7 +281,7 @@ class PaymentService {
       throw new AppError('CinetPay non configuré', 500);
     }
 
-    const verifyUrl = `${this.baseUrl}/v2/payment/check`;
+    const verifyUrl = `${this.baseUrl}${this.checkPath}`;
     const payload = {
       apikey:         this.apiKey,
       password:       this.apiPassword,
