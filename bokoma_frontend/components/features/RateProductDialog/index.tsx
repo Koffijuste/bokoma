@@ -145,7 +145,9 @@ export default function RateProductDialog({
         body: comment.trim() || 'Aucune description fournie.',
       };
 
-      await reviewApi.createReview(product.slug || product._id, payload as any);
+      // ⚠️ Le backend valide un ObjectId Mongo (validateObjectId('id') côté route).
+      //    On envoie donc TOUJOURS product._id, jamais le slug — sinon 400 "ID invalide".
+      await reviewApi.createReview(product._id, payload as any);
 
       onRated?.(product._id);
 

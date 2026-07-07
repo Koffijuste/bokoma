@@ -30,6 +30,32 @@ type ExtendedConfig = InternalAxiosRequestConfig & {
 };
 
 // ============================================================================
+// 🔹 PUBLIC PATHS — Mirror exact de middleware.ts (côté Edge)
+// ============================================================================
+// ⚠️ Si tu ajoutes une route publique dans middleware.ts, AJOUTE-LA ICI aussi.
+//    Sinon l'interceptor va rediriger les visiteurs non-authentifiés hors de
+//    cette route, alors que le middleware Edge les laissait passer.
+// ============================================================================
+const PUBLIC_PATHS: readonly string[] = [
+  '/',
+  '/products',
+  '/search',
+  '/categories',
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot',
+  '/auth/reset-password',
+  '/api/v1/health',
+];
+
+const isPublicPath = (path: string): boolean => {
+  if (!path) return false;
+  return PUBLIC_PATHS.some(
+    (p) => path === p || path.startsWith(p + '/'),
+  );
+};
+
+// ============================================================================
 // 🔹 API CLIENT
 // ============================================================================
 
@@ -138,12 +164,25 @@ class ApiClient {
 
   private onSessionExpired() {
     if (typeof window === 'undefined') return;
-    // L'authStore écoute cet événement pour reset le state user
+
+    // ✅ L'authStore écoute cet événement pour reset le state user
+    //    → on le dispatch TOUJOURS, même sur les pages publiques
     window.dispatchEvent(new CustomEvent('bokoma:session-expired'));
+
+    // 🛡️ Garde-fou : on ne redirige JAMAIS depuis une page publique.
+    //    Sinon, l'interceptor bouffe le 401 avant que le composant puisse
+    //    afficher son état d'erreur, et l'utilisateur se fait ejecter
+    //    depuis /products ou / sans avoir rien demandé.
+    //
+    //    Pages publiques = celles que middleware.ts laisse passer sans token.
+    //    La redirection vers /auth/login doit être déclenchée par useRequireAuth
+    //    (qui sait quelles routes exigent l'auth), pas par l'interceptor.
     const path = window.location.pathname;
-    if (!path.startsWith('/auth')) {
-      window.location.href = `/auth/login?from=${encodeURIComponent(path)}`;
-    }
+
+    if (path.startsWith('/auth')) return;            // on est déjà sur /auth → no-op
+    if (isPublicPath(path)) return;                  // page publique → no-op
+
+    window.location.href = `/auth/login?from=${encodeURIComponent(path)}`;
   }
 
   private toApiError(error: AxiosError<ApiResponse>, overrideMsg?: string): ApiError {
