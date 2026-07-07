@@ -134,7 +134,7 @@ export default function CouponsAdminPage() {
     try {
       setLoading(true);
       const response = await couponApi.getCoupons();
-      const data = response?.coupons || response?.data?.coupons || response;
+      const data = response?.data?.coupons || response?.data || response;
       setCoupons(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err: any) {
@@ -476,7 +476,7 @@ export default function CouponsAdminPage() {
         </div>
         <Select
           value={statusFilter}
-          onChange={(value) => setStatusFilter(value as StatusFilter)}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           options={STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label }))}
         />
       </div>
@@ -882,7 +882,7 @@ export default function CouponsAdminPage() {
                 <Select
                   options={discountTypes.map((t) => ({ value: t.value, label: t.label }))}
                   value={formData.discountType}
-                  onChange={(value) => handleInputChange('discountType')(value as DiscountType)}
+                  onChange={(e) => handleInputChange('discountType')(e.target.value as DiscountType)}
                 />
               </div>
 

@@ -4,14 +4,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Clock, Loader2, AlertCircle, Package, Truck, CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
+import { Clock, Loader2, AlertCircle, Package, CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PaymentStatusBadge } from '@/components/admin/PaymentStatusBadge';
 import { apiClient } from '@/services/api';
 import { formatPrice, formatDate } from '@/utils/helpers';
-import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/constants';
-import { toast } from 'sonner';
 
 interface Order {
   _id: string;
@@ -41,7 +39,6 @@ interface Order {
 export default function OrderDetailsPage() {
   const params = useParams();
   const orderId = params.orderId as string;
-  const { user, isAuthenticated } = useAuth();
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);

@@ -12,7 +12,7 @@ import Link from 'next/link';
 import {
   CheckCircle2, X, MessageSquare, AlertTriangle, Lightbulb, Star, Wrench,
   Search, Loader2, RefreshCcw, Eye, EyeOff, Reply, ChevronLeft, ChevronRight,
-  Calendar, Mail, Trash2, Filter,
+  Calendar, Mail, Trash2, Filter, type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -25,7 +25,7 @@ import type { FeedbackItem, FeedbackStatus, FeedbackCategory } from '@/types';
 
 import {
   AdminHeader, AdminStats, AdminFilters, StaggerList, EmptyState, StatusPill,
-  ErrorBanner, InlineSpinner, IconBadge,
+  IconBadge,
 } from '@/components/admin/admin-shell';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ type CategoryColor = 'blue' | 'orange' | 'yellow' | 'amber' | 'emerald';
 const CATEGORIES: Record<FeedbackCategory, {
   label: string;
   emoji: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   color: CategoryColor;
 }> = {
   site_feedback:   { label: 'Avis site',         emoji: '💬', icon: MessageSquare, color: 'blue' },
@@ -125,7 +125,6 @@ const DetailModal = React.memo(function DetailModal({
 
   const cat = CATEGORIES[item.category];
   const Icon = cat.icon;
-  const userObj = typeof item.user === 'object' ? item.user : null;
   const authorName = getUserDisplay(item).name;
 
   const save = async () => {

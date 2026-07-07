@@ -67,7 +67,7 @@ export default function SettingsPage() {
     setIsSaving(true);
     
     try {
-      await userApi.updateMe({
+      await userApi.updateProfile({
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phone,

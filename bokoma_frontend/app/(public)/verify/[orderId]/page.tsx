@@ -122,7 +122,7 @@ export default function OrderVerificationPage() {
         setError(null);
         
         const response = await orderApi.getOrder(orderId);
-        const orderData = response.data?.order || response.order;
+        const orderData = (response.data as any)?.data?.order || (response.data as any)?.order || (response as any).order;
         
         if (!orderData) {
           throw new Error('Commande introuvable');
@@ -158,7 +158,7 @@ export default function OrderVerificationPage() {
     toast.loading('Vérification en cours...');
     try {
       const response = await orderApi.getOrder(orderId);
-      const orderData = response.data?.order || response.order;
+      const orderData = (response.data as any)?.data?.order || (response.data as any)?.order || (response as any).order;
       if (orderData) {
         setOrder(orderData);
         setVerificationStatus('valid');
@@ -197,7 +197,7 @@ export default function OrderVerificationPage() {
       expired: { icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-500/10', title: 'Vérification expirée', message: error || 'Cette commande a expiré.', action: 'Contacter le support', link: '/help' },
       error: { icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-500/10', title: 'Erreur', message: error || 'Une erreur est survenue.', action: 'Réessayer', link: null },
     };
-    const c = config[verificationStatus] || config.invalid;
+    const c = (config as any)[verificationStatus] || config.invalid;
     const Icon = c.icon;
     
     return (

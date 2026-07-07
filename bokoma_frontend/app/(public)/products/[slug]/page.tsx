@@ -76,10 +76,6 @@ export default function ProductDetailsPage() {
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
 
-  const productImage =
-    product?.images?.find((img: any) => typeof img === 'string' || img?.url)?.url
-    ?? (typeof product?.images?.[0] === 'string' ? product.images[0] : undefined);
-
   const { data: apiResponse, loading, error, refetch } = useFetch<any>(
     () => productApi.getProduct(slug),
     [slug]
@@ -140,6 +136,7 @@ export default function ProductDetailsPage() {
 
     setIsAdding(true);
     try {
+      if (!product) return;
       const res = await addToCartWithPrompt({
         product,
         size: isFootwearProduct ? customSize : (isClothingProduct ? selectedSize : undefined),

@@ -203,7 +203,7 @@ export const authApi = {
   login: (credentials: { email: string; password: string }) =>
     apiClient.post<ApiResponse<AuthPayload>>('/auth/login', credentials),
 
-  register: (data: { firstName: string; lastName: string; email: string; password: string; phone?: string }) =>
+  register: (data: { firstName: string; lastName: string; email: string; password: string; phone?: string; address?: string; country?: string }) =>
     apiClient.post<ApiResponse<AuthResponse>>('/auth/register', data),
 
   getMe: () =>
@@ -236,6 +236,7 @@ export const userApi = {
   getUser:        (id: string) => apiClient.get<ApiResponse<{ user: User }>>(`/users/${id}`),
   updateUser:     (id: string, data: Partial<User>) => apiClient.patch<ApiResponse<{ user: User }>>(`/users/${id}`, data),
   deleteUser:     (id: string) => apiClient.delete<ApiResponse>(`/users/${id}`),
+  toggleUserStatus: (id: string, isActive: boolean) => apiClient.patch<ApiResponse<{ user: User }>>(`/users/${id}/status`, { isActive }),
 };
 
 // ── Categories ────────────────────────────────────────────────────────────────

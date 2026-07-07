@@ -319,7 +319,7 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
 
 interface IconBadgeProps {
   icon: LucideIcon;
-  color?: 'blue' | 'orange' | 'yellow' | 'amber' | 'emerald' | 'rose' | 'purple' | 'slate';
+  color?: 'blue' | 'orange' | 'yellow' | 'amber' | 'emerald' | 'rose' | 'purple' | 'slate' | 'accent';
   size?: 'sm' | 'md';
   className?: string;
 }
@@ -333,6 +333,7 @@ const BADGE_COLORS: Record<NonNullable<IconBadgeProps['color']>, string> = {
   rose:    'bg-rose-500/10 text-rose-600 dark:text-rose-400',
   purple:  'bg-purple-500/10 text-purple-600 dark:text-purple-400',
   slate:   'bg-slate-500/10 text-slate-600 dark:text-slate-400',
+  accent:  'bg-accent/10 text-accent',
 };
 
 const BADGE_SIZES = {

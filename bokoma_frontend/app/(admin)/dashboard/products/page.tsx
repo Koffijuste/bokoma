@@ -4,7 +4,7 @@
 import React, { FormEvent, useEffect, useState, useCallback, useMemo } from 'react';
 import { 
   Plus, X, Image as ImageIcon, Loader2, AlertCircle, RefreshCw, 
-  Upload, CheckCircle, Zap, Info, Edit2, Trash2, Eye
+  Upload, Zap, Info, Edit2, Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -482,7 +482,7 @@ export default function ProductsAdminPage() {
         formDataToSend.append('existingImages', JSON.stringify(img));
       });
 
-      const response = await apiClient.upload('/products', formDataToSend);
+      await apiClient.upload('/products', formDataToSend);
       
       toast.success('Produit ajouté avec succès');
       setModalOpen(false);
@@ -571,7 +571,7 @@ export default function ProductsAdminPage() {
         formDataToSend.append(`existingImages[${index}]`, img.url);
       });
 
-      const response = await apiClient.put(`/products/${editingProduct._id}`, formDataToSend, {
+      await apiClient.put(`/products/${editingProduct._id}`, formDataToSend, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: API_TIMEOUT,
       });

@@ -472,7 +472,7 @@ export default function HomePage() {
                 <div className="flex items-center gap-3 pt-4 border-t border-border/50">
                   <TestimonialAvatar 
                     src={t.avatar}
-                    fallback={t.avatarFallback}
+                    fallback={t.avatarFallback ?? ''}
                     alt={`Photo de ${t.name}`}
                   />
                   <div>

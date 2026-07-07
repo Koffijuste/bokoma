@@ -6,7 +6,7 @@ import { useFetch } from '@/hooks';
 import { orderApi } from '@/services';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatPrice } from '@/utils/helpers';
-import NextImage from 'next/image';
+
 
 export default function OrdersPage() {
   const { data, loading, error, refetch } = useFetch(
@@ -37,9 +37,9 @@ export default function OrdersPage() {
             <p className="mb-4">Erreur: {error.message}</p>
             <Button onClick={() => refetch()}>Réessayer</Button>
           </div>
-        ) : data?.data?.length ? (
+        ) : (data as any)?.data?.orders?.length ? (
           <div className="space-y-4">
-            {data.data.map((order, index) => (
+            {((data as any)?.data?.orders || []).map((order: any, index: number) => (
               <div
                 key={order._id}
                 className="rounded-3xl border border-border bg-card p-6 hover:shadow-lg transition-shadow duration-300 animate-in fade-in slide-in-from-bottom-4 duration-500"

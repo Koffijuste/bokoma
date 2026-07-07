@@ -26,7 +26,7 @@ import { userApi } from '@/services';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { formatDate } from '@/utils/helpers';
 import { toast } from 'sonner';
-import type { User } from '@/types';
+import type { User, UserRole } from '@/types';
 
 const ROLE_OPTIONS = [
   { value: 'all', label: 'Tous les rôles' },
@@ -134,11 +134,7 @@ export default function UsersAdminPage() {
       setLoading(true);
       setError(null);
       
-      const response = await userApi.getUsers({ page: 1, limit: 100 });
-      
-      const responseData = response?.data || response;
-      const usersData = responseData?.data || responseData;
-      const userList = usersData?.users || usersData || [];
+      const userList = await userApi.getUsers({ page: 1, limit: 100 });
       
       setUsers(Array.isArray(userList) ? userList : []);
     } catch (err: any) {
@@ -164,12 +160,12 @@ export default function UsersAdminPage() {
     });
   }, [users, search, roleFilter]);
 
-  const handleRoleUpdate = async (userId: string, newRole: string) => {
+  const handleRoleUpdate = async (userId: string, newRole: UserRole) => {
     if (updating === userId) return;
     setUpdating(userId);
     
     try {
-      await userApi.updateUserRole(userId, newRole);
+      await userApi.updateUser(userId, { role: newRole });
       toast.success(`Rôle mis à jour en "${newRole}"`);
       
       setUsers(prev => prev.map(u => u._id === userId ? { ...u, role: newRole } : u));
@@ -404,7 +400,7 @@ export default function UsersAdminPage() {
                   </label>
                   <Select
                     value={selectedUser.role}
-                    onValueChange={(val) => handleRoleUpdate(selectedUser._id, val)}
+                    onValueChange={(val) => handleRoleUpdate(selectedUser._id, val as UserRole)}
                     disabled={updating === selectedUser._id}
                   >
                     <SelectTrigger className={cn(updating === selectedUser._id && "opacity-60")}>

@@ -41,6 +41,19 @@ const statusOptions = [
 // `./_components/OrderDetailsModal.tsx` pour alléger ce fichier et garantir
 // que la taille est TOUJOURS visible (jamais collapsée).
 
+// ═══════════════════════════════════════════════════════════════
+// 🔹 HELPER : affichage d'un utilisateur à partir d'une commande
+// ═══════════════════════════════════════════════════════════════
+function getUserDisplay(order: Order): { name: string; email: string } {
+  const u: any = typeof order.user === 'object' && order.user !== null ? order.user : {};
+  return {
+    name: u.firstName
+      ? `${u.firstName} ${u.lastName || ''}`.trim()
+      : u.name || order.shipping?.fullName || 'Client',
+    email: u.email || order.shipping?.phone || '—',
+  };
+}
+
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -166,16 +179,6 @@ export default function OrdersAdminPage() {
       return [];
     }
   }, []);
-
-  const getUserDisplay = (order: Order): { name: string; email: string } => {
-    const u: any = typeof order.user === 'object' && order.user !== null ? order.user : {};
-    return {
-      name: u.firstName
-        ? `${u.firstName} ${u.lastName || ''}`.trim()
-        : u.name || order.shipping?.fullName || 'Client',
-      email: u.email || order.shipping?.phone || '—',
-    };
-  };
 
   const handleNewOrder = useCallback((order: Order) => {
     toast.success('🎉 Nouvelle commande !', {

@@ -13,7 +13,7 @@ import { useAddToCart } from '@/hooks/useAddToCart';
 import { formatPrice, cn } from '@/utils/helpers';
 import type { Product } from '@/types';
 
-interface ProductCardProps {
+export interface ProductCardProps {
   product: Product;
   variant?: 'default' | 'compact' | 'featured';
   showQuickActions?: boolean;

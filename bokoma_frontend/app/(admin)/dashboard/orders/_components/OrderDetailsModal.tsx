@@ -514,8 +514,6 @@ export function OrderDetailsModal({
       isOpen={isOpen}
       onClose={onClose}
       size="3xl"
-      title={null}
-      description={null}
     >
       <div className="space-y-6">
         {/* ── HEADER COMPACT ────────────────────────────────────────────── */}

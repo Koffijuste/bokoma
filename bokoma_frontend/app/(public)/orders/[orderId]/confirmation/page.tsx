@@ -235,7 +235,7 @@ export default function OrderConfirmationPage() {
     try {
       if (showLoader) setLoading(true);
       const response = await orderApi.getOrder(orderId);
-      const orderData = response.data?.order || response.order;
+      const orderData = (response.data as any)?.data?.order || (response.data as any)?.order || (response as any).order;
       
       if (orderData.payment?.status === 'failed' || orderData.status === 'cancelled') {
         if (showLoader) {
@@ -685,7 +685,7 @@ export default function OrderConfirmationPage() {
                     }[order.payment?.method as string] || 'Inconnu'}
                   </Badge>
                   <Badge className={cn(
-                    order.payment?.status === 'paid' 
+                    order.payment?.status === 'completed' 
                       ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20' 
                       : order.payment?.status === 'partial'
                       ? 'bg-blue-500/10 text-blue-700 border-blue-500/20'

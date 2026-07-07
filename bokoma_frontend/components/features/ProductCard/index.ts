@@ -1,1 +1,1 @@
-export { ProductCard, type ProductCardProps } from './index';
+export { ProductCard, type ProductCardProps } from './index.tsx';

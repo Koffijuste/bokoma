@@ -115,7 +115,7 @@ export default function DashboardPage() {
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const requestCountRef = useRef(0);
 
-  const { unreadCount } = usePaymentNotifications(isAdmin, 30000);
+  usePaymentNotifications(isAdmin, 30000);
   // ✅ Montage côté client
   useEffect(() => {
     setMounted(true);

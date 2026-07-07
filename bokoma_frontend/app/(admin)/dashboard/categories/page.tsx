@@ -47,7 +47,7 @@ interface CategoryFormData {
 interface CategoryRowProps {
   category: Category;
   onEdit: (category: Category) => void;
-  onDelete: (id: string) => void;
+  onDelete: (category: Category) => void;
   onToggleActive: (id: string, active: boolean) => void;
   index: number;
   isToggling: boolean;
@@ -179,7 +179,7 @@ const CategoryRow = React.memo<CategoryRowProps>(({
             size="icon"
             variant="ghost"
             className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive transition-all"
-            onClick={() => onDelete(category._id)}
+            onClick={() => onDelete(category)}
             aria-label="Supprimer la catégorie"
             title="Supprimer"
           >
