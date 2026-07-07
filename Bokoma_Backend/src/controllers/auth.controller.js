@@ -191,11 +191,26 @@ exports.refreshToken = async (req, res, next) => {
 
 // ============================================================================
 // POST /auth/logout — Déconnexion
+// ✅ Vide le refreshToken en DB pour invalider complètement la session
+//    (sinon un refresh token volé restait utilisable malgré le clearCookie)
 // ============================================================================
 exports.logout = async (req, res, next) => {
   try {
-    res.clearCookie('bokoma_access_token');
-    res.clearCookie('bokoma_refresh_token');
+    // ✅ Invalide le refresh token en base → plus de refresh possible
+    if (req.user?.userId) {
+      await User.findByIdAndUpdate(req.user.userId, { $unset: { refreshToken: 1 } });
+    }
+
+    // ✅ Options identiques à celles utilisées pour set le cookie en login
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
+    };
+
+    res.clearCookie('bokoma_access_token', cookieOptions);
+    res.clearCookie('bokoma_refresh_token', cookieOptions);
 
     res.json({
       success: true,

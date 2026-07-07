@@ -71,10 +71,21 @@ export const useAuthStore = create<AuthStore>()(
         try {
           await authApi.logout();
         } catch {
-          // Continuer même si l'API échoue
+          // Continuer même si l'API échoue (token expiré, etc.)
         } finally {
+          // ✅ Reset complet de l'auth state
           set({ user: null, error: null });
+
+          // ✅ Cleanup localStorage auth (évite de re-hydrater un user null)
           if (typeof window !== 'undefined') {
+            try {
+              // zustand/persist utilise cette clé pour la persistance
+              window.localStorage.removeItem('bokoma-auth-v2');
+            } catch {
+              // Certains navigateurs en mode privé refusent l'accès au storage
+            }
+
+            // ✅ Notifie les stores (cart, wishlist…) de se vider
             window.dispatchEvent(new CustomEvent('bokoma:logout'));
           }
         }

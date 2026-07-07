@@ -12,6 +12,7 @@ import { formatPrice } from '@/utils/helpers';
 import { Loader2, ShoppingBag, MapPin, Phone, User, Truck, CreditCard } from 'lucide-react';
 import { cn } from '@/utils/helpers';
 import { toast } from 'sonner';
+import { useCartStore } from '@/store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ const SHIPPING_METHODS = [
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const clearCart = useCartStore((state) => state.clearCart);
   const { data: cartResponse, loading, error, refetch } = useFetch(
     () => cartApi.getCart(), []
   );
@@ -112,6 +114,13 @@ export default function CheckoutPage() {
       } as any);
 
       const data = (response as any)?.data ?? response;
+
+      // ✅ Commande créée → on vide le panier immédiatement, que le paiement
+      //    passe par la popup CinetPay (CinetPay = paiement validé en parallèle)
+      //    ou qu'il s'agisse d'un cash-on-delivery. Le backend vide déjà son
+      //    cart côté DB ; ici on synchronise le store Zustand pour que la
+      //    navbar (compteur) et la page /cart soient vides tout de suite.
+      clearCart();
 
       // ✅ CinetPay retourne un paymentUrl → ouvrir dans une POPUP centrée
       // (au lieu de rediriger et perdre la page checkout). La popup reste

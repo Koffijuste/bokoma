@@ -1,4 +1,8 @@
 // store/wishlist.ts
+// ============================================================================
+// ❤️ WISHLIST STORE — Cleanup auto sur logout / session expirée
+// ============================================================================
+
 import { create } from 'zustand';
 import type { Product } from '@/types';
 
@@ -13,12 +17,12 @@ interface WishlistState {
 
 export const useWishlistStore = create<WishlistState>((set, get) => ({
   wishlist: [],
-  
+
   setWishlist: (wishlist) => {
     console.log('🔄 [STORE] setWishlist:', wishlist.length, 'produits');
     set({ wishlist });
   },
-  
+
   addItem: (product) => {
     console.log('➕ [STORE] addItem:', product.name);
     set((state) => {
@@ -32,7 +36,7 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
       return { wishlist: newWishlist };
     });
   },
-  
+
   removeItem: (productId) => {
     console.log('➖ [STORE] removeItem:', productId);
     set((state) => {
@@ -41,13 +45,29 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
       return { wishlist: newWishlist };
     });
   },
-  
+
   clearWishlist: () => {
     console.log('🗑️ [STORE] clearWishlist');
     set({ wishlist: [] });
   },
-  
+
   getCount: () => {
     return get().wishlist.length;
   },
 }));
+
+// ============================================================================
+// 🔁 Auto-cleanup : wishlist vidée à la déconnexion ou session expirée
+// ============================================================================
+if (typeof window !== 'undefined') {
+  const cleanup = () => {
+    try {
+      useWishlistStore.getState().clearWishlist();
+    } catch (err) {
+      console.warn('[WishlistStore] cleanup failed:', err);
+    }
+  };
+
+  window.addEventListener('bokoma:logout', cleanup);
+  window.addEventListener('bokoma:session-expired', cleanup);
+}

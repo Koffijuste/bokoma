@@ -73,7 +73,6 @@ export default function ProfileSettingsPage() {
   const [profileData, setProfileData] = useState({
     firstName: '',
     lastName: '',
-    phone: '',
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -98,6 +97,24 @@ export default function ProfileSettingsPage() {
     return score;
   }, [passwordData.newPassword]);
 
+  // Critères individuels — affichés comme check-list sous le champ
+  const passwordChecks = useMemo(() => {
+    const pwd = passwordData.newPassword;
+    return {
+      length:  pwd.length >= 8,
+      upper:   /[A-Z]/.test(pwd),
+      digit:   /[0-9]/.test(pwd),
+      special: /[^A-Za-z0-9]/.test(pwd),
+    };
+  }, [passwordData.newPassword]);
+
+  // ✅ Le backend (PATCH /users/me/password) impose : >= 8 car. + 1 majuscule
+  //    + 1 chiffre. On reproduit la même règle côté UI pour éviter un
+  //    round-trip inutile + donner du feedback immédiat.
+  const isPasswordValid = useMemo(() => {
+    return passwordChecks.length && passwordChecks.upper && passwordChecks.digit;
+  }, [passwordChecks]);
+
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
@@ -112,7 +129,6 @@ export default function ProfileSettingsPage() {
       setProfileData({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
-        phone: user.phone || '',
       });
     }
   }, [user]);
@@ -154,6 +170,11 @@ export default function ProfileSettingsPage() {
 
     if (passwordData.newPassword.length < 8) {
       toast.error('Le nouveau mot de passe doit contenir au moins 8 caractères');
+      return;
+    }
+
+    if (!/[A-Z]/.test(passwordData.newPassword) || !/\d/.test(passwordData.newPassword)) {
+      toast.error('Le mot de passe doit contenir au moins une majuscule et un chiffre');
       return;
     }
 
@@ -468,10 +489,14 @@ export default function ProfileSettingsPage() {
                     <Label htmlFor="phone">Téléphone</Label>
                     <Input
                       id="phone"
-                      value={profileData.phone}
-                      onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+                      value={user?.phone || ''}
+                      disabled
+                      className="bg-muted/50"
                       placeholder="+225 07 07 07 07 07"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Le numéro de téléphone ne peut pas être modifié. Contactez le support pour le changer.
+                    </p>
                   </div>
 
                   <div className="flex justify-end pt-4">
@@ -597,7 +622,11 @@ export default function ProfileSettingsPage() {
                   </div>
 
                   <div className="flex justify-end pt-4">
-                    <Button type="submit" variant="primary" disabled={saving}>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={saving || !passwordData.currentPassword || !isPasswordValid || passwordData.newPassword !== passwordData.confirmPassword}
+                    >
                       {saving ? (
                         <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Modification...</>
                       ) : (

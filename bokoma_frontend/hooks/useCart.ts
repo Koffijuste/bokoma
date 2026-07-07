@@ -33,7 +33,7 @@ const extractCart = (response: any): Cart | null => {
 };
 
 export function useCart() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { cart, setCart, clearCart } = useCartStore();
 
   const cartCount = cart?.items?.length || 0;
@@ -90,6 +90,26 @@ export function useCart() {
       setCart(null);
     }
   }, [isAuthenticated, fetchCart, setCart]);
+
+  // 🛡️ Garde-fou : si l'utilisateur change (login d'un autre compte)
+  //    on vide le panier local avant de re-fetch depuis le backend.
+  //    Sans ça, sur la même machine, un nouveau user pourrait voir
+  //    le panier de l'ancien user pendant la fenêtre d'hydratation.
+  //    Le `user.id` est un alias défensif pour les payloads qui n'exposent
+  //    que `id` (rare, mais le backend Mongo expose parfois les deux).
+  const userId = (user as any)?.id ?? user?._id;
+  useEffect(() => {
+    if (!userId) return;
+    const storedUserId = (() => {
+      try { return window.localStorage.getItem('bokoma-cart:userId'); } catch { return null; }
+    })();
+    if (storedUserId && storedUserId !== userId) {
+      // Nouveau user détecté → reset panier
+      setCart(null);
+      try { window.localStorage.removeItem('bokoma-cart'); } catch {}
+    }
+    try { window.localStorage.setItem('bokoma-cart:userId', userId); } catch {}
+  }, [userId, setCart]);
 
   const handleAddItem = useCallback(
     async (payload: AddItemPayload) => {

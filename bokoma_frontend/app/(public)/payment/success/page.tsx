@@ -4,8 +4,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  CheckCircle, Clock, XCircle, Package, Loader2, RefreshCw, 
+import {
+  CheckCircle, Clock, XCircle, Package, Loader2, RefreshCw,
   ArrowRight, Sparkles, ShoppingBag, Truck, Mail, Phone,
   AlertCircle, ExternalLink
 } from 'lucide-react';
@@ -15,6 +15,7 @@ import { formatPrice } from '@/utils/helpers';
 import { ROUTES } from '@/constants';
 import { cn } from '@/utils/helpers';
 import { toast } from 'sonner';
+import { useCartStore } from '@/store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,7 @@ const CountdownRing = ({ seconds, total }: { seconds: number; total: number }) =
 export default function PaymentSuccessPage() {
   const params = useSearchParams();
   const router = useRouter();
+  const clearCart = useCartStore((state) => state.clearCart);
 
   const orderId = params.get('orderId');
   const statusParam = params.get('status');
@@ -145,6 +147,8 @@ export default function PaymentSuccessPage() {
 
       if (payStatus === 'paid' || orderStatus === 'confirmed' || orderStatus === 'processing') {
         setStatus('confirmed');
+        // ✅ Panier vidé : paiement confirmé côté backend → on flush le store
+        clearCart();
         sessionStorage.removeItem('bokoma_pending_order');
         toast.success('🎉 Paiement confirmé !');
         return;

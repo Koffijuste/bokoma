@@ -15,6 +15,7 @@ import { useWishlist } from '@/hooks/useWishlist';
 import { useAuth } from '@/hooks/useAuth';
 import { useAddToCart } from '@/hooks/useAddToCart';
 import { Button } from '@/components/ui/button';
+import { ProductReviews } from '@/components/features/ProductReviews';
 import { ROUTES } from '@/constants';
 import { formatPrice, cn } from '@/utils/helpers';
 import { toast } from 'sonner';
@@ -488,6 +489,11 @@ export default function ProductDetailsPage() {
             </div>
           </div>
         </div>
+
+        {/* ═══════════════════════════════════════════════════════════════
+            AVIS CLIENTS — Seuls les avis approuvés par l'admin s'affichent
+           ═══════════════════════════════════════════════════════════════ */}
+        {productId && <ProductReviews productId={productId} />}
       </div>
     </div>
   );

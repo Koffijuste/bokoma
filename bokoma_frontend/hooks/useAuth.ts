@@ -73,10 +73,16 @@ export function useAuth() {
   }, [store]);
 
   // ── Logout wrapper ────────────────────────────────────────────────────────
+  // ✅ Après la déco on renvoie sur la home (et non /auth/login) pour éviter
+  //    le flash d'écran de login quand l'utilisateur n'était pas sur une
+  //    route privée. Les composants qui le souhaitent peuvent écouter
+  //    `bokoma:logout` ou router.push eux-mêmes APRÈS l'appel.
   const logout = useCallback(async () => {
     await store.logout();
-    router.push(r(ROUTES?.AUTH?.LOGIN, '/auth/login'));
-  }, [store, router]);
+    // Pas de router.push ici volontairement : les appelants (Navbar, Header,
+    // Profile) gèrent déjà la redirection eux-mêmes. Ça évite les courses
+    // entre deux `router.push` concurrents qui causaient le bug visuel.
+  }, [store]);
 
   return {
     user: store.user,

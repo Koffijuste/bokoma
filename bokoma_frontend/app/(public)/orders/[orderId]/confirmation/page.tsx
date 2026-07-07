@@ -22,6 +22,7 @@ import { useMounted } from '@/hooks/useMounted';
 import { orderApi } from '@/services';
 import { ROUTES } from '@/constants';
 import { formatPrice, formatDate, cn } from '@/utils/helpers';
+import { useCartStore } from '@/store';
 import type { Order } from '@/types';
 
 // ============================================================================
@@ -213,8 +214,9 @@ export default function OrderConfirmationPage() {
   
   const { user } = useAuth();
   const mounted = useMounted();
+  const clearCart = useCartStore((state) => state.clearCart);
   const receiptRef = useRef<HTMLDivElement>(null);
-  
+
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -259,6 +261,15 @@ export default function OrderConfirmationPage() {
     if (!mounted || !orderId) return;
     fetchOrder();
   }, [mounted, orderId, fetchOrder]);
+
+  // ✅ Si on arrive directement sur cette page (rechargement, bookmark, partage),
+  //    on vide aussi le panier dès que la commande est confirmée.
+  useEffect(() => {
+    if (!order) return;
+    if (order.payment?.status === 'paid' || ['confirmed', 'processing', 'shipped', 'delivered'].includes(order.status)) {
+      clearCart();
+    }
+  }, [order, clearCart]);
 
   // ============================================================================
   // 🔹 POLLING pour mise à jour en temps réel
@@ -685,7 +696,7 @@ export default function OrderConfirmationPage() {
                     }[order.payment?.method as string] || 'Inconnu'}
                   </Badge>
                   <Badge className={cn(
-                    order.payment?.status === 'completed' 
+                    order.payment?.status === 'paid' 
                       ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20' 
                       : order.payment?.status === 'partial'
                       ? 'bg-blue-500/10 text-blue-700 border-blue-500/20'

@@ -10,7 +10,7 @@
 export type UserRole = 'customer' | 'manager' | 'admin';
 export type ProductType = 'shoes' | 'perfume' | 'clothing' | 'accessory';
 export type PaymentMethod = 'card' | 'mobile_money' | 'cash_on_delivery' | 'bank_transfer';
-export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded' | 'partial'; // ✅ Ajout de 'partial'
+export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'refunded' | 'partially_refunded' | 'partial'; // ✅ Aligné sur le backend (Order.js)
 export type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
 export type DiscountType = 'percentage' | 'fixed';
 
