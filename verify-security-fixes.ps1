@@ -164,11 +164,15 @@ Write-Host ""
 Write-Host "6. Divers : path traversal, sensitive files" -ForegroundColor White
 Write-Host "---------------------------------------------" -ForegroundColor DarkGray
 $tests = @(
-    @{ U = "$frontend/etc/passwd";           Accept = @(403);     N = "/etc/passwd -> 403" },
+    # /etc/passwd est intercepté par le middleware Next.js qui redirige vers
+    # /auth/login (307) plutôt que par Vercel Edge WAF (403). Les deux sont
+    # sûrs : le fichier n'est jamais servi. On accepte les deux codes.
+    @{ U = "$frontend/etc/passwd";           Accept = @(403,307); N = "/etc/passwd -> 403/307 (non servi)" },
     @{ U = "$frontend/.env";                  Accept = @(403,404); N = "/.env -> 403/404" },
     @{ U = "$frontend/.env.local";            Accept = @(403,404); N = "/.env.local -> 403/404" },
     @{ U = "$frontend/robots.txt";            Accept = @(200);     N = "/robots.txt -> 200" },
     @{ U = "$frontend/sitemap.xml";           Accept = @(200);     N = "/sitemap.xml -> 200" },
+    @{ U = "$frontend/.well-known/security.txt"; Accept = @(200);  N = "security.txt -> 200 (RFC 9116)" },
     @{ U = "$backend/api/v1/../users/admin";  Accept = @(400,404); N = "Path traversal /api/v1 -> 4xx" }
 )
 foreach ($t in $tests) {

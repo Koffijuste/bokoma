@@ -83,11 +83,14 @@ export function middleware(request: NextRequest) {
   }
 
   // 2) Assets Next.js & fichiers statiques — exclus du matcher, double-check
+  // NB : /.well-known/security.txt est aussi exclu pour rester en accès libre
+  // (RFC 9116 : les chercheurs doivent pouvoir le lire sans s'authentifier).
   if (
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/robots.txt') ||
-    pathname.startsWith('/sitemap.xml')
+    pathname.startsWith('/sitemap.xml') ||
+    pathname.startsWith('/.well-known/')
   ) {
     return NextResponse.next();
   }

@@ -1,0 +1,26 @@
+# ============================================================================
+# Bokoma Store — security.txt (RFC 9116)
+# ============================================================================
+# Canal officiel pour signaler une vulnérabilité de sécurité.
+# Réponse sous 48h ouvrées. Ne PAS utiliser pour le support client.
+# ============================================================================
+
+Contact: mailto:security@bokoma.ci
+Contact: https://bokoma.vercel.app/contact
+Expires: 2027-07-09T23:59:59Z
+Preferred-Languages: fr, en
+Canonical: https://bokoma.vercel.app/.well-known/security.txt
+
+# === Politique de divulgation responsable ===
+# - Tests autorisés UNIQUEMENT sur les domaines bokoma.ci / bokoma.vercel.app
+#   et l'API bokoma-production.up.railway.app.
+# - Pas d'attaque DoS, pas de brute-force, pas d'ingénierie sociale.
+# - Pas d'accès / modification / suppression de données utilisateur réelles.
+# - Signalement dans les 24h suivant la découverte.
+# - Divulgation publique après 90 jours ou correctif validé, selon le plus tôt.
+#
+# Merci de joindre :
+#   • URL/endpoint concerné
+#   • Étapes de reproduction minimales
+#   • Impact estimé (CVSS v3.1 si possible)
+#   • Votre nom / handle si vous souhaitez être crédité (hall of fame)
