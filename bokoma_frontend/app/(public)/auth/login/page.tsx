@@ -4,12 +4,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, EyeOff, Sparkles, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/constants';
 
@@ -91,9 +92,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-background">
       <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Sparkles className="w-8 h-8 text-accent" />
-            <span className="text-2xl font-bold gradient-text">Bokoma</span>
+          <div className="flex items-center justify-center mb-4">
+            <BrandLogo size="md" layout="compact" />
           </div>
           <h1 className="text-3xl font-bold">Connexion</h1>
           <p className="text-muted-foreground mt-2">Accédez à votre compte</p>

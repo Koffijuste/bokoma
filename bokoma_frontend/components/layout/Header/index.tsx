@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Search, ShoppingBag, User, Heart, Menu, X, LogOut, Package,
@@ -13,6 +12,7 @@ import {
 import { useTheme } from 'next-themes';
 
 import { Button } from '@/components/ui/button';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useAuth } from '@/hooks/useAuth';
 import { useMounted } from '@/hooks/useMounted';
 import { useWishlist } from '@/hooks/useWishlist';
@@ -148,30 +148,8 @@ export function Header() {
     return (
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 h-16 lg:h-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative w-10 h-10 lg:w-11 lg:h-11 rounded-xl overflow-hidden shadow-lg shadow-accent/30 ring-1 ring-black/5">
-              <Image
-                src="/logo.jpeg"
-                alt="Bokoma"
-                fill
-                sizes="44px"
-                priority
-                className="object-cover"
-              />
-            </div>
-            <div className="flex flex-col">
-              <span
-                className="text-2xl lg:text-[1.7rem] leading-none font-bold tracking-tight"
-                style={{ fontFamily: 'var(--font-playfair), Georgia, serif', fontStyle: 'italic' }}
-              >
-                <span className="bg-gradient-to-r from-rose-700 via-red-700 to-rose-900 bg-clip-text text-transparent">
-                  Bokoma
-                </span>
-              </span>
-              <span className="text-[9px] text-muted-foreground font-medium tracking-[0.25em] uppercase -mt-0.5 hidden sm:block">
-                Premium Store
-              </span>
-            </div>
+          <Link href="/" className="group">
+            <BrandLogo size="md" priority />
           </Link>
         </div>
       </header>
@@ -194,35 +172,11 @@ export function Header() {
           <div className="flex items-center justify-between h-16 lg:h-20">
             
             {/* LOGO */}
-            <Link 
-              href={isAdminPath ? ROUTES.ADMIN.DASHBOARD : ROUTES.HOME} 
-              className="flex items-center gap-3 group"
+            <Link
+              href={isAdminPath ? ROUTES.ADMIN.DASHBOARD : ROUTES.HOME}
+              className="group"
             >
-              <div className="relative">
-                <div className="relative w-10 h-10 lg:w-11 lg:h-11 rounded-xl overflow-hidden shadow-lg shadow-rose-900/20 ring-1 ring-black/5 group-hover:shadow-rose-900/40 group-hover:scale-105 transition-all duration-300">
-                  <Image
-                    src="/logo.jpeg"
-                    alt="Bokoma"
-                    fill
-                    sizes="44px"
-                    priority
-                    className="object-cover"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col">
-                <span
-                  className="text-2xl lg:text-[1.75rem] leading-none font-bold tracking-tight"
-                  style={{ fontFamily: 'var(--font-playfair), Georgia, serif', fontStyle: 'italic' }}
-                >
-                  <span className="bg-gradient-to-r from-rose-700 via-red-700 to-rose-900 bg-clip-text text-transparent">
-                    Bokoma
-                  </span>
-                </span>
-                <span className="text-[9px] text-muted-foreground font-medium tracking-[0.25em] uppercase -mt-0.5 hidden sm:block">
-                  Premium Store
-                </span>
-              </div>
+              <BrandLogo size="md" priority />
             </Link>
 
             {/* DESKTOP NAVIGATION */}
@@ -484,25 +438,7 @@ export function Header() {
             <div className="p-6 pt-20">
               {/* Header du menu */}
               <div className="flex items-center justify-between mb-8 -mt-8">
-                <div className="flex items-center gap-2">
-                  <div className="relative w-9 h-9 rounded-lg overflow-hidden shadow-md shadow-rose-900/20 ring-1 ring-black/5">
-                    <Image
-                      src="/logo.jpeg"
-                      alt="Bokoma"
-                      fill
-                      sizes="36px"
-                      className="object-cover"
-                    />
-                  </div>
-                  <span
-                    className="text-xl leading-none font-bold tracking-tight"
-                    style={{ fontFamily: 'var(--font-playfair), Georgia, serif', fontStyle: 'italic' }}
-                  >
-                    <span className="bg-gradient-to-r from-rose-700 via-red-700 to-rose-900 bg-clip-text text-transparent">
-                      Bokoma
-                    </span>
-                  </span>
-                </div>
+                <BrandLogo size="sm" layout="compact" />
                 <button
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors"

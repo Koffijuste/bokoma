@@ -5,9 +5,10 @@ import React from 'react';
 import Link from 'next/link';
 import {
   Mail, Phone, MapPin, Facebook, Twitter, Instagram, Linkedin,
-  Sparkles, CreditCard, Truck, Shield, Headphones, ArrowRight, ImageIcon, MessageSquare, BookOpen
+  CreditCard, Truck, Shield, Headphones, ArrowRight, ImageIcon, MessageSquare, BookOpen
 } from 'lucide-react';
 import { ROUTES } from '@/constants';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { CookiePreferencesButton } from '@/components/legal/CookiePreferencesButton';
 
 export function Footer() {
@@ -43,18 +44,8 @@ export function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-accent/30">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <span className="text-xl font-bold bg-gradient-to-r from-accent to-purple-500 bg-clip-text text-transparent">
-                  Bokoma
-                </span>
-                <p className="text-[10px] text-muted-foreground tracking-widest uppercase -mt-1">
-                  Premium Store
-                </p>
-              </div>
+            <div className="mb-4">
+              <BrandLogo size="md" />
             </div>
             <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
               Découvrez notre sélection premium de produits de luxe et tendance.

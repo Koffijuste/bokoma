@@ -6,9 +6,10 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Search, ShoppingCart, User, Heart, Menu, X, LogOut, Package,
-  LayoutDashboard, ChevronDown, Sparkles, Settings
+  LayoutDashboard, ChevronDown, Settings
 } from 'lucide-react';
 
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useAuth } from '@/hooks/useAuth';
 import { useWishlist } from '@/hooks/useWishlist';
 import { useCartStore } from '@/store';
@@ -103,23 +104,31 @@ export function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <Link 
-            href={isAdminPath ? ROUTES.ADMIN.DASHBOARD : ROUTES.HOME} 
-            className="flex items-center gap-2 group"
+          <Link
+            href={isAdminPath ? ROUTES.ADMIN.DASHBOARD : ROUTES.HOME}
+            className="group"
             onClick={closeMobileMenu}
           >
             {isAdminPath ? (
-              <div className="w-10 h-10 rounded-lg bg-accent/10 border border-accent flex items-center justify-center">
-                <LayoutDashboard className="w-5 h-5 text-accent" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/10 border border-accent flex items-center justify-center flex-shrink-0">
+                  <LayoutDashboard className="w-5 h-5 text-accent" />
+                </div>
+                <div className="flex flex-col">
+                  <span
+                    className="text-xl leading-none font-bold tracking-tight"
+                    style={{ fontFamily: 'var(--font-playfair), Georgia, serif', fontStyle: 'italic' }}
+                  >
+                    <span className="bg-gradient-to-r from-rose-700 via-red-700 to-rose-900 bg-clip-text text-transparent">
+                      Bokoma
+                    </span>
+                    <span className="ml-1 text-foreground">Admin</span>
+                  </span>
+                </div>
               </div>
             ) : (
-              <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-accent group-hover:rotate-12 transition-transform" />
-              </div>
+              <BrandLogo size="sm" layout="compact" />
             )}
-            <span className="hidden sm:block font-bold text-lg gradient-text">
-              {isAdminPath ? 'Bokoma Admin' : 'Bokoma'}
-            </span>
           </Link>
 
           <div className="hidden md:flex flex-1 max-w-md mx-4">
