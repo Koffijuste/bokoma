@@ -309,6 +309,34 @@ export default function OrdersAdminPage() {
     );
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🔹 HELPER : affichage du montant (gère les paiements partiels)
+  // Renvoie ce qui doit être affiché + un sous-label éventuel.
+  // ═══════════════════════════════════════════════════════════════
+  const getPaymentDisplay = (order: Order): { amount: number; subtitle?: string; isPartial: boolean } => {
+    const total = order.total || 0;
+    const p = order.payment;
+    if (!p) return { amount: total, isPartial: false };
+
+    // Paiement entièrement payé → on affiche le total tel quel
+    if (p.status === 'paid') {
+      return { amount: total, isPartial: false };
+    }
+
+    // Paiement partiel → on affiche CE QUI A ÉTÉ PAYÉ + rappel du total
+    if (p.status === 'partial') {
+      const paid = typeof p.amountPaid === 'number' ? p.amountPaid : Math.round(total / 2);
+      return {
+        amount: paid,
+        subtitle: `/ ${formatPrice(total)}`,
+        isPartial: true,
+      };
+    }
+
+    // Pour les autres statuts (pending, failed, expired, refunded…), on garde le total
+    return { amount: total, isPartial: false };
+  };
+
   const filteredOrders = useMemo(() => orders.filter(order => {
     const u: any = typeof order.user === 'object' && order.user !== null ? order.user : {};
     const matchesSearch = searchQuery === '' ||
@@ -692,7 +720,29 @@ export default function OrdersAdminPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-bold text-base text-accent">{formatPrice(order.total)}</p>
+                        {(() => {
+                          const pay = getPaymentDisplay(order);
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <p className={cn(
+                                "font-bold text-base",
+                                pay.isPartial ? "text-amber-600" : "text-accent"
+                              )}>
+                                {formatPrice(pay.amount)}
+                              </p>
+                              {pay.isPartial && pay.subtitle && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {pay.subtitle}
+                                </span>
+                              )}
+                              {pay.isPartial && (
+                                <span className="text-[9px] uppercase font-bold text-amber-600">
+                                  Partiel
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-4">
                         {getStatusBadge(order.status, 'sm')}
@@ -823,7 +873,31 @@ export default function OrdersAdminPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <p className="font-bold text-base text-accent">{formatPrice(order.total)}</p>
+                    <div className="flex flex-col items-end gap-0.5">
+                      {(() => {
+                        const pay = getPaymentDisplay(order);
+                        return (
+                          <>
+                            <p className={cn(
+                              "font-bold text-base",
+                              pay.isPartial ? "text-amber-600" : "text-accent"
+                            )}>
+                              {formatPrice(pay.amount)}
+                            </p>
+                            {pay.isPartial && pay.subtitle && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {pay.subtitle}
+                              </span>
+                            )}
+                            {pay.isPartial && (
+                              <span className="text-[9px] uppercase font-bold text-amber-600">
+                                Partiel
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                     <Button 
                       variant="ghost" 
                       size="sm" 
