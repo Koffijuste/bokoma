@@ -15,6 +15,8 @@ import {
   Plus, Trash2, Edit3, Save, X, Search, Star, Loader2, Image as ImageIcon,
   Play, Eye, EyeOff, RefreshCcw,
   ChevronLeft, ChevronRight, Upload, Link as LinkIcon, FileVideo, AlertCircle,
+  LayoutGrid, List, Sparkles, Filter, Calendar, Tag,
+  MoreVertical, CheckCircle2, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -606,9 +608,11 @@ export default function AdminGalleryPage() {
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [stats, setStats] = useState<{ total: number; published: number; featured: number } | null>(null);
   const [refetching, setRefetching] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const cancelledRef = useRef(false);
 
@@ -730,6 +734,17 @@ export default function AdminGalleryPage() {
     setSearchQuery(searchInput);
   };
 
+  // Fermer le menu contextuel au click-outside
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-card-menu]')) setOpenMenuId(null);
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [openMenuId]);
+
   // ═══════════════════════════════════════════════════════════════
   // 🔹 RENDER
   // ═══════════════════════════════════════════════════════════════
@@ -737,170 +752,482 @@ export default function AdminGalleryPage() {
   return (
     <div className="space-y-6 animate-fade-up">
 
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Galerie</h1>
-          <p className="text-sm text-muted-foreground">
-            Gérez les médias affichés sur la page publique de la galerie Bokoma.
-          </p>
+      {/* ── Header premium ── */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center shrink-0 shadow-lg shadow-accent/20">
+            <ImageIcon className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Galerie</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Gérez les médias affichés sur la page publique de la galerie Bokoma.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => fetchItems(1)} disabled={loading}>
-            <RefreshCcw className={cn('w-4 h-4 mr-2', loading && 'animate-spin')} />
-            Actualiser
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => fetchItems(1)}
+            disabled={loading}
+            className="gap-2"
+            title="Rafraîchir la liste"
+          >
+            <RefreshCcw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            <span className="hidden sm:inline">Actualiser</span>
           </Button>
           <Button
             onClick={() => { setEditingItem(null); setModalOpen(true); }}
-            className="bg-gradient-to-r from-accent to-purple-500 text-white"
+            className="bg-gradient-to-r from-accent to-purple-500 hover:from-accent/90 hover:to-purple-500/90 text-white shadow-lg shadow-accent/25 gap-2"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            Ajouter un média
+            <Plus className="w-4 h-4" />
+            <span>Ajouter un média</span>
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* ── Stats cards avec icônes ── */}
       {stats && (
-        <div className="grid grid-cols-3 gap-3 stagger-children">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 stagger-children">
           {[
-            { label: 'Total',        value: stats.total,     color: 'text-foreground' },
-            { label: 'Publiés',      value: stats.published, color: 'text-green-500' },
-            { label: 'À la une',     value: stats.featured,  color: 'text-amber-500' },
-          ].map((s) => (
-            <Card key={s.label}>
-              <CardContent className="p-4">
-                <p className="text-xs uppercase text-muted-foreground tracking-wider">{s.label}</p>
-                <p className={cn('text-3xl font-bold mt-1', s.color)}>{s.value}</p>
-              </CardContent>
-            </Card>
-          ))}
+            { label: 'Total médias', value: stats.total,     icon: ImageIcon, accent: 'from-slate-500/10 to-slate-500/0 ring-slate-500/20', text: 'text-foreground' },
+            { label: 'Publiés',      value: stats.published, icon: CheckCircle2, accent: 'from-emerald-500/15 to-emerald-500/0 ring-emerald-500/30', text: 'text-emerald-600 dark:text-emerald-400' },
+            { label: 'À la une',     value: stats.featured,  icon: Sparkles, accent: 'from-amber-500/15 to-amber-500/0 ring-amber-500/30', text: 'text-amber-600 dark:text-amber-400' },
+          ].map((s) => {
+            const Icon = s.icon;
+            return (
+              <div
+                key={s.label}
+                className={cn(
+                  'group relative overflow-hidden rounded-2xl border border-border bg-card p-4 sm:p-5',
+                  'ring-1 ring-transparent hover:ring-current hover-lift transition-shadow duration-200',
+                )}
+              >
+                <div className={cn('absolute inset-0 bg-gradient-to-br opacity-60', s.accent)} />
+                <div className="relative flex items-center justify-between mb-2">
+                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    {s.label}
+                  </p>
+                  <div className={cn('w-9 h-9 rounded-xl bg-background/60 backdrop-blur-sm flex items-center justify-center', s.text)}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                </div>
+                <p className={cn('relative text-3xl font-bold tabular-nums', s.text)}>{s.value}</p>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Filtres */}
-      <Card>
-        <CardContent className="p-4 flex flex-wrap gap-3 items-center">
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      {/* ── Filter bar ── */}
+      <div className="p-3 sm:p-4 rounded-2xl border border-border bg-card/80 backdrop-blur-sm">
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
+          {/* Recherche */}
+          <form onSubmit={handleSearch} className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Rechercher titre, tag…"
-              className="pl-10 w-64"
+              placeholder="Rechercher par titre, description, tag…"
+              className="pl-10 h-10"
             />
           </form>
 
-          <div className="flex gap-1 bg-muted/50 rounded-full p-1">
-            {(['all', 'published', 'draft'] as const).map((f) => (
+          {/* Chips : statut */}
+          <div className="flex gap-1 bg-muted/40 rounded-full p-1 shrink-0 overflow-x-auto">
+            {([
+              { id: 'all',       label: 'Tous',       icon: Filter },
+              { id: 'published', label: 'Publiés',    icon: CheckCircle2 },
+              { id: 'draft',     label: 'Brouillons', icon: Clock },
+            ] as const).map(({ id, label, icon: Icon }) => (
               <button
-                key={f}
-                onClick={() => setFilter(f)}
+                key={id}
+                onClick={() => setFilter(id)}
                 className={cn(
-                  'px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-150',
-                  filter === f ? 'bg-accent text-white shadow-md' : 'text-muted-foreground hover:text-foreground'
+                  'px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 whitespace-nowrap',
+                  'flex items-center gap-1.5',
+                  filter === id
+                    ? 'bg-gradient-to-r from-accent to-purple-500 text-white shadow-md shadow-accent/25'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
                 )}
               >
-                {f === 'all' ? 'Tous' : f === 'published' ? 'Publiés' : 'Brouillons'}
+                <Icon className="w-3.5 h-3.5" />
+                {label}
               </button>
             ))}
           </div>
 
-          <div className="flex gap-1 bg-muted/50 rounded-full p-1">
-            {(['all', 'image', 'video'] as const).map((t) => (
+          {/* Chips : type */}
+          <div className="flex gap-1 bg-muted/40 rounded-full p-1 shrink-0">
+            {([
+              { id: 'all',   label: 'Tous',     icon: Filter },
+              { id: 'image', label: 'Images',   icon: ImageIcon },
+              { id: 'video', label: 'Vidéos',   icon: Play },
+            ] as const).map(({ id, label, icon: Icon }) => (
               <button
-                key={t}
-                onClick={() => setTypeFilter(t)}
+                key={id}
+                onClick={() => setTypeFilter(id)}
                 className={cn(
-                  'px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-150',
-                  typeFilter === t ? 'bg-accent text-white shadow-md' : 'text-muted-foreground hover:text-foreground'
+                  'px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 whitespace-nowrap',
+                  'flex items-center gap-1.5',
+                  typeFilter === id
+                    ? 'bg-gradient-to-r from-accent to-purple-500 text-white shadow-md shadow-accent/25'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
                 )}
               >
-                {t === 'all' ? 'Tous types' : t === 'image' ? '🖼️ Images' : '🎬 Vidéos'}
+                <Icon className="w-3.5 h-3.5" />
+                {label}
               </button>
             ))}
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Liste */}
-      {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="aspect-square rounded-2xl bg-muted animate-pulse" />
-          ))}
+          {/* View mode toggle */}
+          <div className="flex gap-1 bg-muted/40 rounded-full p-1 shrink-0">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                'w-9 h-9 rounded-full flex items-center justify-center transition-all',
+                viewMode === 'grid' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+              aria-label="Vue grille"
+              title="Vue grille"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={cn(
+                'w-9 h-9 rounded-full flex items-center justify-center transition-all',
+                viewMode === 'list' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+              aria-label="Vue liste"
+              title="Vue liste"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* ── Liste ── */}
+      {loading ? (
+        viewMode === 'grid' ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="aspect-square bg-muted animate-pulse" />
+                <div className="p-3 space-y-2">
+                  <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
+                  <div className="h-3 bg-muted rounded w-full animate-pulse" />
+                  <div className="h-3 bg-muted rounded w-1/2 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-20 rounded-2xl border border-border bg-card animate-pulse" />
+            ))}
+          </div>
+        )
       ) : items.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <ImageIcon className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
-            <p className="text-muted-foreground">Aucun média. Ajoutez-en un pour démarrer.</p>
-          </CardContent>
-        </Card>
-      ) : (
+        <div className="flex flex-col items-center justify-center py-16 px-6 text-center rounded-2xl border-2 border-dashed border-border bg-card/40 animate-fade-up">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent/20 to-purple-500/10 flex items-center justify-center mb-5">
+            <ImageIcon className="w-9 h-9 text-accent" />
+          </div>
+          <h3 className="text-lg font-semibold mb-1">Aucun média pour le moment</h3>
+          <p className="text-sm text-muted-foreground max-w-md mb-5">
+            {searchQuery || filter !== 'all' || typeFilter !== 'all'
+              ? "Aucun résultat ne correspond à vos critères. Essayez d'élargir les filtres."
+              : "Commencez par ajouter votre premier média pour enrichir la page galerie publique."}
+          </p>
+          <Button
+            onClick={() => { setEditingItem(null); setModalOpen(true); }}
+            className="bg-gradient-to-r from-accent to-purple-500 text-white shadow-lg shadow-accent/25 gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Ajouter un média
+          </Button>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
           {items.map((item) => {
             const cat = CATEGORIES.find((c) => c.id === item.category);
+            const isMenuOpen = openMenuId === item._id;
             return (
-              <Card key={item._id} className="overflow-hidden group hover-lift">
-                <div className="relative aspect-square bg-muted">
+              <Card
+                key={item._id}
+                className="overflow-hidden group hover-lift relative"
+                data-card-menu
+              >
+                {/* Thumbnail + overlay */}
+                <div className="relative aspect-square bg-muted overflow-hidden">
                   {item.thumbnail || item.url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={item.thumbnail || item.url}
                       alt={item.title}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                       loading="lazy"
                       decoding="async"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      {item.type === 'video' ? <Play className="w-10 h-10" /> : <ImageIcon className="w-10 h-10" />}
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/40">
+                      {item.type === 'video' ? <Play className="w-10 h-10 text-muted-foreground/60" /> : <ImageIcon className="w-10 h-10 text-muted-foreground/60" />}
                     </div>
                   )}
-                  {item.type === 'video' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <div className="w-12 h-12 rounded-full bg-white/90 text-black flex items-center justify-center">
-                        <Play className="w-5 h-5 ml-0.5" fill="currentColor" />
+
+                  {/* Dégradé permanent pour lisibilité des badges */}
+                  <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+
+                  {/* Type indicator (top-left) */}
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                    <span className={cn(
+                      'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm flex items-center gap-1',
+                      item.type === 'video'
+                        ? 'bg-rose-500/90 text-white'
+                        : 'bg-blue-500/90 text-white'
+                    )}>
+                      {item.type === 'video' ? <Play className="w-3 h-3" fill="currentColor" /> : <ImageIcon className="w-3 h-3" />}
+                      {item.type}
+                    </span>
+                    {item.isFeatured && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/90 text-white text-[10px] font-bold flex items-center gap-1 backdrop-blur-sm">
+                        <Sparkles className="w-3 h-3" fill="currentColor" />
+                        À la une
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Brouillon overlay */}
+                  {!item.isPublished && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-white font-semibold">
+                      <div className="flex items-center gap-2 text-sm">
+                        <EyeOff className="w-4 h-4" /> Brouillon
                       </div>
                     </div>
                   )}
-                  {!item.isPublished && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-bold">
-                      <EyeOff className="w-4 h-4 mr-2" /> Brouillon
+
+                  {/* Vidéo play overlay (toujours visible, plus grand) */}
+                  {item.type === 'video' && item.isPublished && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-14 h-14 rounded-full bg-white/95 text-black flex items-center justify-center shadow-xl transition-transform duration-300 group-hover:scale-110">
+                        <Play className="w-6 h-6 ml-0.5" fill="currentColor" />
+                      </div>
                     </div>
                   )}
-                  {item.isFeatured && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center gap-1">
-                      <Star className="w-3 h-3" fill="currentColor" /> À la une
+
+                  {/* Hover actions overlay */}
+                  <div className="absolute inset-x-0 bottom-0 p-2 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none group-hover:pointer-events-auto">
+                    <div className="flex items-center gap-1 bg-black/60 backdrop-blur-md rounded-xl p-1 border border-white/10">
+                      <button
+                        onClick={() => handleTogglePublished(item)}
+                        title={item.isPublished ? 'Dépublier' : 'Publier'}
+                        className="flex-1 h-9 rounded-lg text-white hover:bg-white/20 flex items-center justify-center transition-colors"
+                      >
+                        {item.isPublished ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => handleToggleFeatured(item)}
+                        title={item.isFeatured ? 'Retirer de la une' : 'Mettre à la une'}
+                        className={cn(
+                          'flex-1 h-9 rounded-lg text-white hover:bg-white/20 flex items-center justify-center transition-colors',
+                          item.isFeatured && 'bg-amber-500/30'
+                        )}
+                      >
+                        <Star className={cn('w-4 h-4', item.isFeatured && 'fill-amber-300 text-amber-300')} />
+                      </button>
+                      <button
+                        onClick={() => { setEditingItem(item); setModalOpen(true); }}
+                        title="Modifier"
+                        className="flex-1 h-9 rounded-lg text-white hover:bg-white/20 flex items-center justify-center transition-colors"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
                     </div>
-                  )}
-                </div>
-                <CardContent className="p-3 space-y-2">
-                  <p className="font-semibold text-sm line-clamp-1">{item.title}</p>
-                  <p className="text-xs text-muted-foreground line-clamp-2">{item.description || '—'}</p>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="px-1.5 py-0.5 bg-muted rounded font-medium">{cat?.label ?? item.category}</span>
-                    <span className="flex items-center gap-1">
-                      {item.type === 'video' ? <Play className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
-                      {item.type}
-                    </span>
                   </div>
-                  <div className="flex items-center gap-1 pt-2 border-t border-border">
-                    <Button variant="ghost" size="sm" className="flex-1" onClick={() => handleTogglePublished(item)}>
-                      {item.isPublished ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                    </Button>
-                    <Button variant="ghost" size="sm" className="flex-1" onClick={() => handleToggleFeatured(item)}>
-                      <Star className={cn('w-3 h-3', item.isFeatured && 'fill-amber-400 text-amber-400')} />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="flex-1" onClick={() => { setEditingItem(item); setModalOpen(true); }}>
-                      <Edit3 className="w-3 h-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="flex-1 hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDelete(item._id, item.title)}>
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
+                </div>
+
+                {/* Card content */}
+                <CardContent className="p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm line-clamp-1">{item.title}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{item.description || '—'}</p>
+                    </div>
+
+                    {/* Menu contextuel (⋮) */}
+                    <div className="relative shrink-0" data-card-menu>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(isMenuOpen ? null : item._id); }}
+                        className="w-7 h-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+                        aria-label="Plus d'actions"
+                        data-card-menu
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                      {isMenuOpen && (
+                        <div
+                          data-card-menu
+                          className="absolute right-0 top-full mt-1 z-20 w-44 rounded-xl border border-border bg-card shadow-xl py-1 animate-fade-up"
+                        >
+                          <button
+                            onClick={() => { setEditingItem(item); setModalOpen(true); setOpenMenuId(null); }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                            data-card-menu
+                          >
+                            <Edit3 className="w-3.5 h-3.5" /> Modifier
+                          </button>
+                          <button
+                            onClick={() => { handleTogglePublished(item); setOpenMenuId(null); }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                            data-card-menu
+                          >
+                            {item.isPublished ? <><EyeOff className="w-3.5 h-3.5" /> Dépublier</> : <><Eye className="w-3.5 h-3.5" /> Publier</>}
+                          </button>
+                          <button
+                            onClick={() => { handleToggleFeatured(item); setOpenMenuId(null); }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                            data-card-menu
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            {item.isFeatured ? 'Retirer de la une' : 'Mettre à la une'}
+                          </button>
+                          <div className="h-px bg-border my-1" data-card-menu />
+                          <button
+                            onClick={() => { handleDelete(item._id, item.title); setOpenMenuId(null); }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-destructive/10 text-destructive flex items-center gap-2"
+                            data-card-menu
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Supprimer
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1.5 border-t border-border/60">
+                    <span className="px-1.5 py-0.5 bg-muted rounded font-medium flex items-center gap-1">
+                      <Tag className="w-3 h-3" />
+                      {cat?.label ?? item.category}
+                    </span>
+                    {item.createdAt && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(item.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                      </span>
+                    )}
                   </div>
                 </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        /* ── Vue liste ── */
+        <div className="space-y-2 stagger-children">
+          {items.map((item) => {
+            const cat = CATEGORIES.find((c) => c.id === item.category);
+            const isMenuOpen = openMenuId === item._id;
+            return (
+              <Card key={item._id} className="overflow-hidden group hover-lift" data-card-menu>
+                <div className="flex items-center gap-3 p-3">
+                  {/* Mini thumbnail */}
+                  <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-muted shrink-0">
+                    {item.thumbnail || item.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.thumbnail || item.url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        {item.type === 'video' ? <Play className="w-5 h-5 text-muted-foreground" /> : <ImageIcon className="w-5 h-5 text-muted-foreground" />}
+                      </div>
+                    )}
+                    {item.type === 'video' && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                        <Play className="w-4 h-4 text-white" fill="currentColor" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Infos */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <p className="font-semibold text-sm line-clamp-1">{item.title}</p>
+                      {item.isFeatured && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-bold flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" /> Une
+                        </span>
+                      )}
+                      {!item.isPublished && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-slate-500/10 text-slate-500 text-[10px] font-bold flex items-center gap-1">
+                          <EyeOff className="w-3 h-3" /> Brouillon
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-1">{item.description || '—'}</p>
+                    <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        {item.type === 'video' ? <Play className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
+                        {item.type}
+                      </span>
+                      <span>·</span>
+                      <span className="flex items-center gap-1">
+                        <Tag className="w-3 h-3" />
+                        {cat?.label ?? item.category}
+                      </span>
+                      {item.createdAt && (
+                        <>
+                          <span>·</span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(item.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleTogglePublished(item)}
+                      title={item.isPublished ? 'Dépublier' : 'Publier'}
+                      className="h-9 w-9"
+                    >
+                      {item.isPublished ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleToggleFeatured(item)}
+                      title={item.isFeatured ? 'Retirer de la une' : 'Mettre à la une'}
+                      className="h-9 w-9"
+                    >
+                      <Star className={cn('w-4 h-4', item.isFeatured && 'fill-amber-400 text-amber-400')} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => { setEditingItem(item); setModalOpen(true); }}
+                      title="Modifier"
+                      className="h-9 w-9"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(item._id, item.title)}
+                      title="Supprimer"
+                      className="h-9 w-9 text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               </Card>
             );
           })}

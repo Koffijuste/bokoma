@@ -56,18 +56,23 @@ export function AdminSidebar() {
         />
       )}
 
-      {/* ✅ SIDEBAR */}
+      {/* ✅ SIDEBAR
+          - Mobile (< sm) : drawer 256px qui slide in/out
+          - Desktop (sm+) : toujours visible, largeur variable (80px ↔ 256px)
+            ⚠️ Le `-translate-x-full` doit être scopé à mobile uniquement,
+            sinon la sidebar est off-screen par défaut sur desktop. */}
       <aside
         className={cn(
           'fixed top-0 bottom-0 bg-card border-r border-border z-40',
           'transition-all duration-300 ease-in-out',
-          
-          // Desktop : width variable selon état
-          'sm:block sm:pt-16',
+          'sm:pt-16',
+          // Largeur : base 256px (mobile drawer), 80px ou 256px sur desktop
+          'w-64',
           sidebarOpen ? 'sm:w-64' : 'sm:w-20',
-          
-          // Mobile : drawer qui glisse
-          sidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'
+          // Translation : caché sur mobile fermé, toujours visible sur desktop
+          sidebarOpen
+            ? 'translate-x-0'
+            : '-translate-x-full sm:translate-x-0'
         )}
         data-sidebar-open={sidebarOpen}
       >
