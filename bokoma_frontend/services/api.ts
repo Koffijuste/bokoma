@@ -256,9 +256,17 @@ export const userApi = {
                     apiClient.patch<ApiResponse<{ user: User }>>('/auth/me', data),
   updatePassword: (currentPassword: string, newPassword: string) =>
                     apiClient.patch<ApiResponse>('/auth/me/password', { currentPassword, newPassword }),
-  getUsers:       (filters?: any) => apiClient.get<ApiResponse<{ users: User[]; total: number }>>('/users', { params: filters }),
+  getUsers:       async (filters?: any): Promise<User[]> => {
+    const payload = await apiClient.get<ApiResponse<{ users: User[]; total: number }>>('/users', { params: filters });
+    // ✅ Le backend renvoie { success, data: { users: [...], total } } — on extrait la liste.
+    const list = payload?.data?.users;
+    return Array.isArray(list) ? list : [];
+  },
   getUser:        (id: string) => apiClient.get<ApiResponse<{ user: User }>>(`/users/${id}`),
-  updateUser:     (id: string, data: Partial<User>) => apiClient.patch<ApiResponse<{ user: User }>>(`/users/${id}`, data),
+  // ✅ Backend expose une route dédiée `/users/:id/role` (cf. user.routes.js).
+  //    On évite le PATCH générique `/users/:id` qui n'existe pas → 404.
+  updateUserRole: (id: string, role: User['role']) =>
+    apiClient.patch<ApiResponse<{ user: User }>>(`/users/${id}/role`, { role }),
   deleteUser:     (id: string) => apiClient.delete<ApiResponse>(`/users/${id}`),
   toggleUserStatus: (id: string, isActive: boolean) => apiClient.patch<ApiResponse<{ user: User }>>(`/users/${id}/status`, { isActive }),
 };

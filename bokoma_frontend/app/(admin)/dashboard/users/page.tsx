@@ -165,7 +165,7 @@ export default function UsersAdminPage() {
     setUpdating(userId);
     
     try {
-      await userApi.updateUser(userId, { role: newRole });
+      await userApi.updateUserRole(userId, newRole);
       toast.success(`Rôle mis à jour en "${newRole}"`);
       
       setUsers(prev => prev.map(u => u._id === userId ? { ...u, role: newRole } : u));
