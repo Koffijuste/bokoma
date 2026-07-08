@@ -263,10 +263,17 @@ export default function OrderConfirmationPage() {
   }, [mounted, orderId, fetchOrder]);
 
   // ✅ Si on arrive directement sur cette page (rechargement, bookmark, partage),
-  //    on vide aussi le panier dès que la commande est confirmée.
+  //    on vide aussi le panier dès que la commande est confirmée — y compris
+  //    en cas de paiement partiel (l'acompte suffit à considérer la commande
+  //    comme "payée" côté UX).
   useEffect(() => {
     if (!order) return;
-    if (order.payment?.status === 'paid' || ['confirmed', 'processing', 'shipped', 'delivered'].includes(order.status)) {
+    const pay = order.payment?.status;
+    if (
+      pay === 'paid' ||
+      pay === 'partial' ||
+      ['confirmed', 'processing', 'shipped', 'delivered'].includes(order.status)
+    ) {
       clearCart();
     }
   }, [order, clearCart]);

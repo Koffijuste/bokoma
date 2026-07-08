@@ -59,4 +59,12 @@ if (typeof window !== 'undefined') {
 
   window.addEventListener('bokoma:logout', cleanup);
   window.addEventListener('bokoma:session-expired', cleanup);
+
+  // ✅ Au login d'un nouvel utilisateur (sur la même machine) on flush
+  //    aussi le panier local : Zustand persiste dans localStorage, donc
+  //    un autre client hériterait sinon des articles du précédent.
+  //    Le useEffect `userId` de useCart fera un re-fetch du cart du
+  //    nouveau user juste après — il faut juste qu'on soit sûr de
+  //    partir d'un panier vide côté store.
+  window.addEventListener('bokoma:login', cleanup);
 }

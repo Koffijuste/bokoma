@@ -145,12 +145,19 @@ export default function PaymentSuccessPage() {
       const payStatus = o.payment?.status;
       const orderStatus = o.status;
 
-      if (payStatus === 'paid' || orderStatus === 'confirmed' || orderStatus === 'processing') {
+      if (
+        payStatus === 'paid' ||
+        payStatus === 'partial' ||
+        orderStatus === 'confirmed' ||
+        orderStatus === 'processing'
+      ) {
         setStatus('confirmed');
-        // ✅ Panier vidé : paiement confirmé côté backend → on flush le store
+        // ✅ Panier vidé : paiement (entier ou partiel) confirmé côté backend
+        //    → on flush le store. Le backend a déjà clear son cart en DB,
+        //    il reste à synchroniser le store Zustand pour la navbar.
         clearCart();
         sessionStorage.removeItem('bokoma_pending_order');
-        toast.success('🎉 Paiement confirmé !');
+        toast.success(payStatus === 'partial' ? '💰 Acompte reçu !' : '🎉 Paiement confirmé !');
         return;
       }
 
