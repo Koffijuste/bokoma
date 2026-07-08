@@ -119,6 +119,11 @@ const authLimiter = rateLimit({
 // ─── Health check (avant rate limiter global) ─────────────────────────────────
 app.use('/api/v1/health', require('./routes/health.routes'));
 
+// ─── Debug (avant rate limiter global aussi — usage ponctuel) ─────────────────
+// Sert à récupérer l'IP sortante du conteneur Railway (whitelist CinetPay, etc.)
+// Désactivable via ENABLE_DEBUG_ROUTES=false
+app.use('/api/v1/debug', require('./routes/debug.routes'));
+
 // ─── Rate limiter global ──────────────────────────────────────────────────────
 app.use(apiLimiter);
 
