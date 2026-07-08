@@ -8,7 +8,7 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  HelpCircle, Search, ChevronDown, MessageSquare, Phone, Mail,
+  HelpCircle, Search, ChevronDown, MessageSquare, Mail,
   ShoppingBag, CreditCard, Truck, RotateCcw, User, Sparkles, ArrowRight,
   CheckCircle2, Package,
 } from 'lucide-react';
@@ -506,22 +506,16 @@ export default function FaqPage() {
                   asChild
                   className="w-full bg-gradient-to-r from-accent to-purple-500 text-white"
                 >
-                  <Link href="/feedback">
+                  <Link href="/contact">
                     <MessageSquare className="w-4 h-4 mr-2" />
-                    Envoyer un message
+                    Nous contacter
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="w-full">
-                  <a href="mailto:contact@bokoma.com">
+                  <Link href="/feedback">
                     <Mail className="w-4 h-4 mr-2" />
-                    contact@bokoma.com
-                  </a>
-                </Button>
-                <Button asChild variant="ghost" className="w-full">
-                  <a href="tel:+2250798300782">
-                    <Phone className="w-4 h-4 mr-2" />
-                    +225 07 98 30 07 82
-                  </a>
+                    Laisser un avis
+                  </Link>
                 </Button>
               </div>
             </div>

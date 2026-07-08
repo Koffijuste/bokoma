@@ -781,11 +781,11 @@ export default function OrderConfirmationPage() {
                 <div className="flex-1">
                   <p className="font-semibold mb-1">Besoin d'aide ?</p>
                   <p className="text-sm text-muted-foreground">
-                    Contactez notre support à{' '}
-                    <a href="mailto:support@bokoma.com" className="text-accent hover:underline font-medium">
-                      support@bokoma.com
-                    </a>{' '}
-                    ou appelez le <span className="font-medium">+225 07 07 07 07 07</span>
+                    Contactez notre support via notre{' '}
+                    <Link href="/contact" className="text-accent hover:underline font-medium">
+                      formulaire de contact sécurisé
+                    </Link>
+                    {' '}en indiquant votre numéro de commande.
                   </p>
                 </div>
               </div>

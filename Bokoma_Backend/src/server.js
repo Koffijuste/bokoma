@@ -12,10 +12,11 @@ const path       = require('path');
 const cors       = require('cors');
 const helmet     = require('helmet');
 const morgan     = require('morgan');
-const rateLimit  = require('express-rate-limit');
+const hpp        = require('hpp');
 const cookieParser = require('cookie-parser');
 const connectDB  = require('./config/db');
 const logger     = require('./utils/logger');
+const { apiLimiter } = require('./middlewares/rateLimiters');
 
 const app = express();
 
@@ -94,27 +95,15 @@ app.use(cookieParser());
 
 // ─── Sanitization & logging ───────────────────────────────────────────────────
 app.use(require('./middlewares/sanitize'));
+// ✅ Anti HTTP Parameter Pollution (empêche ?role=customer&role=admin)
+//    Whitelist des champs où la répétition est légitime (filtres listes).
+app.use(hpp({
+  whitelist: ['category', 'type', 'tags', 'sort', 'fields'],
+}));
 app.use(morgan('dev'));
 
 // ─── Fichiers statiques ───────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-
-// ─── Rate Limiters ────────────────────────────────────────────────────────────
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1000,
-  standardHeaders: true,
-  legacyHeaders:   false,
-  message: { success: false, message: 'Trop de requêtes, réessayez plus tard.' },
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 2000,
-  standardHeaders: true,
-  legacyHeaders:   false,
-  message: { success: false, message: 'Trop de tentatives, réessayez dans quelques minutes.' },
-});
 
 // ─── Health check (avant rate limiter global) ─────────────────────────────────
 app.use('/api/v1/health', require('./routes/health.routes'));
@@ -129,8 +118,10 @@ app.use(apiLimiter);
 
 // ─── Routes API ───────────────────────────────────────────────────────────────
 
-// Auth
-app.use('/api/v1/auth', authLimiter, require('./routes/auth.routes'));
+// Auth (rate limiters stricts appliqués par route dans auth.routes.js)
+// → /login, /forgot-password, /reset-password-otp : 10/15min (anti brute-force)
+// → /register, /verify-email                  : 10/h (anti spam comptes)
+app.use('/api/v1/auth', require('./routes/auth.routes'));
 
 // Ressources
 app.use('/api/v1/users',      require('./routes/user.routes'));

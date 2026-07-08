@@ -11,7 +11,7 @@
 import React from 'react';
 import {
   Shield, Database, Share2, Cookie, UserCheck, Clock, Lock, Baby,
-  Mail, Phone, FileText, ScrollText, Sparkles, ArrowRight,
+  Mail, FileText, ScrollText, Sparkles, ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
 import { CookiePreferencesButton } from '@/components/legal/CookiePreferencesButton';
@@ -289,9 +289,10 @@ export default function PrivacyPolicyPage() {
                 <li><strong>Droit de réclamation</strong> — saisir la CNIL ou l'ARTCP (autorité ivoirienne) en cas de litige.</li>
               </ul>
               <p>
-                Pour exercer ces droits, écrivez-nous à{' '}
-                <a href="mailto:contact@bokoma.com" className="text-accent hover:underline">contact@bokoma.com</a>
-                {' '}en joignant un justificatif d'identité. Nous répondons sous <strong>30 jours</strong>.
+                Pour exercer ces droits, utilisez notre{' '}
+                <Link href="/contact" className="text-accent hover:underline">formulaire de contact sécurisé</Link>
+                {' '}en joignant un justificatif d'identité (à mentionner dans le message).
+                Nous répondons sous <strong>30 jours</strong>.
                 Vous pouvez aussi gérer la plupart de ces droits directement depuis votre profil.
               </p>
             </SectionTitle>
@@ -339,8 +340,8 @@ export default function PrivacyPolicyPage() {
                 sans le consentement de leurs parents.
               </p>
               <p>
-                Si vous pensez qu'un mineur a créé un compte sur notre site, contactez-nous à{' '}
-                <a href="mailto:contact@bokoma.com" className="text-accent hover:underline">contact@bokoma.com</a>
+                Si vous pensez qu'un mineur a créé un compte sur notre site, contactez-nous via{' '}
+                <Link href="/contact" className="text-accent hover:underline">notre formulaire</Link>
                 {' '}pour que nous procédions à la suppression immédiate.
               </p>
             </SectionTitle>
@@ -358,25 +359,19 @@ export default function PrivacyPolicyPage() {
                     toute question ou demande relative à vos données personnelles.
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <a
-                      href="mailto:contact@bokoma.com"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border hover:border-accent/40 text-sm font-medium transition-colors"
+                    <Link
+                      href="/contact"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-purple-500 text-white text-sm font-medium hover:opacity-90 transition-opacity"
                     >
-                      <Mail className="w-4 h-4 text-accent" />
-                      contact@bokoma.com
-                    </a>
-                    <a
-                      href="tel:+2250798300782"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border hover:border-accent/40 text-sm font-medium transition-colors"
-                    >
-                      <Phone className="w-4 h-4 text-accent" />
-                      +225 07 98 30 07 82
-                    </a>
+                      <Mail className="w-4 h-4" />
+                      Formulaire de contact sécurisé
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
                     <Link
                       href="/feedback"
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border hover:border-accent/40 text-sm font-medium transition-colors"
                     >
-                      Formulaire de contact
+                      Donner un avis
                       <ArrowRight className="w-4 h-4 text-accent" />
                     </Link>
                   </div>

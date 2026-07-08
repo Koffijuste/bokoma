@@ -10,8 +10,8 @@
 import React from 'react';
 import {
   FileText, ScrollText, User, ShoppingBag, CreditCard, Truck,
-  RotateCcw, Ban, Brain, AlertTriangle, Scale, Phone,
-  CheckCircle2, Sparkles, Mail,
+  RotateCcw, Ban, Brain, AlertTriangle, Scale,
+  CheckCircle2, Sparkles, Mail, ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -160,9 +160,10 @@ export default function TermsPage() {
               </p>
               <p>
                 En cas de perte, vol ou utilisation non autorisée de vos identifiants, informez-nous
-                immédiatement à <a href="mailto:contact@bokoma.com" className="text-accent hover:underline">contact@bokoma.com</a>.
-                Bokoma ne saurait être tenu responsable des dommages résultant d'une utilisation
-                non autorisée de votre compte due à un défaut de vigilance de votre part.
+                immédiatement via notre <Link href="/contact" className="text-accent hover:underline">formulaire de contact</Link>
+                {' '}(catégorie SAV « compte / sécurité »). Bokoma ne saurait être tenu responsable des
+                dommages résultant d'une utilisation non autorisée de votre compte due à un défaut
+                de vigilance de votre part.
               </p>
               <p>
                 Vous pouvez demander la suppression de votre compte à tout moment depuis votre profil
@@ -329,8 +330,8 @@ export default function TermsPage() {
                 de la concurrence et de la consommation</strong> compétente.
               </p>
               <p>
-                Pour toute question relative à ces CGU :{' '}
-                <a href="mailto:contact@bokoma.com" className="text-accent hover:underline">contact@bokoma.com</a>.
+                Pour toute question relative à ces CGU, utilisez notre{' '}
+                <Link href="/contact" className="text-accent hover:underline">formulaire de contact sécurisé</Link>.
               </p>
             </SectionTitle>
 
@@ -338,7 +339,7 @@ export default function TermsPage() {
             <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/5 to-purple-500/5 p-6 sm:p-8">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                  <Phone className="w-6 h-6 text-accent" />
+                  <Mail className="w-6 h-6 text-accent" />
                 </div>
                 <div className="flex-1">
                   <h3 className="text-lg sm:text-xl font-bold mb-1">Une question sur ces conditions ?</h3>
@@ -347,20 +348,14 @@ export default function TermsPage() {
                     des CGU.
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <a
-                      href="mailto:contact@bokoma.com"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border hover:border-accent/40 text-sm font-medium transition-colors"
+                    <Link
+                      href="/contact"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-purple-500 text-white text-sm font-medium hover:opacity-90 transition-opacity"
                     >
-                      <Mail className="w-4 h-4 text-accent" />
-                      contact@bokoma.com
-                    </a>
-                    <a
-                      href="tel:+2250798300782"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border hover:border-accent/40 text-sm font-medium transition-colors"
-                    >
-                      <Phone className="w-4 h-4 text-accent" />
-                      +225 07 98 30 07 82
-                    </a>
+                      <Mail className="w-4 h-4" />
+                      Formulaire de contact sécurisé
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
                   </div>
                 </div>
               </div>

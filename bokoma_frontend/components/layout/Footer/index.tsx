@@ -8,6 +8,9 @@ import {
   CreditCard, Truck, Shield, Headphones, ArrowRight, ImageIcon, MessageSquare, BookOpen
 } from 'lucide-react';
 import { ROUTES } from '@/constants';
+
+// ❌ Pas d'email ni de téléphone en clair exposés publiquement (audit 08/07/2026).
+//    Tout passe par la page /contact (formulaire sécurisé).
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { TikTokIcon } from '@/components/brand/TikTokIcon';
 import { CookiePreferencesButton } from '@/components/legal/CookiePreferencesButton';
@@ -146,10 +149,13 @@ export function Footer() {
                   <Mail className="w-4 h-4 text-accent" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Email</p>
-                  <a href="mailto:contact@bokoma.com" className="hover:text-accent transition-colors">
-                    contact@bokoma.com
-                  </a>
+                  <p className="text-xs text-muted-foreground">Service client</p>
+                  <Link
+                    href="/contact"
+                    className="hover:text-accent transition-colors font-medium"
+                  >
+                    Nous écrire →
+                  </Link>
                 </div>
               </li>
               <li className="flex items-start gap-3">
@@ -158,9 +164,9 @@ export function Footer() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Téléphone</p>
-                  <a href="tel:+2250173324157" className="hover:text-accent transition-colors">
-                    +225 01 73 32 41 57
-                  </a>
+                  <span className="text-muted-foreground italic">
+                    communiqué après prise de contact
+                  </span>
                 </div>
               </li>
               <li className="flex items-start gap-3">
