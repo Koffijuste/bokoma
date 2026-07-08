@@ -75,8 +75,7 @@ exports.getMyOrders = async (req, res, next) => {
         .populate({
           path: 'items.product',
           select: 'name slug images basePrice soldCount category type variants',
-        })
-        .populate({ path: 'items.variant' }),
+        }),
       Order.countDocuments(filters),
     ]);
 
@@ -107,8 +106,7 @@ exports.getOrder = async (req, res, next) => {
       .populate({
         path: 'items.product',
         select: 'name slug images basePrice soldCount description category type variants',
-      })
-      .populate({ path: 'items.variant' });
+      });
 
     if (!order) return next(new AppError('Commande introuvable', 404));
 
@@ -176,7 +174,6 @@ exports.getAllOrders = async (req, res, next) => {
           path: 'items.product',
           select: 'name slug images basePrice category type variants',
         })
-        .populate({ path: 'items.variant' })
         .sort(sortBy)
         .skip((page - 1) * limit)
         .limit(limit),
@@ -293,7 +290,6 @@ exports.verifyOrderPublic = async (req, res, next) => {
     const order = await Order.findById(orderId)
       .select('orderNumber status createdAt total subtotal shippingCost discount currency items shipping payment notes')
       .populate({ path: 'items.product', select: 'name slug images basePrice variants' })
-      .populate({ path: 'items.variant' })
       .lean();
 
     if (!order) {

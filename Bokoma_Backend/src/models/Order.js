@@ -11,9 +11,13 @@ const orderItemSchema = new mongoose.Schema(
       required: true,
       index: true
     },
+    // ⚠️ NOTE : les variantes sont un sous-document inline de Product
+    // (Schema.Types.ObjectId non-populable directement depuis Mongoose 9+).
+    // On stocke donc juste l'ObjectId ici ; le frontend retrouve les détails
+    // (size/color/sku) via product.variants OU via le snapshot (size/color/sku
+    // déjà persistés sur l'item).
     variant: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Product.variants'
     },
     name: { type: String, required: true, trim: true },
     sku: { type: String, required: true, trim: true },
