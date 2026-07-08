@@ -30,7 +30,9 @@ export const userApi = {
     if (Array.isArray(data)) return data;
     if (Array.isArray(data?.data)) return data.data;
     if (Array.isArray(data?.users)) return data.users;
-    
+    // ✅ Format Bokoma : { success, data: { users: [...], pagination: {...} } }
+    if (Array.isArray(data?.data?.users)) return data.data.users;
+
     return [];
   },
 
