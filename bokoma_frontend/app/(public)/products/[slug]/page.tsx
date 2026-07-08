@@ -168,8 +168,8 @@ export default function ProductDetailsPage() {
   ]);
 
   /**
-   * 🛒⚡ Achat express : ajoute au panier puis redirige directement vers /checkout.
-   * Évite à l'utilisateur d'avoir à repasser par le panier puis cliquer sur "Commander".
+   * 🛒⚡ Achat express : ajoute le produit au panier puis redirige vers /cart.
+   * Permet à l'utilisateur de finaliser sa commande (adresse + paiement) depuis le panier.
    */
   const handleBuyNow = useCallback(async () => {
     if (!productId || !product) {
@@ -203,11 +203,11 @@ export default function ProductDetailsPage() {
       });
 
       if (res.ok) {
-        // ✅ Redirection directe vers le checkout pour ne pas perdre l'utilisateur
-        router.push(ROUTES.CHECKOUT);
+        // ✅ Redirection vers le panier pour finaliser la commande
+        router.push(ROUTES.CART);
       }
     } catch {
-      toast.error('Impossible de passer au paiement');
+      toast.error('Impossible d\'ajouter au panier');
     } finally {
       setIsBuyingNow(false);
     }

@@ -168,9 +168,19 @@ export default function OrdersAdminPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
+  // ✅ Sélection multiple pour suppression en lot
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+
   const fetchOrders = useCallback(async (): Promise<Order[]> => {
     try {
-      const response: any = await orderApi.getAllOrders({ page: 1, limit: 50 });
+      const response: any = await orderApi.getAllOrders({
+        page: 1,
+        limit: 50,
+        // ✅ Tri explicite : plus récent en premier (pile)
+        sort: '-createdAt',
+      });
       const ordersList = response?.data?.orders || response?.orders || [];
       return Array.isArray(ordersList) ? ordersList : [];
     } catch (err: any) {
@@ -267,6 +277,13 @@ export default function OrdersAdminPage() {
         setSelectedOrder(null);
       }
 
+      // ✅ Retirer l'ID de la sélection
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(deleteConfirmModal.order!._id);
+        return next;
+      });
+
       await refresh();
 
     } catch (err: any) {
@@ -303,6 +320,78 @@ export default function OrdersAdminPage() {
 
     return matchesSearch && matchesStatus;
   }), [orders, searchQuery, statusFilter]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🔹 SÉLECTION MULTIPLE + SUPPRESSION EN LOT
+  // (Déclarés APRÈS filteredOrders pour éviter les erreurs TS2448/2454)
+  // ═══════════════════════════════════════════════════════════════
+  const toggleSelectOne = useCallback((orderId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedIds(prev => {
+      const visibleIds = filteredOrders.map(o => o._id);
+      const allSelected = visibleIds.length > 0 && visibleIds.every(id => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) {
+        visibleIds.forEach(id => next.delete(id));
+      } else {
+        visibleIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  }, [filteredOrders]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const handleBulkDelete = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    setIsBulkDeleting(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      // Suppression en série pour ne pas surcharger le serveur
+      for (const id of ids) {
+        try {
+          await orderApi.deleteOrder(id);
+          successCount += 1;
+          setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        } catch (err: any) {
+          failCount += 1;
+          console.error('❌ Bulk delete error for', id, err);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`🗑️ ${successCount} commande${successCount > 1 ? 's' : ''} supprimée${successCount > 1 ? 's' : ''}`, {
+          duration: 5000,
+        });
+      }
+      if (failCount > 0) {
+        toast.error(`⚠️ ${failCount} suppression${failCount > 1 ? 's' : ''} échouée${failCount > 1 ? 's' : ''}`);
+      }
+
+      setBulkDeleteConfirmOpen(false);
+      await refresh();
+    } catch (err: any) {
+      toast.error('Erreur lors de la suppression en lot');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }, [selectedIds]);
 
   const stats = useMemo(() => ({
     total: orders.length,
@@ -430,6 +519,46 @@ export default function OrdersAdminPage() {
         </div>
       </div>
 
+      {/* ═══════════════════════════════════════════════════════════════
+          BARRE D'ACTION — Sélection multiple + suppression en lot
+         ═══════════════════════════════════════════════════════════════ */}
+      {selectedIds.size > 0 && (
+        <div className="mb-4 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+              <span className="text-accent font-bold">{selectedIds.size}</span>
+            </div>
+            <p className="text-sm font-medium">
+              {selectedIds.size} commande{selectedIds.size > 1 ? 's' : ''} sélectionnée{selectedIds.size > 1 ? 's' : ''}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSelection}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteConfirmOpen(true)}
+              disabled={isBulkDeleting}
+              className="gap-2"
+            >
+              {isBulkDeleting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              Supprimer ({selectedIds.size})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       {message && (
         <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -450,6 +579,16 @@ export default function OrdersAdminPage() {
           <table className="w-full">
             <thead className="bg-muted/30 border-b border-border">
               <tr>
+                <th className="px-4 py-4 text-left w-12">
+                  <input
+                    type="checkbox"
+                    aria-label="Tout sélectionner"
+                    checked={filteredOrders.length > 0 && filteredOrders.every(o => selectedIds.has(o._id))}
+                    onChange={toggleSelectAllVisible}
+                    disabled={filteredOrders.length === 0}
+                    className="h-4 w-4 rounded border-border accent-accent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Commande</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Client</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Articles</th>
@@ -462,7 +601,7 @@ export default function OrdersAdminPage() {
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
                       <Loader2 className="w-8 h-8 animate-spin text-accent" />
                       <span className="text-sm">Chargement des commandes...</span>
@@ -471,7 +610,7 @@ export default function OrdersAdminPage() {
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
                       <Package className="w-12 h-12 opacity-30" />
                       <p className="text-sm">Aucune commande trouvée</p>
@@ -486,23 +625,36 @@ export default function OrdersAdminPage() {
                   const isOrderNew = isNew(order._id);
                   const isRecent = new Date(order.createdAt).getTime() > Date.now() - 5 * 60 * 1000;
                   const isDeleting = deletingOrderId === order._id;
+                  const isSelected = selectedIds.has(order._id);
                   
                   return (
                     <tr 
                       key={order._id} 
                       className={cn(
                         "transition-all duration-500 group",
-                        isOrderNew && "bg-accent/10",
-                        isRecent && !isOrderNew && "bg-blue-500/5",
-                        !isOrderNew && !isRecent && "hover:bg-gradient-to-r hover:from-muted/50 hover:to-transparent",
+                        isSelected && "bg-accent/15",
+                        !isSelected && isOrderNew && "bg-accent/10",
+                        !isSelected && isRecent && !isOrderNew && "bg-blue-500/5",
+                        !isSelected && !isOrderNew && !isRecent && "hover:bg-gradient-to-r hover:from-muted/50 hover:to-transparent",
                         isDeleting && "opacity-50"
                       )}
                       style={{ animationDelay: `${index * 30}ms` }}
                     >
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          aria-label={`Sélectionner la commande ${order.orderNumber || order._id}`}
+                          checked={isSelected}
+                          onChange={() => toggleSelectOne(order._id)}
+                          onClick={(e) => e.stopPropagation()}
+                          disabled={isDeleting}
+                          className="h-4 w-4 rounded border-border accent-accent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           {isOrderNew && (
-                            <span className="px-2 py-0.5 bg-gradient-to-r from-accent to-purple-500 text-white text-[10px] font-bold rounded-full uppercase animate-pulse">
+                            <span className="px-2 py-0.5 bg-gradient-to-r from-accent to-purple-500 text-white text-[10px] font-bold rounded-full uppercase animate-pulse shadow-sm shadow-accent/30">
                               Nouveau
                             </span>
                           )}
@@ -606,39 +758,57 @@ export default function OrdersAdminPage() {
             const isOrderNew = isNew(order._id);
             const isRecent = new Date(order.createdAt).getTime() > Date.now() - 5 * 60 * 1000;
             const isDeleting = deletingOrderId === order._id;
+            const isSelected = selectedIds.has(order._id);
             
             return (
               <div 
                 key={order._id} 
                 className={cn(
                   "bg-card border rounded-xl p-4 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2",
-                  isOrderNew && "border-accent/50 bg-accent/5 shadow-lg shadow-accent/20",
-                  isRecent && !isOrderNew && "border-blue-500/30 bg-blue-500/5",
-                  !isOrderNew && !isRecent && "border-border hover:border-accent/40 hover:shadow-md",
+                  isSelected && "border-accent bg-accent/10 ring-2 ring-accent/30",
+                  !isSelected && isOrderNew && "border-accent/50 bg-accent/5 shadow-lg shadow-accent/20",
+                  !isSelected && isRecent && !isOrderNew && "border-blue-500/30 bg-blue-500/5",
+                  !isSelected && !isOrderNew && !isRecent && "border-border hover:border-accent/40 hover:shadow-md",
                   isDeleting && "opacity-50"
                 )}
                 style={{ animationDelay: `${index * 50}ms` }}
               >
-                <div 
-                  className="flex items-start justify-between gap-3 mb-3 cursor-pointer"
-                  onClick={() => openOrderDetails(order)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {isOrderNew && (
-                        <span className="px-2 py-0.5 bg-gradient-to-r from-accent to-purple-500 text-white text-[10px] font-bold rounded-full uppercase animate-pulse">
-                          Nouveau
-                        </span>
-                      )}
-                      <p className="font-mono font-semibold text-sm">
-                        #{order.orderNumber || order._id?.slice(-6)}
-                      </p>
-                    </div>
-<p className="text-xs text-muted-foreground">
+                <div className="flex items-start gap-3 mb-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`Sélectionner la commande ${order.orderNumber || order._id}`}
+                    checked={isSelected}
+                    onChange={() => toggleSelectOne(order._id)}
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={isDeleting}
+                    className="mt-1 h-5 w-5 rounded border-border accent-accent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                  />
+                  <div 
+                    className="flex items-start justify-between gap-3 flex-1 min-w-0 cursor-pointer"
+                    onClick={() => openOrderDetails(order)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {isOrderNew && (
+                          <span className="px-2 py-0.5 bg-gradient-to-r from-accent to-purple-500 text-white text-[10px] font-bold rounded-full uppercase animate-pulse shadow-sm shadow-accent/30">
+                            Nouveau
+                          </span>
+                        )}
+                        {isRecent && !isOrderNew && (
+                          <span className="px-2 py-0.5 bg-blue-500/20 text-blue-600 text-[10px] font-bold rounded-full uppercase">
+                            Récent
+                          </span>
+                        )}
+                        <p className="font-mono font-semibold text-sm">
+                          #{order.orderNumber || order._id?.slice(-6)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
                         {getUserDisplay(order).name}
                       </p>
+                    </div>
+                    {getStatusBadge(order.status, 'sm')}
                   </div>
-                  {getStatusBadge(order.status, 'sm')}
                 </div>
                 
                 <div className="flex items-center justify-between pt-3 border-t border-border/50">
@@ -693,6 +863,73 @@ export default function OrdersAdminPage() {
         order={deleteConfirmModal.order}
         isLoading={deletingOrderId !== null}
       />
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MODALE — Confirmation suppression en LOT
+         ═══════════════════════════════════════════════════════════════ */}
+      {bulkDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => !isBulkDeleting && setBulkDeleteConfirmOpen(false)}
+          />
+          <div className="relative bg-card border-2 border-destructive/30 rounded-2xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 mx-auto mb-4">
+              <Trash2 className="w-8 h-8 text-destructive" />
+            </div>
+
+            <h3 className="text-xl font-bold text-center mb-2">
+              Supprimer {selectedIds.size} commande{selectedIds.size > 1 ? 's' : ''} ?
+            </h3>
+
+            <div className="bg-muted/50 rounded-xl p-4 mb-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Nombre de commandes</span>
+                <span className="font-bold">{selectedIds.size}</span>
+              </div>
+            </div>
+
+            <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-6">
+              <p className="text-xs text-destructive font-medium mb-1">
+                ⚠️ Attention : Cette action est irréversible
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Toutes les commandes sélectionnées seront définitivement supprimées.
+                Les stocks seront restaurés si nécessaire.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setBulkDeleteConfirmOpen(false)}
+                disabled={isBulkDeleting}
+                className="flex-1"
+              >
+                Annuler
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                className="flex-1 gap-2"
+              >
+                {isBulkDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Suppression...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Tout supprimer
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

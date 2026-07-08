@@ -404,7 +404,7 @@ export default function CartPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8 pb-32 lg:pb-8">
         <div className="text-center mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
           <h1 className="text-3xl sm:text-4xl font-bold mb-2">Finaliser votre commande</h1>
           <p className="text-muted-foreground">{cart.items.length} produit{cart.items.length > 1 ? 's' : ''} • Total: {formatPrice(total)}</p>
@@ -412,7 +412,7 @@ export default function CartPage() {
 
         <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-8">
           <div className="animate-in fade-in slide-in-from-left-4 duration-500">
-            <form onSubmit={handleSubmitOrder} className="space-y-6">
+            <form id="cart-checkout-form" onSubmit={handleSubmitOrder} className="space-y-6">
               <div className="rounded-3xl border border-border bg-card p-6">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Package className="w-5 h-5" /> Vos articles ({cart.items.length})</h2>
                 <div className="space-y-4">
@@ -642,6 +642,38 @@ export default function CartPage() {
               </Link>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          📱 MOBILE STICKY BAR — Total + bouton Commander toujours visibles
+          Pour éviter de scroller sur petit écran
+         ═══════════════════════════════════════════════════════════════ */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</p>
+            <p className="text-lg font-bold text-accent truncate">{formatPrice(total)}</p>
+            {discount > 0 && (
+              <p className="text-[10px] text-emerald-600">-{formatPrice(discount)} promo</p>
+            )}
+          </div>
+          <Button
+            type="submit"
+            size="lg"
+            form="cart-checkout-form"
+            variant="primary"
+            className="flex-shrink-0 h-12 px-5 text-sm font-semibold"
+            disabled={isSubmitting || !shippingDetails.fullName || !shippingDetails.phone || !shippingDetails.address || !shippingDetails.country || !shippingDetails.city}
+          >
+            {isSubmitting ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> ...</>
+            ) : paymentMethod === 'cash_on_delivery' ? (
+              <><Banknote className="w-4 h-4 mr-2" /> Payer maintenant</>
+            ) : (
+              <><CheckCircle className="w-4 h-4 mr-2" /> Commander</>
+            )}
+          </Button>
         </div>
       </div>
     </div>
