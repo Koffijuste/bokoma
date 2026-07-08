@@ -5,21 +5,82 @@
   "installCommand": "npm install --legacy-peer-deps",
   "outputDirectory": ".next",
   "regions": ["fra1"],
+
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        // ════════════════════════════════════════════════════════════════
+        // 🛡️  HEADERS DE SÉCURITÉ — appliqués au niveau CDN (Vercel Edge)
+        // Prime sur next.config.js → garantit la couverture même si la
+        // config Next.js change ou si la sortie est statique.
+        // ════════════════════════════════════════════════════════════════
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains; preload"
+        },
+        { "key": "X-Frame-Options",                "value": "DENY" },
+        { "key": "X-Content-Type-Options",         "value": "nosniff" },
+        { "key": "Referrer-Policy",                "value": "strict-origin-when-cross-origin" },
+        { "key": "X-DNS-Prefetch-Control",         "value": "off" },
+        { "key": "X-Download-Options",             "value": "noopen" },
+        { "key": "Cross-Origin-Opener-Policy",     "value": "same-origin" },
+        {
+          "key": "Permissions-Policy",
+          "value": "accelerometer=(), ambient-light-sensor=(), autoplay=(self), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(self), gamepad=(), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(self \"https://*.cinetpay.com\"), picture-in-picture=(self), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=(), interest-cohort=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.cinetpay.com https://*.cinetpay.com https://secure.cinetpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https: res.cloudinary.com https://*.cloudinary.com https://*.fbcdn.net https://*.cdninstagram.com https://pbs.twimg.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' https: https://*.cloudinary.com; connect-src 'self' https: https://api.cinetpay.com https://api.cinetpay.net https://*.cinetpay.com https://bokoma-production.up.railway.app wss:; frame-src 'self' https://*.cinetpay.com https://*.cinetpay.net https://secure.cinetpay.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.facebook.com https://web.facebook.com https://www.tiktok.com https://www.instagram.com https://platform.twitter.com; frame-ancestors 'none'; form-action 'self' https://*.cinetpay.com; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
+        }
       ]
     },
     {
       "source": "/_next/static/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
       ]
+    },
+    {
+      "source": "/_next/image(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+        { "key": "Cache-Control", "value": "public, max-age=3600, s-maxage=86400" }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        { "key": "Content-Type", "value": "application/xml; charset=utf-8" },
+        { "key": "Cache-Control", "value": "public, max-age=3600, s-maxage=86400" }
+      ]
+    }
+  ],
+
+  "redirects": [
+    {
+      "source": "/admin",
+      "destination": "/dashboard",
+      "statusCode": 301
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/dashboard/:path*",
+      "statusCode": 301
     }
   ]
 }

@@ -15,6 +15,31 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { TikTokIcon } from '@/components/brand/TikTokIcon';
 import { CookiePreferencesButton } from '@/components/legal/CookiePreferencesButton';
 
+// 🛡️ Audit 09/07/2026 : les liens sociaux pointaient vers facebook.com,
+// twitter.com, etc. en racine (= page d'accueil du réseau, PAS un profil
+// Bokoma → 404 + mauvaise image de marque). On lit désormais les URLs
+// depuis des variables d'env NEXT_PUBLIC_SOCIAL_*. Si la variable n'est
+// pas définie, on RETIRE l'icône du footer (au lieu d'afficher un lien
+// cassé). Pour activer : ajouter dans .env.local / Vercel :
+//   NEXT_PUBLIC_SOCIAL_FACEBOOK=https://facebook.com/bokoma
+//   NEXT_PUBLIC_SOCIAL_TWITTER=https://twitter.com/bokoma
+//   NEXT_PUBLIC_SOCIAL_INSTAGRAM=https://instagram.com/bokoma
+//   NEXT_PUBLIC_SOCIAL_TIKTOK=https://tiktok.com/@bokoma
+//   NEXT_PUBLIC_SOCIAL_LINKEDIN=https://linkedin.com/company/bokoma
+const SOCIAL_LINKS = [
+  { key: 'FACEBOOK',  icon: Facebook,   label: 'Facebook'  },
+  { key: 'INSTAGRAM', icon: Instagram,  label: 'Instagram' },
+  { key: 'TIKTOK',    icon: TikTokIcon, label: 'TikTok'    },
+  { key: 'TWITTER',   icon: Twitter,    label: 'X (Twitter)' },
+  { key: 'LINKEDIN',  icon: Linkedin,   label: 'LinkedIn'  },
+]
+  .map(({ key, icon, label }) => ({
+    icon,
+    label,
+    href: (process.env[`NEXT_PUBLIC_SOCIAL_${key}`] || '').trim(),
+  }))
+  .filter((s) => !!s.href && s.href !== '#' && /^https?:\/\//i.test(s.href));
+
 export function Footer() {
   return (
     <footer className="bg-gradient-to-b from-background to-muted/30 border-t border-border/50 mt-auto">
@@ -55,15 +80,9 @@ export function Footer() {
               Découvrez notre sélection premium de produits de luxe et tendance.
             </p>
             <div className="flex gap-2">
-              {[
-                { icon: Facebook,   href: 'https://facebook.com',   label: 'Facebook' },
-                { icon: Twitter,    href: 'https://twitter.com',    label: 'Twitter' },
-                { icon: Instagram,  href: 'https://instagram.com',  label: 'Instagram' },
-                { icon: TikTokIcon, href: 'https://tiktok.com',     label: 'TikTok' },
-                { icon: Linkedin,   href: 'https://linkedin.com',   label: 'LinkedIn' },
-              ].map((social, i) => (
+              {SOCIAL_LINKS.map((social) => (
                 <a
-                  key={i}
+                  key={social.label}
                   href={social.href}
                   target="_blank"
                   rel="noopener noreferrer"

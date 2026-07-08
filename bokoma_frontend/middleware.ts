@@ -59,6 +59,16 @@ function decodeAccessToken(token: string | undefined): BokomaJwtPayload | null {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // 🛡️ Audit 09/07/2026 : ancien chemin /admin → redirigé vers /dashboard.
+  //    Redirection 308 (permanente, conserve la méthode). On le fait AVANT
+  //    tout le reste pour ne pas exposer le contenu (et la sidebar admin)
+  //    à un chemin que l'audit précédent signalait comme confusant.
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+    const target = pathname.replace(/^\/admin/, '/dashboard');
+    const url = new URL(target || '/dashboard', request.url);
+    return NextResponse.redirect(url, 308);
+  }
+
   // 1) Routes 100% publiques → on ne touche à rien
   const isPublic =
     pathname === '/' ||

@@ -1,7 +1,22 @@
 // src/controllers/gallery.controller.js
+// ============================================================================
+// 🛡️  POSTURE DE SÉCURITÉ — Audit 09/07/2026
+// ----------------------------------------------------------------------------
+// Les routes PUBLIQUES (`listPublic`, `getPublicById`) n'acceptent QUE des
+// filtres de navigation (page, limit, type, category, featured). Tout autre
+// paramètre (role, isAdmin, userId, isPublished, createdBy…) est IGNORÉ
+// silencieusement. Le filtre `{ isPublished: true }` est imposé côté
+// `findPublic` (modèle) — un attaquant ne peut pas l'outrepasser via
+// query string ou body. Les champs `createdBy` (qui contient un ObjectId
+// admin et son email) sont strippés de la réponse pour éviter un leak
+// d'identité des administrateurs.
+// ============================================================================
 const GalleryItem = require('../models/GalleryItem');
 const AppError = require('../utils/AppError');
 const { deleteImage } = require('../services/upload.service');
+
+// Whitelist explicite des query params acceptés sur les routes publiques
+const PUBLIC_QUERY_WHITELIST = ['page', 'limit', 'type', 'category', 'featured'];
 
 // ───────────────────────────────────────────────────────────────────────────
 // 🔹 Validation helpers
@@ -45,6 +60,11 @@ exports.listPublic = async (req, res, next) => {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 24));
+
+    // 🛡️ Defense-in-depth (audit 09/07/2026) : on ne fait JAMAIS confiance
+    // aux query params pour décider du rôle ou du statut de publication.
+    // Seuls les filtres ci-dessous sont autorisés, et la publication reste
+    // imposée par le modèle (findPublic → { isPublished: true }).
     const { type, category, featured } = req.query;
 
     const items = await GalleryItem.findPublic({
@@ -55,15 +75,24 @@ exports.listPublic = async (req, res, next) => {
       featuredOnly: featured === 'true' || featured === '1',
     });
 
+    // Filtre serveur pour le count (redondant avec findPublic mais explicite)
     const filter = { isPublished: true };
     if (type) filter.type = type;
     if (category) filter.category = category;
     if (featured === 'true' || featured === '1') filter.isFeatured = true;
     const total = await GalleryItem.countDocuments(filter);
 
+    // 🛡️ Suppression des champs sensibles avant envoi (createdBy.email, etc.)
+    const safeItems = items.map((it) => {
+      if (!it) return it;
+      // On retire explicitement tout ce qui ne doit pas fuiter
+      delete it.createdBy;
+      return it;
+    });
+
     res.json({
       success: true,
-      data: items,
+      data: safeItems,
       meta: {
         page,
         limit,
@@ -85,7 +114,10 @@ exports.getPublicById = async (req, res, next) => {
     const item = await GalleryItem.findOne({
       _id: req.params.id,
       isPublished: true,
-    }).lean();
+    })
+      // 🛡️ On ne joint JAMAIS l'auteur pour la route publique (leak d'email admin)
+      .select('-createdBy')
+      .lean();
 
     if (!item) {
       throw new AppError('Élément introuvable ou non publié.', 404);
