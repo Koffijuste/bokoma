@@ -269,7 +269,16 @@ exports.updateStatus = async (req, res, next) => {
 
     const update = {};
     if (status) update.status = status;
-    if (isPublic !== undefined) update.isPublic = !!isPublic;
+    if (isPublic !== undefined) {
+      update.isPublic = !!isPublic;
+    } else if (status === 'approved') {
+      // ✅ Approuvé → automatiquement rendu public pour qu'il s'affiche
+      // sur la page /feedback (sinon l'admin devrait cocher la case en plus).
+      update.isPublic = true;
+    } else if (status === 'rejected' || status === 'archived') {
+      // ✅ Rejeté/archivé → retiré de la page publique.
+      update.isPublic = false;
+    }
     if (isAnonymous !== undefined) update.isAnonymous = !!isAnonymous;
     if (adminResponse !== undefined) {
       update.adminResponse = adminResponse;

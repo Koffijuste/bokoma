@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Heart, ShoppingCart, Star, Check, AlertCircle, Loader2,
-  Ruler, Sparkles, Shirt, Footprints
+  Ruler, Sparkles, Shirt, Footprints, Zap, CreditCard
 } from 'lucide-react';
 import { useFetch } from '@/hooks';
 import { productApi } from '@/services';
@@ -76,6 +76,7 @@ export default function ProductDetailsPage() {
   const [customSize, setCustomSize] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
 
   const { data: apiResponse, loading, error, refetch } = useFetch<any>(
     () => productApi.getProduct(slug),
@@ -164,6 +165,62 @@ export default function ProductDetailsPage() {
     isFootwearProduct,
     isClothingProduct,
     product,
+  ]);
+
+  /**
+   * 🛒⚡ Achat express : ajoute au panier puis redirige directement vers /checkout.
+   * Évite à l'utilisateur d'avoir à repasser par le panier puis cliquer sur "Commander".
+   */
+  const handleBuyNow = useCallback(async () => {
+    if (!productId || !product) {
+      toast.error('Produit non chargé');
+      return;
+    }
+
+    // ✅ Mêmes validations que handleAddToCart
+    if (isFootwearProduct) {
+      if (!customSize) {
+        toast.error('Veuillez indiquer votre pointure');
+        return;
+      }
+      if (!isValidSize(customSize)) {
+        toast.error(`Pointure invalide (${SIZE_MIN}-${SIZE_MAX})`);
+        return;
+      }
+    } else if (isClothingProduct) {
+      if (!selectedSize) {
+        toast.error('Veuillez sélectionner une taille');
+        return;
+      }
+    }
+
+    setIsBuyingNow(true);
+    try {
+      const res = await addToCartWithPrompt({
+        product,
+        size: isFootwearProduct ? customSize : (isClothingProduct ? selectedSize : undefined),
+        quantity,
+      });
+
+      if (res.ok) {
+        // ✅ Redirection directe vers le checkout pour ne pas perdre l'utilisateur
+        router.push(ROUTES.CHECKOUT);
+      }
+    } catch {
+      toast.error('Impossible de passer au paiement');
+    } finally {
+      setIsBuyingNow(false);
+    }
+  }, [
+    productId,
+    product,
+    selectedSize,
+    customSize,
+    quantity,
+    addToCartWithPrompt,
+    isFootwearProduct,
+    isClothingProduct,
+    router,
   ]);
 
   const handleWishlist = useCallback(async () => {
@@ -454,38 +511,75 @@ export default function ProductDetailsPage() {
                 </p>
               </div>
 
-              {/* Bouton Ajouter */}
-              <Button
-                onClick={handleAddToCart}
-                className={cn(
-                  "w-full h-12 text-base transition-all",
-                  isFootwearProduct 
-                    ? "bg-gradient-to-r from-accent to-purple-500 hover:from-accent/90 hover:to-purple-500/90"
-                    : isClothingProduct
-                      ? "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-500/90 hover:to-cyan-500/90"
-                      : "bg-accent hover:bg-accent/90"
-                )}
-                disabled={
-                  product.totalStock === 0 || 
-                  (isFootwearProduct && !customSize) ||
-                  (isClothingProduct && !selectedSize) ||
-                  isAdding
-                }
-              >
-                {isAdding ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <ShoppingCart className="mr-2 h-5 w-5" />
-                )}
-                {product.totalStock === 0 
-                  ? 'Rupture de stock' 
-                  : isFootwearProduct && !customSize
-                    ? 'Indiquez votre pointure'
-                    : isClothingProduct && !selectedSize
-                      ? 'Sélectionnez une taille' 
-                      : `Ajouter au panier — ${formatPrice((product.basePrice || 0) * quantity)}`
-                }
-              </Button>
+              {/* Boutons d'action : Ajouter au panier + Acheter maintenant */}
+              <div className="space-y-3">
+                <Button
+                  onClick={handleAddToCart}
+                  className={cn(
+                    "w-full h-12 text-base transition-all",
+                    isFootwearProduct
+                      ? "bg-gradient-to-r from-accent to-purple-500 hover:from-accent/90 hover:to-purple-500/90"
+                      : isClothingProduct
+                        ? "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-500/90 hover:to-cyan-500/90"
+                        : "bg-accent hover:bg-accent/90"
+                  )}
+                  disabled={
+                    product.totalStock === 0 ||
+                    (isFootwearProduct && !customSize) ||
+                    (isClothingProduct && !selectedSize) ||
+                    isAdding ||
+                    isBuyingNow
+                  }
+                >
+                  {isAdding ? (
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  ) : (
+                    <ShoppingCart className="mr-2 h-5 w-5" />
+                  )}
+                  {product.totalStock === 0
+                    ? 'Rupture de stock'
+                    : isFootwearProduct && !customSize
+                      ? 'Indiquez votre pointure'
+                      : isClothingProduct && !selectedSize
+                        ? 'Sélectionnez une taille'
+                        : `Ajouter au panier — ${formatPrice((product.basePrice || 0) * quantity)}`
+                  }
+                </Button>
+
+                {/* ⚡ Achat express : ajoute au panier ET va directement au paiement */}
+                <Button
+                  onClick={handleBuyNow}
+                  variant="outline"
+                  className={cn(
+                    "w-full h-12 text-base font-semibold border-2 transition-all",
+                    "border-accent/60 text-accent hover:bg-accent hover:text-white hover:border-accent",
+                    "shadow-sm hover:shadow-md"
+                  )}
+                  disabled={
+                    product.totalStock === 0 ||
+                    (isFootwearProduct && !customSize) ||
+                    (isClothingProduct && !selectedSize) ||
+                    isAdding ||
+                    isBuyingNow
+                  }
+                >
+                  {isBuyingNow ? (
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  ) : (
+                    <Zap className="mr-2 h-5 w-5 fill-current" />
+                  )}
+                  {isBuyingNow
+                    ? 'Redirection…'
+                    : product.totalStock === 0
+                      ? 'Indisponible'
+                      : `Acheter maintenant — ${formatPrice((product.basePrice || 0) * quantity)}`}
+                </Button>
+
+                <p className="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1.5">
+                  <CreditCard className="w-3 h-3" />
+                  Paiement 100% sécurisé — Orange Money, MTN, Wave, Moov, Carte
+                </p>
+              </div>
             </div>
           </div>
         </div>
