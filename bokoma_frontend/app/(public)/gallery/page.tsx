@@ -78,15 +78,81 @@ const getVimeoId = (url: string): string | null => {
   return m && m[1] ? m[1] : null;
 };
 
+// Facebook : on garde l'URL source pour la passer en paramètre `href`
+// du plugin vidéo officiel (le plus fiable, accepte watch / share / videos / reels).
+const getFacebookEmbedUrl = (url: string): string | null => {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (!/(^|\.)(facebook\.com|fb\.watch|fb\.com)$/i.test(u.hostname)) return null;
+    return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&autoplay=0`;
+  } catch {
+    return null;
+  }
+};
+
+// TikTok : formats /video/ID et /embed/ID
+const getTikTokId = (url: string): string | null => {
+  if (!url) return null;
+  const patterns = [
+    /tiktok\.com\/@[^/]+\/video\/(\d+)/,
+    /tiktok\.com\/embed\/v2?\/(\d+)/,
+    /tiktok\.com\/v\/(\d+)/,
+  ];
+  for (const re of patterns) {
+    const m = url.match(re);
+    if (m && m[1]) return m[1];
+  }
+  return null;
+};
+
+// Instagram : /p/SHORTCODE/ ou /reel/SHORTCODE/
+const getInstagramShortcode = (url: string): string | null => {
+  if (!url) return null;
+  const m = url.match(/instagram\.com\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
+  return m && m[1] ? m[1] : null;
+};
+
+// X (Twitter) : /user/status/ID
+const getTweetId = (url: string): string | null => {
+  if (!url) return null;
+  const m = url.match(/(?:twitter\.com|x\.com)\/[^/]+\/status\/(\d+)/);
+  return m && m[1] ? m[1] : null;
+};
+
 const getEmbedUrl = (item: GalleryItem): string | null => {
   if (item.type !== 'video') return null;
-  if (item.provider === 'youtube') {
-    const id = getYouTubeId(item.url);
+
+  // On tolère un provider absent si l'URL parle d'elle-même
+  const provider = item.provider;
+  const url = item.url;
+
+  if (provider === 'youtube') {
+    const id = getYouTubeId(url);
     return id ? `https://www.youtube.com/embed/${id}` : null;
   }
-  if (item.provider === 'vimeo') {
-    const id = getVimeoId(item.url);
+  if (provider === 'vimeo') {
+    const id = getVimeoId(url);
     return id ? `https://player.vimeo.com/video/${id}` : null;
+  }
+  if (provider === 'facebook') {
+    return getFacebookEmbedUrl(url);
+  }
+  if (provider === 'tiktok') {
+    const id = getTikTokId(url);
+    return id ? `https://www.tiktok.com/embed/v2/${id}` : null;
+  }
+  if (provider === 'instagram') {
+    const code = getInstagramShortcode(url);
+    if (!code) return null;
+    // Reel ou post : on détermine le type à partir de l'URL d'origine
+    return /\/reel/.test(url)
+      ? `https://www.instagram.com/reel/${code}/embed`
+      : `https://www.instagram.com/p/${code}/embed`;
+  }
+  if (provider === 'x') {
+    const id = getTweetId(url);
+    return id ? `https://platform.twitter.com/embed/Tweet.html?id=${id}` : null;
   }
   return null;
 };

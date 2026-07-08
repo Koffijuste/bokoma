@@ -515,7 +515,17 @@ export interface UsePaginationResult<T> extends PaginationState {
 // 🖼️ GALLERY — Bokoma Store vitrine médias
 // ──────────────────────────────────────────────────────────────────────────
 export type GalleryType = 'image' | 'video';
-export type GalleryProvider = 'cloudinary' | 'youtube' | 'vimeo' | 'mp4' | 'local' | 'other';
+export type GalleryProvider =
+  | 'cloudinary'
+  | 'youtube'
+  | 'vimeo'
+  | 'mp4'
+  | 'local'
+  | 'facebook'
+  | 'tiktok'
+  | 'instagram'
+  | 'x'
+  | 'other';
 export type GalleryCategory =
   | 'collection'
   | 'lookbook'

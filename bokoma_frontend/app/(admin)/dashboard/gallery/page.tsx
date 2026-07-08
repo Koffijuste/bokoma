@@ -49,7 +49,48 @@ const CATEGORIES: ReadonlyArray<{ id: GalleryCategory; label: string }> = [
   { id: 'autre',            label: 'Autre' },
 ];
 
-const PROVIDERS: GalleryProvider[] = ['cloudinary', 'youtube', 'vimeo', 'mp4', 'local', 'other'];
+const PROVIDERS: GalleryProvider[] = [
+  'cloudinary',
+  'youtube',
+  'vimeo',
+  'facebook',
+  'tiktok',
+  'instagram',
+  'x',
+  'mp4',
+  'local',
+  'other',
+];
+
+const PROVIDER_LABELS: Record<GalleryProvider, string> = {
+  cloudinary: 'Cloudinary (upload)',
+  youtube: 'YouTube',
+  vimeo: 'Vimeo',
+  facebook: 'Facebook (vidéo)',
+  tiktok: 'TikTok',
+  instagram: 'Instagram (reel / post)',
+  x: 'X (Twitter)',
+  mp4: 'Fichier MP4 direct',
+  local: 'Stockage local',
+  other: 'Autre (URL brute)',
+};
+
+/**
+ * 🔍 Auto-détection du provider à partir d'une URL collée.
+ * Retourne le provider correspondant, ou `null` si indéterminé.
+ */
+const inferProviderFromUrl = (rawUrl: string): GalleryProvider | null => {
+  if (!rawUrl) return null;
+  const url = rawUrl.toLowerCase().trim();
+  if (/(?:youtube\.com|youtu\.be)/.test(url))                            return 'youtube';
+  if (/vimeo\.com/.test(url))                                            return 'vimeo';
+  if (/(?:facebook\.com|fb\.watch|fb\.com)/.test(url))                   return 'facebook';
+  if (/tiktok\.com/.test(url))                                           return 'tiktok';
+  if (/instagram\.com/.test(url))                                        return 'instagram';
+  if (/(?:twitter\.com|x\.com)/.test(url))                               return 'x';
+  if (/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url))                           return 'mp4';
+  return null;
+};
 
 const PAGE_SIZE = 20;
 
@@ -482,15 +523,26 @@ const ItemModal: React.FC<ItemModalProps> = ({ open, initial, onClose, onSaved }
               <div className="space-y-2">
                 <Input
                   value={draft.url}
-                  onChange={(e) => set('url', e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    set('url', v);
+                    // 🪄 Auto-détection du provider quand une URL reconnaissable est collée
+                    // (uniquement pour les vidéos en mode URL)
+                    if (draft.type === 'video') {
+                      const detected = inferProviderFromUrl(v);
+                      if (detected && detected !== draft.provider) {
+                        set('provider', detected);
+                      }
+                    }
+                  }}
                   placeholder={
-                    draft.type === 'video' && (draft.provider === 'youtube' || draft.provider === 'vimeo')
-                      ? 'https://www.youtube.com/watch?v=…'
+                    draft.type === 'video'
+                      ? 'YouTube, Vimeo, Facebook, TikTok, Instagram, X…'
                       : 'https://res.cloudinary.com/…'
                   }
                 />
                 <p className="text-xs text-muted-foreground">
-                  Pour les vidéos YouTube/Vimeo, collez simplement l'URL publique.
+                  YouTube, Vimeo, Facebook, TikTok, Instagram, X, mp4 direct… le provider est détecté automatiquement.
                 </p>
               </div>
             )}
@@ -503,7 +555,7 @@ const ItemModal: React.FC<ItemModalProps> = ({ open, initial, onClose, onSaved }
                 <Input
                   value={draft.thumbnail ?? ''}
                   onChange={(e) => set('thumbnail', e.target.value)}
-                  placeholder="https://… (optionnel pour YouTube/Vimeo)"
+                  placeholder="https://… (optionnel — auto pour YouTube/Vimeo)"
                 />
               </div>
               <div>
@@ -514,7 +566,7 @@ const ItemModal: React.FC<ItemModalProps> = ({ open, initial, onClose, onSaved }
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   {PROVIDERS.map((p) => (
-                    <option key={p} value={p}>{p}</option>
+                    <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
                   ))}
                 </select>
               </div>

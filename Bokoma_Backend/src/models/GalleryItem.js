@@ -43,10 +43,10 @@ const galleryItemSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
-    // Pour les vidéos : provider (cloudinary/youtube/vimeo/mp4)
+    // Pour les vidéos : provider (cloudinary/youtube/vimeo/mp4/facebook/tiktok/instagram/x/…)
     provider: {
       type: String,
-      enum: ['cloudinary', 'youtube', 'vimeo', 'mp4', 'local', 'other'],
+      enum: ['cloudinary', 'youtube', 'vimeo', 'mp4', 'local', 'facebook', 'tiktok', 'instagram', 'x', 'other'],
       default: 'cloudinary',
     },
 

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { ROUTES } from '@/constants';
 import { BrandLogo } from '@/components/brand/BrandLogo';
+import { TikTokIcon } from '@/components/brand/TikTokIcon';
 import { CookiePreferencesButton } from '@/components/legal/CookiePreferencesButton';
 
 export function Footer() {
@@ -52,10 +53,11 @@ export function Footer() {
             </p>
             <div className="flex gap-2">
               {[
-                { icon: Facebook, href: 'https://facebook.com' },
-                { icon: Twitter, href: 'https://twitter.com' },
-                { icon: Instagram, href: 'https://instagram.com' },
-                { icon: Linkedin, href: 'https://linkedin.com' },
+                { icon: Facebook,   href: 'https://facebook.com',   label: 'Facebook' },
+                { icon: Twitter,    href: 'https://twitter.com',    label: 'Twitter' },
+                { icon: Instagram,  href: 'https://instagram.com',  label: 'Instagram' },
+                { icon: TikTokIcon, href: 'https://tiktok.com',     label: 'TikTok' },
+                { icon: Linkedin,   href: 'https://linkedin.com',   label: 'LinkedIn' },
               ].map((social, i) => (
                 <a
                   key={i}
@@ -63,7 +65,7 @@ export function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-9 h-9 rounded-lg bg-muted/50 hover:bg-accent/10 hover:text-accent flex items-center justify-center transition-all hover:scale-110"
-                  aria-label="Social link"
+                  aria-label={social.label}
                 >
                   <social.icon className="w-4 h-4" />
                 </a>
@@ -156,8 +158,8 @@ export function Footer() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Téléphone</p>
-                  <a href="tel:+2250798300782" className="hover:text-accent transition-colors">
-                    +225 07 98 30 07 82
+                  <a href="tel:+2250173324157" className="hover:text-accent transition-colors">
+                    +225 01 73 32 41 57
                   </a>
                 </div>
               </li>
@@ -167,7 +169,7 @@ export function Footer() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Adresse</p>
-                  <span>Abidjan, Côte d'Ivoire</span>
+                  <span>537 Angré Djorogobité 1 terminus de bus, Abidjan, Côte d'Ivoire</span>
                 </div>
               </li>
             </ul>

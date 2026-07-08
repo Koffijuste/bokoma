@@ -1,0 +1,24 @@
+# ============================================================================
+# Bokoma Store — robots.txt
+# ============================================================================
+# Bloque les robots sur les zones admin et privées, autorise le reste.
+# /dashboard, /admin, /profile, /cart, /checkout, /auth/* = NO INDEX.
+# ============================================================================
+
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /dashboard/*
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /profile
+Disallow: /profile/*
+Disallow: /cart
+Disallow: /checkout
+Disallow: /orders
+Disallow: /wishlist
+Disallow: /auth/
+Disallow: /api/
+
+# Référence au sitemap
+Sitemap: https://bokoma.vercel.app/sitemap.xml

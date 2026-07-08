@@ -12,6 +12,7 @@
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, Layers, Users, ShoppingCart,
@@ -54,8 +55,11 @@ export function AdminSidebar({ open, onOpenChange }: AdminSidebarProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
-        {/* Overlay sombre cliquable */}
-        <DialogOverlay className="z-40 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        {/* Overlay sombre cliquable — ferme le drawer au clic */}
+        <DialogOverlay
+          onClick={() => onOpenChange(false)}
+          className="z-40 bg-black/60 backdrop-blur-sm cursor-pointer data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        />
 
         {/* Drawer latéral gauche */}
         <div
@@ -71,8 +75,14 @@ export function AdminSidebar({ open, onOpenChange }: AdminSidebarProps) {
           {/* Header du drawer */}
           <div className="flex items-center justify-between px-5 h-16 border-b border-border bg-card shrink-0">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                B
+              <div className="relative w-9 h-9 rounded-lg overflow-hidden shadow-md ring-1 ring-black/5 shrink-0">
+                <Image
+                  src="/logo.jpeg"
+                  alt="Bokoma"
+                  fill
+                  sizes="36px"
+                  className="object-cover"
+                />
               </div>
               <div className="leading-tight">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
