@@ -74,10 +74,16 @@ exports.getMyOrders = async (req, res, next) => {
         .limit(limit)
         .populate({
           path: 'items.product',
-          select: 'name slug images basePrice soldCount category type',
-        }),
+          select: 'name slug images basePrice soldCount category type variants',
+        })
+        .populate({ path: 'items.variant' }),
       Order.countDocuments(filters),
     ]);
+
+    // 🐛 FIX : répare les snapshots cassés des anciennes commandes
+    // (name='Produit', sku='N/A', size/color/image manquants).
+    // Charge les produits non populés en une seule query.
+    await orderService.enrichOrders(orders);
 
     res.json({
       success: true,
@@ -100,8 +106,9 @@ exports.getOrder = async (req, res, next) => {
       .populate('user', 'firstName lastName email phone avatar')
       .populate({
         path: 'items.product',
-        select: 'name slug images basePrice soldCount description category type',
-      });
+        select: 'name slug images basePrice soldCount description category type variants',
+      })
+      .populate({ path: 'items.variant' });
 
     if (!order) return next(new AppError('Commande introuvable', 404));
 
@@ -109,6 +116,9 @@ exports.getOrder = async (req, res, next) => {
     if (orderUserId !== userId && !['admin', 'manager'].includes(userRole)) {
       return next(new AppError('Accès refusé', 403));
     }
+
+    // 🐛 FIX : répare les snapshots cassés (lecture seule — ne persiste rien)
+    await orderService.enrichOrderItems(order);
 
     res.json({
       success: true,
@@ -164,13 +174,17 @@ exports.getAllOrders = async (req, res, next) => {
         .populate('user', 'firstName lastName email phone avatar')
         .populate({
           path: 'items.product',
-          select: 'name slug images basePrice category type',
+          select: 'name slug images basePrice category type variants',
         })
+        .populate({ path: 'items.variant' })
         .sort(sortBy)
         .skip((page - 1) * limit)
         .limit(limit),
       Order.countDocuments(filters),
     ]);
+
+    // 🐛 FIX : répare les snapshots cassés (lecture seule)
+    await orderService.enrichOrders(orders);
 
     res.json({
       success: true,
@@ -278,12 +292,16 @@ exports.verifyOrderPublic = async (req, res, next) => {
     const { orderId } = req.params;
     const order = await Order.findById(orderId)
       .select('orderNumber status createdAt total subtotal shippingCost discount currency items shipping payment notes')
-      .populate({ path: 'items.product', select: 'name slug images basePrice' })
+      .populate({ path: 'items.product', select: 'name slug images basePrice variants' })
+      .populate({ path: 'items.variant' })
       .lean();
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Commande introuvable' });
     }
+
+    // 🐛 FIX : répare les snapshots cassés (lecture seule)
+    await orderService.enrichOrderItems(order);
 
     res.json({
       success: true,

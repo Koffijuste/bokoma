@@ -12,7 +12,9 @@
     "test:unit": "cross-env NODE_ENV=test jest tests/unit --runInBand",
     "test:integration": "cross-env NODE_ENV=test jest tests/integration --runInBand",
     "reset:payments": "node scripts/resetPayments.js",
-    "clean:payments": "node scripts/cleanOldPayments.js"
+    "clean:payments": "node scripts/cleanOldPayments.js",
+    "fix:order-snapshots": "node scripts/fix-order-snapshots.js",
+    "fix:order-snapshots:apply": "node scripts/fix-order-snapshots.js --apply"
   },
   "keywords": [],
   "author": "",

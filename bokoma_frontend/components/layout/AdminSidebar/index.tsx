@@ -1,4 +1,13 @@
-// components/layout/AdminSidebar.tsx
+// components/layout/AdminSidebar/index.tsx
+// ============================================================================
+// 🗂️ ADMIN DRAWER — Menu latéral façon "sheet"
+// ============================================================================
+// Au lieu d'une sidebar permanente qui occupe de la place même fermée, on a
+// un simple bouton dans le header qui ouvre/ferme un drawer (overlay + panneau
+// qui slide depuis la gauche). Le contenu principal n'est plus jamais
+// rétréci : toute la largeur reste disponible.
+// ============================================================================
+
 'use client';
 
 import React, { useEffect } from 'react';
@@ -6,12 +15,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, Layers, Users, ShoppingCart,
-  Ticket, MessageSquare, BarChart3, Settings, ChevronLeft,
-  ChevronRight, X, ImageIcon, Send,
+  Ticket, MessageSquare, BarChart3, Settings,
+  Image as ImageIcon, Send, X,
 } from 'lucide-react';
-import { useUiStore } from '@/store';
-import { ROUTES } from '@/constants';
+import {
+  Dialog, DialogPortal, DialogOverlay, DialogClose,
+} from '@/components/ui/dialog';
 import { cn } from '@/utils/helpers';
+import { ROUTES } from '@/constants';
 
 const adminNavItems = [
   { label: 'Tableau de Bord', href: ROUTES?.ADMIN?.DASHBOARD || '/dashboard', icon: LayoutDashboard },
@@ -26,148 +37,108 @@ const adminNavItems = [
   { label: 'Statistiques', href: ROUTES?.ADMIN?.ANALYTICS || '/dashboard/analytics', icon: BarChart3 },
 ];
 
-export function AdminSidebar() {
+interface AdminSidebarProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function AdminSidebar({ open, onOpenChange }: AdminSidebarProps) {
   const pathname = usePathname();
-  const { sidebarOpen, setSidebarOpen } = useUiStore();
 
-  // Fermer le sidebar quand on change de page (mobile)
+  // ✅ Auto-ferme le drawer quand l'utilisateur change de route
   useEffect(() => {
-    setSidebarOpen(false);
-  }, [pathname, setSidebarOpen]);
-
-  const handleToggle = () => {
-    console.log('🖱️ [SIDEBAR] Toggle clicked, current:', sidebarOpen);
-    setSidebarOpen(!sidebarOpen);
-  };
-
-  const handleClose = () => {
-    console.log('🖱️ [SIDEBAR] Close clicked');
-    setSidebarOpen(false);
-  };
+    if (open) onOpenChange(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   return (
-    <>
-      {/* ✅ OVERLAY pour mobile */}
-      {sidebarOpen && (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPortal>
+        {/* Overlay sombre cliquable */}
+        <DialogOverlay className="z-40 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+
+        {/* Drawer latéral gauche */}
         <div
-          onClick={handleClose}
-          className="fixed inset-0 bg-black/50 z-30 sm:hidden animate-in fade-in duration-300"
-          aria-hidden="true"
-        />
-      )}
-
-      {/* ✅ SIDEBAR
-          - Mobile (< sm) : drawer 256px qui slide in/out
-          - Desktop (sm+) : toujours visible, largeur variable (80px ↔ 256px)
-            ⚠️ Le `-translate-x-full` doit être scopé à mobile uniquement,
-            sinon la sidebar est off-screen par défaut sur desktop. */}
-      <aside
-        className={cn(
-          'fixed top-0 bottom-0 bg-card border-r border-border z-40',
-          'transition-all duration-300 ease-in-out',
-          'sm:pt-16',
-          // Largeur : base 256px (mobile drawer), 80px ou 256px sur desktop
-          'w-64',
-          sidebarOpen ? 'sm:w-64' : 'sm:w-20',
-          // Translation : caché sur mobile fermé, toujours visible sur desktop
-          sidebarOpen
-            ? 'translate-x-0'
-            : '-translate-x-full sm:translate-x-0'
-        )}
-        data-sidebar-open={sidebarOpen}
-      >
-        {/* Bouton toggle (desktop seulement) — volontairement bien visible :
-            44×44 (WCAG 2.5.5), icône 20px et fond accent quand la sidebar
-            est repliée pour qu'on le repère immédiatement. */}
-        <button
-          onClick={handleToggle}
-          title={sidebarOpen ? 'Réduire le menu' : 'Ouvrir le menu de navigation'}
-          aria-label={sidebarOpen ? 'Réduire le menu de navigation' : 'Ouvrir le menu de navigation'}
           className={cn(
-            // Taille ≥ 44×44px (cible tactile conforme WCAG)
-            'absolute top-20 -right-4 z-10 flex items-center justify-center',
-            'w-11 h-11 rounded-full border-2 transition-all duration-200',
-            // Visibilité : très proéminent quand la sidebar est repliée
-            // (état par défaut, c'est là que l'utilisateur cherche le toggle) ;
-            // discret quand la sidebar est dépliée (pour ne pas distraire).
-            sidebarOpen
-              ? 'bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted shadow-sm hover:shadow-md'
-              : 'bg-accent border-accent text-accent-foreground shadow-lg shadow-accent/30 hover:scale-105 hover:shadow-xl',
-            'active:scale-95',
-            'hidden sm:flex' // visible uniquement sur desktop
+            'fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-card border-r border-border shadow-2xl',
+            'flex flex-col',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left',
+            'data-[state=closed]:duration-300 data-[state=open]:duration-300',
+            'data-[state=open]:ease-out data-[state=closed]:ease-in'
           )}
         >
-          {sidebarOpen ? (
-            <ChevronLeft className="w-4 h-4" />
-          ) : (
-            <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
-          )}
-        </button>
+          {/* Header du drawer */}
+          <div className="flex items-center justify-between px-5 h-16 border-b border-border bg-card shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                B
+              </div>
+              <div className="leading-tight">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  Administration
+                </p>
+                <p className="font-bold text-sm">Bokoma Store</p>
+              </div>
+            </div>
+            <DialogClose
+              className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              aria-label="Fermer le menu"
+            >
+              <X className="w-5 h-5" />
+            </DialogClose>
+          </div>
 
-        {/* Bouton fermer (mobile seulement) — un peu plus grand pour être facilement cliquable au tactile */}
-        <button
-          onClick={handleClose}
-          className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center rounded-full bg-background/80 backdrop-blur-sm border border-border hover:bg-muted transition-colors sm:hidden"
-          aria-label="Fermer le menu"
-        >
-          <X className="w-5 h-5" />
-        </button>
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+            {adminNavItems.map((item) => {
+              const isActive =
+                pathname === item.href ||
+                pathname?.startsWith(item.href + '/');
+              const Icon = item.icon;
 
-        {/* Navigation */}
-        <nav className="p-4 space-y-2 overflow-y-auto h-[calc(100vh-4rem)]">
-          {adminNavItems.map((item) => {
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="block"
-              >
-                <div
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
-                    isActive
-                      ? 'bg-accent text-accent-foreground shadow-md'
-                      : 'hover:bg-muted text-muted-foreground hover:text-foreground hover:translate-x-1'
-                  )}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="block"
+                  onClick={() => onOpenChange(false)}
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  
-                  {/* ✅ CORRECTION : Toujours rendre le span, masquer via CSS */}
-                  {/* Sur desktop : masqué si sidebar fermé (sm:hidden) */}
-                  {/* Sur mobile : toujours visible (pas de hidden) */}
-                  <span 
+                  <div
                     className={cn(
-                      'font-medium text-sm whitespace-nowrap',
-                      !sidebarOpen && 'sm:hidden'
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+                      isActive
+                        ? 'bg-accent text-accent-foreground shadow-md'
+                        : 'hover:bg-muted text-muted-foreground hover:text-foreground hover:translate-x-1'
                     )}
                   >
-                    {item.label}
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
+                    <Icon className="w-5 h-5 shrink-0" />
+                    <span className="font-medium text-sm">{item.label}</span>
+                  </div>
+                </Link>
+              );
+            })}
 
-          <div className="border-t border-border my-4" />
+            <div className="border-t border-border my-3" />
 
-          <Link href={ROUTES?.ADMIN?.SETTINGS || '/dashboard/settings'} className="block">
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 hover:translate-x-1">
-              <Settings className="w-5 h-5 flex-shrink-0" />
-              <span 
-                className={cn(
-                  'font-medium text-sm',
-                  !sidebarOpen && 'sm:hidden'
-                )}
-              >
-                Paramètres
-              </span>
-            </div>
-          </Link>
-        </nav>
-      </aside>
-    </>
+            <Link
+              href={ROUTES?.ADMIN?.SETTINGS || '/dashboard/settings'}
+              className="block"
+              onClick={() => onOpenChange(false)}
+            >
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 hover:translate-x-1">
+                <Settings className="w-5 h-5 shrink-0" />
+                <span className="font-medium text-sm">Paramètres</span>
+              </div>
+            </Link>
+          </nav>
+
+          {/* Footer du drawer (légère) */}
+          <div className="px-5 py-3 border-t border-border text-[11px] text-muted-foreground text-center shrink-0">
+            Bokoma Store · Admin
+          </div>
+        </div>
+      </DialogPortal>
+    </Dialog>
   );
 }

@@ -9,6 +9,7 @@
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
 const Coupon = require('../models/Coupon');
+const Product = require('../models/Product');
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
@@ -87,19 +88,271 @@ const resolveCart = async (userId, payload) => {
 
 const buildOrderItems = (cartItems) => {
   return (cartItems || [])
-    .map((item) => ({
-      product: item.product?._id || item.product,
-      variant: item.variant?._id || item.variant,
-      name: item.name || item.product?.name || 'Produit',
-      sku: item.sku || 'N/A',
-      image: item.image || item.product?.images?.[0]?.url,
-      size: item.size,
-      color: item.color,
-      price: item.price || 0,
-      quantity: item.quantity || 1,
-      subtotal: (item.price || 0) * (item.quantity || 1),
-    }))
+    .map((item) => {
+      // ⚠️ Le cart item (post-fix cart.controller.js) contient déjà
+      // name/sku/size/color/image/price/quantity. On convertit juste
+      // les refs d'objet en IDs pour persister en DB.
+      const product =
+        item.product && typeof item.product === 'object' && item.product.name
+          ? item.product
+          : null;
+
+      // Filet de sécurité : si le cart item n'a pas été créé via le fix
+      // (anciens paniers legacy), on tente une dernière passe d'enrichissement
+      // synchrone depuis le produit populé — sans aller chercher en DB (pour
+      // ne pas pénaliser le checkout).
+      let resolvedSize = item.size;
+      let resolvedColor = item.color;
+      let resolvedSku = item.sku || product?.variants?.[0]?.sku;
+
+      if (product && Array.isArray(product.variants)) {
+        const matchedVariant = product.variants.find(
+          (v) =>
+            (item.variant && (v._id?.toString?.() === item.variant?.toString?.())) ||
+            (item.sku && v.sku === item.sku),
+        );
+        if (matchedVariant) {
+          resolvedSize = resolvedSize || matchedVariant.size;
+          resolvedColor = resolvedColor || matchedVariant.color;
+          resolvedSku = resolvedSku || matchedVariant.sku;
+        }
+      }
+
+      return {
+        product: item.product?._id || item.product,
+        variant: item.variant?._id || item.variant,
+        name: item.name || product?.name || 'Produit',
+        sku: resolvedSku || 'N/A',
+        image: item.image || product?.images?.[0]?.url || product?.images?.[0],
+        size: resolvedSize,
+        color: resolvedColor,
+        price: item.price || 0,
+        quantity: item.quantity || 1,
+        subtotal: (item.price || 0) * (item.quantity || 1),
+      };
+    })
     .filter((item) => item.product);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ENRICHMENT — Répare les snapshots de commandes anciennes ou cassées
+// ─────────────────────────────────────────────────────────────────────────────
+// Pourquoi : la migration initiale du panier avait un bug qui stockait des
+// placeholders `name:'Produit'` / `sku:'N/A'` et perdait `size`/`color` quand
+// il n'y avait pas de variantId. Ces snapshots sont immuables (c'est tout
+// l'intérêt d'un snapshot) mais on a besoin de les afficher correctement dans
+// l'admin.
+//
+// Stratégie :
+//   1. `enrichSingleItem(item, product)` — fonction PURE qui mute un item en
+//      place à partir d'un produit déjà chargé. Idempotente.
+//   2. `enrichOrderItems(order)` — async ; charge les produits manquants en
+//      une seule query depuis la DB et applique enrichSingleItem. Utilisé en
+//      lecture par les contrôleurs pour réparer à la volée les vieilles
+//      commandes.
+//   3. `enrichOrders(orders)` — variante pour un tableau de commandes, avec
+//      une seule query Product.find() pour tout le lot. Utilisé par la
+//      migration et les listings.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const getImageUrlFromProduct = (product) => {
+  if (!product || !Array.isArray(product.images) || product.images.length === 0) return null;
+  const primary = product.images.find((img) => img && (img.isPrimary || img.url));
+  const first = product.images[0];
+  return (
+    primary?.url ||
+    first?.url ||
+    (typeof first === 'string' ? first : null)
+  );
+};
+
+const resolveVariantFromProduct = (item, product) => {
+  if (!product || !Array.isArray(product.variants)) return null;
+  if (item.variant && typeof item.variant === 'object' && (item.variant.size || item.variant.sku)) {
+    return item.variant;
+  }
+  const itemVariantId =
+    item.variant && typeof item.variant === 'object'
+      ? item.variant._id?.toString?.()
+      : item.variant?.toString?.();
+  const itemSku = item.sku;
+  return (
+    product.variants.find((v) => {
+      const vId = v._id?.toString?.();
+      if (itemVariantId && vId === itemVariantId) return true;
+      if (itemSku && v.sku && v.sku === itemSku) return true;
+      return false;
+    }) || null
+  );
+};
+
+/**
+ * Enrichit un item en place. Ne touche JAMAIS price/quantity/subtotal.
+ * Idempotente : appliquer deux fois ne change rien.
+ *
+ * @param {Object} item    — item de commande (mongoose ou plain object)
+ * @param {Object} product — produit populé (avec name/variants/images)
+ * @returns {boolean}      — true si au moins un champ a été patché
+ */
+const enrichSingleItem = (item, product) => {
+  if (!item || !product) return false;
+  let changed = false;
+
+  // 1. name — patch le placeholder 'Produit'
+  if ((!item.name || item.name === 'Produit') && product.name) {
+    item.name = product.name;
+    changed = true;
+  }
+
+  // 2. sku — patch 'N/A'
+  if (!item.sku || item.sku === 'N/A') {
+    const variant = resolveVariantFromProduct(item, product);
+    const newSku = variant?.sku || product.sku || product.variants?.[0]?.sku;
+    if (newSku) {
+      item.sku = newSku;
+      changed = true;
+    }
+  }
+
+  // 3. size
+  if (!item.size) {
+    const variant = resolveVariantFromProduct(item, product);
+    if (variant?.size) {
+      item.size = variant.size;
+      changed = true;
+    }
+  }
+
+  // 4. color
+  if (!item.color) {
+    const variant = resolveVariantFromProduct(item, product);
+    if (variant?.color) {
+      item.color = variant.color;
+      changed = true;
+    }
+  }
+
+  // 5. image — filet si l'item n'en a pas
+  if (!item.image) {
+    const url = getImageUrlFromProduct(product);
+    if (url) {
+      item.image = url;
+      changed = true;
+    }
+  }
+
+  return changed;
+};
+
+/**
+ * Enrichit les items d'une commande (in-place). Charge au préalable
+ * les produits manquants depuis la DB en une seule query.
+ *
+ * Accepte une commande mongoose, un plain object, ou directement un
+ * tableau d'items.
+ *
+ * @returns {number} nombre d'items modifiés
+ */
+const enrichOrderItems = async (orderOrItems) => {
+  const items = Array.isArray(orderOrItems)
+    ? orderOrItems
+    : orderOrItems?.items || [];
+
+  if (!items.length) return 0;
+
+  const productMap = new Map();
+
+  // Produits déjà populés dans les items → on les utilise tels quels
+  for (const item of items) {
+    if (item.product && typeof item.product === 'object' && item.product.name) {
+      const pid = (item.product._id || item.product).toString();
+      if (!productMap.has(pid)) productMap.set(pid, item.product);
+    }
+  }
+
+  // Produits manquants → query unique si on a au moins un item qui en a besoin
+  const missingIds = new Set();
+  for (const item of items) {
+    if (!item.product) continue;
+    const pid = (typeof item.product === 'object' ? item.product._id : item.product)?.toString?.();
+    if (!pid || productMap.has(pid)) continue;
+    // On ne charge que si l'item ressemble à un cas cassé (sinon c'est inutile)
+    const looksBroken =
+      !item.name ||
+      item.name === 'Produit' ||
+      !item.sku ||
+      item.sku === 'N/A' ||
+      !item.size ||
+      !item.color ||
+      !item.image;
+    if (looksBroken) missingIds.add(pid);
+  }
+
+  if (missingIds.size > 0) {
+    const products = await Product.find({ _id: { $in: Array.from(missingIds) } })
+      .select('name slug images variants sku basePrice type')
+      .lean();
+    for (const p of products) {
+      productMap.set(p._id.toString(), p);
+    }
+  }
+
+  let changedItems = 0;
+  for (const item of items) {
+    if (!item.product) continue;
+    const pid = (typeof item.product === 'object' ? item.product._id : item.product)?.toString?.();
+    const product = productMap.get(pid);
+    if (!product) continue;
+    if (enrichSingleItem(item, product)) changedItems++;
+  }
+
+  return changedItems;
+};
+
+/**
+ * Enrichit un TABLEAU de commandes avec une seule query Product.find()
+ * pour l'ensemble du lot. Retourne le nombre total d'items modifiés.
+ *
+ * @param {Array} orders commandes mongoose docs OU plain objects (lean)
+ */
+const enrichOrders = async (orders) => {
+  if (!Array.isArray(orders) || orders.length === 0) return 0;
+
+  // Collecter tous les productIds référencés
+  const productIds = new Set();
+  for (const order of orders) {
+    if (!Array.isArray(order.items)) continue;
+    for (const item of order.items) {
+      if (!item.product) continue;
+      const pid = (typeof item.product === 'object' ? item.product._id : item.product)?.toString?.();
+      if (pid) productIds.add(pid);
+    }
+  }
+
+  if (productIds.size === 0) return 0;
+
+  // Une seule query pour tout le lot
+  const products = await Product.find({ _id: { $in: Array.from(productIds) } })
+    .select('name slug images variants sku basePrice type')
+    .lean();
+  const productMap = new Map();
+  for (const p of products) {
+    productMap.set(p._id.toString(), p);
+  }
+
+  let totalChanged = 0;
+  for (const order of orders) {
+    if (!Array.isArray(order.items)) continue;
+    for (const item of order.items) {
+      if (!item.product) continue;
+      const pid = (typeof item.product === 'object' ? item.product._id : item.product)?.toString?.();
+      const product = productMap.get(pid);
+      if (!product) continue;
+      if (enrichSingleItem(item, product)) totalChanged++;
+    }
+  }
+
+  return totalChanged;
 };
 
 const generateTransactionId = (userId) =>
@@ -499,6 +752,10 @@ module.exports = {
   computeShippingCost,
   computeCouponDiscount,
   buildOrderItems,
+  // Enrichissement des snapshots (lecture + migration)
+  enrichSingleItem,
+  enrichOrderItems,
+  enrichOrders,
   generateTransactionId,
   resolveCart,
   SHIPPING_RATES,

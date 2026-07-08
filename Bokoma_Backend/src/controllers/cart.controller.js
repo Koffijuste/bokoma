@@ -82,12 +82,15 @@ exports.addItem = async (req, res, next) => {
     // ✅ Gestion des variantes
     let price = product.basePrice;
     let variantData = {};
-    
+    let resolvedSize = size;
+    let resolvedColor = color;
+    let resolvedSku = null;
+
     if (variantId) {
       if (!isValidObjectId(variantId)) {
         return next(new AppError('ID de variante invalide', 400));
       }
-      
+
       const variant = product.variants?.id(variantId);
       if (!variant || !variant.isActive) {
         return next(new AppError('Variante indisponible', 404));
@@ -95,25 +98,32 @@ exports.addItem = async (req, res, next) => {
       if (variant.stock < quantity) {
         return next(new AppError(`Stock insuffisant : ${variant.stock} disponible`, 409));
       }
-      
+
       price = variant.price || product.basePrice;
       variantData = {
         variant: variantId,
         sku: variant.sku,
-        size: variant.size || size,
-        color: variant.color || color,
       };
+      // 🐛 FIX : la VARIANTE fait foi pour size/color/sku, mais le body
+      //         sert de filet de sécurité si la variante n'en a pas.
+      //         Avant : si variantId présent, `size` du body était
+      //         silencieusement écrasé par `variant.size` (souvent
+      //         undefined pour les produits type chaussures sans variant).
+      resolvedSize = variant.size || size;
+      resolvedColor = variant.color || color;
+      resolvedSku = variant.sku || null;
     }
 
     // ✅ Get or create cart
     const cart = await getOrCreateCart(req);
 
-    // ✅ Chercher item existant (même produit + même variante)
-    const existingItem = cart.items.find(item => 
-      item.product.toString() === productId && 
-      (!variantId || item.variant?.toString() === variantId) &&
-      item.size === variantData.size &&
-      item.color === variantData.color
+    // ✅ Chercher item existant (même produit + même variante + même taille)
+    const existingItem = cart.items.find(item =>
+      item.product.toString() === productId &&
+      ((!variantId && !item.variant) ||
+       (variantId && item.variant?.toString() === variantId)) &&
+      (item.size || null) === (resolvedSize || null) &&
+      (item.color || null) === (resolvedColor || null)
     );
 
     if (existingItem) {
@@ -125,6 +135,9 @@ exports.addItem = async (req, res, next) => {
         image: product.images?.[0]?.url,
         price,
         quantity,
+        size: resolvedSize || undefined,
+        color: resolvedColor || undefined,
+        sku: resolvedSku || undefined,
         ...variantData,
       });
     }
