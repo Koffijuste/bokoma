@@ -5,26 +5,20 @@
   "installCommand": "npm install --legacy-peer-deps",
   "outputDirectory": ".next",
   "regions": ["fra1"],
-
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        // ════════════════════════════════════════════════════════════════
-        // 🛡️  HEADERS DE SÉCURITÉ — appliqués au niveau CDN (Vercel Edge)
-        // Prime sur next.config.js → garantit la couverture même si la
-        // config Next.js change ou si la sortie est statique.
-        // ════════════════════════════════════════════════════════════════
         {
           "key": "Strict-Transport-Security",
           "value": "max-age=31536000; includeSubDomains; preload"
         },
-        { "key": "X-Frame-Options",                "value": "DENY" },
-        { "key": "X-Content-Type-Options",         "value": "nosniff" },
-        { "key": "Referrer-Policy",                "value": "strict-origin-when-cross-origin" },
-        { "key": "X-DNS-Prefetch-Control",         "value": "off" },
-        { "key": "X-Download-Options",             "value": "noopen" },
-        { "key": "Cross-Origin-Opener-Policy",     "value": "same-origin" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-DNS-Prefetch-Control", "value": "off" },
+        { "key": "X-Download-Options", "value": "noopen" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
         {
           "key": "Permissions-Policy",
           "value": "accelerometer=(), ambient-light-sensor=(), autoplay=(self), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(self), gamepad=(), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(self \"https://*.cinetpay.com\"), picture-in-picture=(self), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=(), interest-cohort=()"
@@ -70,7 +64,6 @@
       ]
     }
   ],
-
   "redirects": [
     {
       "source": "/admin",
