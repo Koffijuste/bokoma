@@ -25,7 +25,7 @@ export const userApi = {
    */
   getUsers: async (params?: UserQueryParams): Promise<User[]> => {
     const { data } = await api.get('/users', { params });
-    
+
     // ✅ Extraction flexible selon le format de réponse backend
     if (Array.isArray(data)) return data;
     if (Array.isArray(data?.data)) return data.data;
@@ -50,6 +50,30 @@ export const userApi = {
   updateUser: async (userId: string, updates: Partial<User>): Promise<User> => {
     const { data } = await api.patch(`/users/${userId}`, updates);
     return data?.user || data?.data || (data as User);
+  },
+
+  /**
+   * ✅ Met à jour le profil de l'utilisateur connecté
+   * Backend : PATCH /api/v1/users/me
+   * Retourne l'utilisateur mis à jour.
+   */
+  updateProfile: async (updates: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    avatar?: string;
+  }): Promise<User> => {
+    const { data } = await api.patch('/users/me', updates);
+    // Le backend renvoie { success, message, data: { user } }
+    return data?.user || data?.data?.user || data?.data || (data as User);
+  },
+
+  /**
+   * ✅ Change le mot de passe de l'utilisateur connecté
+   * Backend : PATCH /api/v1/users/me/password
+   */
+  updatePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    await api.patch('/users/me/password', { currentPassword, newPassword });
   },
 
   /**

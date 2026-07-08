@@ -1,60 +1,102 @@
 // app/(admin)/dashboard/settings/page.tsx
+// ============================================================================
+// ⚙️  PAGE PARAMÈTRES — Refonte UX (onglets + Zod + dirty tracking)
+// ============================================================================
+// Layout :
+//   - Sidebar d'onglets (desktop) / onglets horizontaux (mobile)
+//   - 4 sections : Profil · Sécurité · Notifications · Apparence
+//   - Indicateur "Non sauvegardé" par section
+//   - Barre flottante globale si modifs en attente
+//   - Validation Zod côté client (mêmes règles que le backend)
+// ============================================================================
+
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { 
-  Save, User, Bell, Shield, Palette, Loader2, 
-  Lock, Eye, EyeOff
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+  Save, User, Bell, Shield, Palette, Loader2, Lock, Mail, Phone,
+  AlertTriangle, Check, Smartphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useRequireAdmin } from '@/hooks/useAuth';
+import { useAuthStore } from '@/store';
 import { useUiStore } from '@/store';
+import { useNotificationPrefs } from '@/hooks/useNotificationPrefs';
 import { userApi } from '@/services';
+import { profileSchema, passwordSchema } from '@/lib/validators/settings';
+import { SettingSection } from '@/components/settings/SettingSection';
+import { SettingsTabs, type SettingsTab } from '@/components/settings/SettingsTabs';
+import { PasswordInput } from '@/components/settings/PasswordInput';
+import { DirtySaveBar } from '@/components/settings/DirtySaveBar';
 import { toast } from 'sonner';
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+type FieldErrors = Record<string, string>;
+
+const formatZodErrors = (zodErr: any): FieldErrors => {
+  // ✅ Tolère Zod v3 et v4
+  const issues = zodErr?.issues ?? zodErr?.errors ?? [];
+  const out: FieldErrors = {};
+  for (const issue of issues) {
+    const path = Array.isArray(issue.path) ? issue.path.join('.') : String(issue.path ?? '');
+    if (path && !out[path]) out[path] = issue.message ?? 'Champ invalide';
+  }
+  return out;
+};
+
+const isSame = (a: Record<string, any>, b: Record<string, any>) =>
+  JSON.stringify(a) === JSON.stringify(b);
+
+// ─── IDs des onglets ────────────────────────────────────────────────────────
+const TABS = {
+  PROFILE: 'profile',
+  SECURITY: 'security',
+  NOTIFICATIONS: 'notifications',
+  APPEARANCE: 'appearance',
+} as const;
+type TabId = (typeof TABS)[keyof typeof TABS];
+
+// ============================================================================
+// 🔹 COMPOSANT PRINCIPAL
+// ============================================================================
 
 export default function SettingsPage() {
   const { user, isLoading } = useRequireAdmin();
-  const { theme, toggleTheme } = useUiStore();
-  const [isSaving, setIsSaving] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [showPasswords, setShowPasswords] = useState({
-    current: false,
-    new: false,
-    confirm: false,
-  });
-  
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
+  const setUser = useAuthStore((s) => s.setUser);
+  const { theme, setTheme } = useUiStore();
+  const { prefs, hydrated: prefsHydrated, updatePref } = useNotificationPrefs();
+
+  const [activeTab, setActiveTab] = useState<TabId>(TABS.PROFILE);
+
+  // États "dirty" par section — agrégés pour la barre flottante
+  const [dirtyMap, setDirtyMap] = useState<Record<TabId, boolean>>({
+    [TABS.PROFILE]: false,
+    [TABS.SECURITY]: false,
+    [TABS.NOTIFICATIONS]: false,
+    [TABS.APPEARANCE]: false,
   });
 
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
+  // Refs vers les fonctions de sauvegarde de chaque section, pour la
+  // barre flottante qui agit sur la section active.
+  const saveFns = useRef<Partial<Record<TabId, () => Promise<void>>>>({});
 
-  const [notifications, setNotifications] = useState({
-    emailNotifications: true,
-    orderNotifications: true,
-  });
+  const markDirty = useCallback((tab: TabId, dirty: boolean) => {
+    setDirtyMap((prev) => (prev[tab] === dirty ? prev : { ...prev, [tab]: dirty }));
+  }, []);
 
-  useEffect(() => {
-    if (user) {
-      setFormData({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || '',
-        phone: user.phone || '',
-      });
-    }
-  }, [user]);
+  const registerSave = useCallback(
+    (tab: TabId, fn: () => Promise<void>) => {
+      saveFns.current[tab] = fn;
+    },
+    []
+  );
 
-  if (isLoading) {
+  const anyDirty = Object.values(dirtyMap).some(Boolean);
+  const dirtyCount = Object.values(dirtyMap).filter(Boolean).length;
+
+  if (isLoading || !user) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-accent" />
@@ -62,314 +104,566 @@ export default function SettingsPage() {
     );
   }
 
-  const handleProfileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    
-    try {
-      await userApi.updateProfile({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-      });
-      
-      toast.success('Profil mis à jour avec succès');
-    } catch (err: any) {
-      console.error('❌ Profile update error:', err);
-      toast.error(err?.response?.data?.message || 'Erreur lors de la sauvegarde');
-    } finally {
-      setIsSaving(false);
-    }
+  const tabs: SettingsTab[] = [
+    { id: TABS.PROFILE,       label: 'Profil',        icon: <User /> },
+    { id: TABS.SECURITY,      label: 'Sécurité',      icon: <Shield /> },
+    {
+      id: TABS.NOTIFICATIONS,
+      label: 'Notifications',
+      icon: <Bell />,
+      // ✅ Badge uniquement si au moins une notif est désactivée
+      badge: prefsHydrated && (!prefs.emailNotifications || !prefs.orderNotifications)
+        ? '!'
+        : undefined,
+    },
+    { id: TABS.APPEARANCE,    label: 'Apparence',     icon: <Palette /> },
+  ];
+
+  const handleGlobalSave = async () => {
+    const fn = saveFns.current[activeTab];
+    if (!fn) return;
+    await fn();
   };
 
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('Les mots de passe ne correspondent pas');
-      return;
-    }
-
-    if (passwordData.newPassword.length < 8) {
-      toast.error('Le mot de passe doit contenir au moins 8 caractères');
-      return;
-    }
-    
-    setIsChangingPassword(true);
-    
-    try {
-      await userApi.updatePassword(
-        passwordData.currentPassword,
-        passwordData.newPassword
-      );
-      
-      toast.success('Mot de passe modifié avec succès');
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-      });
-    } catch (err: any) {
-      console.error('❌ Password change error:', err);
-      toast.error(err?.response?.data?.message || 'Erreur lors du changement de mot de passe');
-    } finally {
-      setIsChangingPassword(false);
-    }
-  };
-
-  const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handlePasswordChange = (field: string, value: string) => {
-    setPasswordData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleNotificationChange = (field: string, value: boolean) => {
-    setNotifications(prev => ({ ...prev, [field]: value }));
-    toast.success('Préférences de notification mises à jour');
-  };
-
-  const handleThemeChange = (newTheme: string) => {
-    if (newTheme === 'dark' && theme !== 'dark') {
-      toggleTheme();
-    } else if (newTheme === 'light' && theme === 'dark') {
-      toggleTheme();
-    }
-    toast.success('Thème mis à jour');
+  const handleGlobalDiscard = () => {
+    // Recharger la page restaure les valeurs initiales.
+    // Pour ne pas perdre d'autres onglets en cours, on invalide juste l'onglet actif
+    // via un event custom que chaque section écoute.
+    window.dispatchEvent(new CustomEvent(`bokoma:settings:discard:${activeTab}`));
   };
 
   return (
-    <div className="p-4 sm:p-8 min-h-screen bg-background">
+    <div className="p-4 sm:p-6 lg:p-8 min-h-screen bg-background">
       <header className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
-        <h1 className="text-3xl font-bold">Paramètres</h1>
-        <p className="text-muted-foreground">Gérez votre profil et vos préférences</p>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Paramètres</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Gérez votre profil, sécurité et préférences.
+        </p>
       </header>
 
-      <div className="max-w-2xl space-y-6">
-        <section className="bg-card border border-border rounded-xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <User className="w-5 h-5" /> Profil
-          </h2>
-          
-          <form onSubmit={handleProfileSubmit} className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">Prénom</Label>
-                <Input
-                  id="firstName"
-                  value={formData.firstName}
-                  onChange={(e) => handleChange('firstName', e.target.value)}
-                  placeholder="Votre prénom"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Nom</Label>
-                <Input
-                  id="lastName"
-                  value={formData.lastName}
-                  onChange={(e) => handleChange('lastName', e.target.value)}
-                  placeholder="Votre nom"
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                disabled
-                className="bg-muted/50"
-              />
-              <p className="text-xs text-muted-foreground">L'email ne peut pas être modifié</p>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="phone">Téléphone</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => handleChange('phone', e.target.value)}
-                placeholder="+225 07 07 07 07 07"
-              />
-            </div>
+      <div className="flex flex-col md:flex-row gap-6 lg:gap-8">
+        <SettingsTabs tabs={tabs} activeTab={activeTab} onChange={(id) => setActiveTab(id as TabId)} />
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sauvegarde...</>
-                ) : (
-                  <><Save className="w-4 h-4 mr-2" /> Sauvegarder</>
-                )}
-              </Button>
-            </div>
-          </form>
-        </section>
-
-        <section className="bg-card border border-border rounded-xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Shield className="w-5 h-5" /> Sécurité
-          </h2>
-          
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="currentPassword">Mot de passe actuel</Label>
-              <div className="relative">
-                <Input
-                  id="currentPassword"
-                  type={showPasswords.current ? 'text' : 'password'}
-                  value={passwordData.currentPassword}
-                  onChange={(e) => handlePasswordChange('currentPassword', e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPasswords(prev => ({ ...prev, current: !prev.current }))}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">Nouveau mot de passe</Label>
-              <div className="relative">
-                <Input
-                  id="newPassword"
-                  type={showPasswords.new ? 'text' : 'password'}
-                  value={passwordData.newPassword}
-                  onChange={(e) => handlePasswordChange('newPassword', e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  minLength={8}
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPasswords(prev => ({ ...prev, new: !prev.new }))}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground">Minimum 8 caractères</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
-              <div className="relative">
-                <Input
-                  id="confirmPassword"
-                  type={showPasswords.confirm ? 'text' : 'password'}
-                  value={passwordData.confirmPassword}
-                  onChange={(e) => handlePasswordChange('confirmPassword', e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {passwordData.confirmPassword && (
-                <p className={`text-xs ${
-                  passwordData.newPassword === passwordData.confirmPassword
-                    ? 'text-green-600'
-                    : 'text-destructive'
-                }`}>
-                  {passwordData.newPassword === passwordData.confirmPassword
-                    ? '✓ Les mots de passe correspondent'
-                    : '✗ Les mots de passe ne correspondent pas'}
-                </p>
-              )}
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={isChangingPassword}>
-                {isChangingPassword ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Modification...</>
-                ) : (
-                  <><Lock className="w-4 h-4 mr-2" /> Changer le mot de passe</>
-                )}
-              </Button>
-            </div>
-          </form>
-        </section>
-
-        <section className="bg-card border border-border rounded-xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Bell className="w-5 h-5" /> Notifications
-          </h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label className="font-medium">Notifications par email</Label>
-                <p className="text-sm text-muted-foreground">Recevoir les mises à jour par email</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleNotificationChange('emailNotifications', !notifications.emailNotifications)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  notifications.emailNotifications ? 'bg-accent' : 'bg-muted'
-                }`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  notifications.emailNotifications ? 'translate-x-6' : 'translate-x-1'
-                }`} />
-              </button>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div>
-                <Label className="font-medium">Notifications de commandes</Label>
-                <p className="text-sm text-muted-foreground">Alertes pour nouvelles commandes</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleNotificationChange('orderNotifications', !notifications.orderNotifications)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  notifications.orderNotifications ? 'bg-accent' : 'bg-muted'
-                }`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  notifications.orderNotifications ? 'translate-x-6' : 'translate-x-1'
-                }`} />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-card border border-border rounded-xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-400">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Palette className="w-5 h-5" /> Apparence
-          </h2>
-          
-          <div className="space-y-2">
-            <Label htmlFor="theme">Thème de l'interface</Label>
-            <select
-              id="theme"
-              value={theme === 'dark' ? 'dark' : 'light'}
-              onChange={(e) => handleThemeChange(e.target.value)}
-              className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
-            >
-              <option value="light">Clair</option>
-              <option value="dark">Sombre</option>
-            </select>
-          </div>
-        </section>
+        <div className="flex-1 max-w-2xl space-y-6">
+          {activeTab === TABS.PROFILE && (
+            <ProfileSection
+              user={user}
+              onDirtyChange={(d) => markDirty(TABS.PROFILE, d)}
+              onRegisterSave={(fn) => registerSave(TABS.PROFILE, fn)}
+            />
+          )}
+          {activeTab === TABS.SECURITY && (
+            <SecuritySection
+              onDirtyChange={(d) => markDirty(TABS.SECURITY, d)}
+              onRegisterSave={(fn) => registerSave(TABS.SECURITY, fn)}
+            />
+          )}
+          {activeTab === TABS.NOTIFICATIONS && (
+            <NotificationsSection
+              hydrated={prefsHydrated}
+              prefs={prefs}
+              onChange={(key, value) => {
+                updatePref(key, value);
+                toast.success('Préférence mise à jour', { duration: 1500 });
+              }}
+              onDirtyChange={() => {
+                // Pas de "save" → pas de dirty. Toujours false.
+                markDirty(TABS.NOTIFICATIONS, false);
+              }}
+            />
+          )}
+          {activeTab === TABS.APPEARANCE && (
+            <AppearanceSection
+              theme={theme}
+              onThemeChange={(newTheme) => {
+                setTheme(newTheme);
+                toast.success('Thème mis à jour', { duration: 1500 });
+              }}
+              onDirtyChange={() => markDirty(TABS.APPEARANCE, false)}
+            />
+          )}
+        </div>
       </div>
+
+      <DirtySaveBar
+        visible={anyDirty && (activeTab === TABS.PROFILE || activeTab === TABS.SECURITY)}
+        onSave={handleGlobalSave}
+        onDiscard={handleGlobalDiscard}
+        message={
+          dirtyCount > 1
+            ? `${dirtyCount} sections ont des modifications non sauvegardées`
+            : 'Vous avez des modifications non sauvegardées'
+        }
+      />
     </div>
+  );
+}
+
+// ============================================================================
+// 🔹 SECTION PROFIL
+// ============================================================================
+
+interface ProfileSectionProps {
+  user: any;
+  onDirtyChange: (dirty: boolean) => void;
+  onRegisterSave: (fn: () => Promise<void>) => void;
+}
+
+function ProfileSection({ user, onDirtyChange, onRegisterSave }: ProfileSectionProps) {
+  const setUser = useAuthStore((s) => s.setUser);
+
+  const initial = useMemo(
+    () => ({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      phone: user.phone || '',
+    }),
+    [user]
+  );
+
+  const [form, setForm] = useState(initial);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [saving, setSaving] = useState(false);
+
+  // Sync si le user change (ex: après refresh du store)
+  useEffect(() => {
+    setForm(initial);
+    setErrors({});
+    onDirtyChange(false);
+  }, [initial, onDirtyChange]);
+
+  // Détection "dirty"
+  useEffect(() => {
+    onDirtyChange(!isSame(form, initial));
+  }, [form, initial, onDirtyChange]);
+
+  const handleChange = useCallback((field: keyof typeof form, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    // Effacer l'erreur du champ à la frappe
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const { [field]: _, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
+  const validate = useCallback((): FieldErrors => {
+    const r = profileSchema.safeParse(form);
+    return r.success ? {} : formatZodErrors(r.error);
+  }, [form]);
+
+  const handleSave = useCallback(async () => {
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      toast.error('Veuillez corriger les erreurs');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const updated = await userApi.updateProfile({
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        phone: form.phone.trim() || undefined,
+      });
+      // ✅ Mettre à jour le store pour que la Navbar reflète le nouveau nom
+      setUser({ ...user, ...updated });
+      toast.success('Profil mis à jour');
+      onDirtyChange(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erreur lors de la sauvegarde';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }, [form, validate, setUser, user, onDirtyChange]);
+
+  // Reset si discard global
+  useEffect(() => {
+    const reset = () => {
+      setForm(initial);
+      setErrors({});
+      onDirtyChange(false);
+      toast.info('Modifications annulées');
+    };
+    window.addEventListener('bokoma:settings:discard:profile', reset);
+    return () => window.removeEventListener('bokoma:settings:discard:profile', reset);
+  }, [initial, onDirtyChange]);
+
+  // Expose save pour la barre flottante
+  useEffect(() => {
+    onRegisterSave(handleSave);
+  }, [handleSave, onRegisterSave]);
+
+  return (
+    <SettingSection
+      title="Profil"
+      description="Vos informations personnelles visibles sur votre compte."
+      icon={<User className="w-5 h-5" />}
+      delay={100}
+      isDirty={!isSame(form, initial) && !saving}
+      footer={
+        <Button onClick={handleSave} disabled={saving || isSame(form, initial)}>
+          {saving ? (
+            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sauvegarde...</>
+          ) : (
+            <><Save className="w-4 h-4 mr-2" /> Sauvegarder</>
+          )}
+        </Button>
+      }
+    >
+      <div className="grid sm:grid-cols-2 gap-4">
+        <Input
+          label="Prénom"
+          value={form.firstName}
+          onChange={(e) => handleChange('firstName', e.target.value)}
+          error={errors.firstName}
+          placeholder="Votre prénom"
+          autoComplete="given-name"
+          required
+        />
+        <Input
+          label="Nom"
+          value={form.lastName}
+          onChange={(e) => handleChange('lastName', e.target.value)}
+          error={errors.lastName}
+          placeholder="Votre nom"
+          autoComplete="family-name"
+          required
+        />
+      </div>
+
+      <Input
+        label="Email"
+        value={user.email || ''}
+        disabled
+        icon={<Mail className="w-4 h-4" />}
+        helperText="L'email est lié à votre compte et ne peut pas être modifié ici."
+      />
+
+      <Input
+        label="Téléphone"
+        value={form.phone}
+        onChange={(e) => handleChange('phone', e.target.value)}
+        error={errors.phone}
+        placeholder="+225 07 07 07 07 07"
+        icon={<Phone className="w-4 h-4" />}
+        helperText="Format attendu : +225 suivi de 8 à 10 chiffres (numéro ivoirien)."
+        autoComplete="tel"
+      />
+    </SettingSection>
+  );
+}
+
+// ============================================================================
+// 🔹 SECTION SÉCURITÉ
+// ============================================================================
+
+interface SecuritySectionProps {
+  onDirtyChange: (dirty: boolean) => void;
+  onRegisterSave: (fn: () => Promise<void>) => void;
+}
+
+const EMPTY_PWD = { currentPassword: '', newPassword: '', confirmPassword: '' };
+
+function SecuritySection({ onDirtyChange, onRegisterSave }: SecuritySectionProps) {
+  const [pwd, setPwd] = useState(EMPTY_PWD);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [saving, setSaving] = useState(false);
+
+  const isDirty = useMemo(() => !isSame(pwd, EMPTY_PWD), [pwd]);
+
+  useEffect(() => {
+    onDirtyChange(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  const handleChange = useCallback((field: keyof typeof pwd, value: string) => {
+    setPwd((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const { [field]: _, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
+  const validate = useCallback((): FieldErrors => {
+    const r = passwordSchema.safeParse(pwd);
+    return r.success ? {} : formatZodErrors(r.error);
+  }, [pwd]);
+
+  const handleSave = useCallback(async () => {
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      toast.error('Veuillez corriger les erreurs');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await userApi.updatePassword(pwd.currentPassword, pwd.newPassword);
+      toast.success('Mot de passe modifié avec succès');
+      setPwd(EMPTY_PWD);
+      onDirtyChange(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erreur lors du changement';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }, [pwd, validate, onDirtyChange]);
+
+  // Reset si discard global
+  useEffect(() => {
+    const reset = () => {
+      setPwd(EMPTY_PWD);
+      setErrors({});
+      onDirtyChange(false);
+      toast.info('Modifications annulées');
+    };
+    window.addEventListener('bokoma:settings:discard:security', reset);
+    return () => window.removeEventListener('bokoma:settings:discard:security', reset);
+  }, [onDirtyChange]);
+
+  // Expose save
+  useEffect(() => {
+    onRegisterSave(handleSave);
+  }, [handleSave, onRegisterSave]);
+
+  // Indicateur visuel : passwords match ?
+  const passwordsMatch =
+    pwd.confirmPassword.length > 0 && pwd.newPassword === pwd.confirmPassword;
+  const passwordsMismatch =
+    pwd.confirmPassword.length > 0 && pwd.newPassword !== pwd.confirmPassword;
+
+  return (
+    <SettingSection
+      title="Sécurité"
+      description="Modifiez votre mot de passe. Choisissez-en un solide (8+ caractères, majuscule, chiffre)."
+      icon={<Shield className="w-5 h-5" />}
+      delay={100}
+      isDirty={isDirty && !saving}
+      footer={
+        <Button onClick={handleSave} disabled={saving || !isDirty}>
+          {saving ? (
+            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Modification...</>
+          ) : (
+            <><Lock className="w-4 h-4 mr-2" /> Changer le mot de passe</>
+          )}
+        </Button>
+      }
+    >
+      <PasswordInput
+        label="Mot de passe actuel"
+        value={pwd.currentPassword}
+        onChange={(e) => handleChange('currentPassword', e.target.value)}
+        error={errors.currentPassword}
+        placeholder="••••••••"
+        autoComplete="current-password"
+        required
+      />
+      <PasswordInput
+        label="Nouveau mot de passe"
+        value={pwd.newPassword}
+        onChange={(e) => handleChange('newPassword', e.target.value)}
+        error={errors.newPassword}
+        placeholder="••••••••"
+        autoComplete="new-password"
+        required
+      />
+
+      <div>
+        <PasswordInput
+          label="Confirmer le nouveau mot de passe"
+          value={pwd.confirmPassword}
+          onChange={(e) => handleChange('confirmPassword', e.target.value)}
+          error={errors.confirmPassword}
+          placeholder="••••••••"
+          autoComplete="new-password"
+          required
+        />
+        {passwordsMatch && (
+          <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
+            <Check className="w-3 h-3" /> Les mots de passe correspondent
+          </p>
+        )}
+        {passwordsMismatch && (
+          <p className="text-xs text-destructive flex items-center gap-1 mt-1">
+            <AlertTriangle className="w-3 h-3" /> Les mots de passe ne correspondent pas
+          </p>
+        )}
+      </div>
+
+      <div className="bg-muted/40 border border-border rounded-lg p-3 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground mb-1">Règles de robustesse :</p>
+        <ul className="space-y-0.5 list-disc list-inside">
+          <li>Au moins 8 caractères</li>
+          <li>Au moins une majuscule</li>
+          <li>Au moins un chiffre</li>
+          <li>Différent de votre mot de passe actuel</li>
+        </ul>
+      </div>
+    </SettingSection>
+  );
+}
+
+// ============================================================================
+// 🔹 SECTION NOTIFICATIONS
+// ============================================================================
+
+interface NotificationsSectionProps {
+  prefs: {
+    emailNotifications: boolean;
+    orderNotifications: boolean;
+    marketingNotifications: boolean;
+  };
+  hydrated: boolean;
+  onChange: <K extends keyof NotificationsSectionProps['prefs']>(
+    key: K,
+    value: NotificationsSectionProps['prefs'][K]
+  ) => void;
+  onDirtyChange: (dirty: boolean) => void;
+}
+
+const NOTIF_ITEMS: Array<{
+  key: keyof NotificationsSectionProps['prefs'];
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}> = [
+  {
+    key: 'emailNotifications',
+    title: 'Notifications par email',
+    description: 'Recevoir des emails pour les événements importants.',
+    icon: <Mail className="w-5 h-5" />,
+  },
+  {
+    key: 'orderNotifications',
+    title: 'Alertes de commandes',
+    description: 'Notification instantanée pour chaque nouvelle commande.',
+    icon: <Smartphone className="w-5 h-5" />,
+  },
+  {
+    key: 'marketingNotifications',
+    title: 'Promotions & nouveautés',
+    description: 'Recevoir nos offres et nouveaux produits.',
+    icon: <Bell className="w-5 h-5" />,
+  },
+];
+
+function NotificationsSection({
+  prefs,
+  hydrated,
+  onChange,
+  onDirtyChange,
+}: NotificationsSectionProps) {
+  useEffect(() => {
+    onDirtyChange(false); // Pas de save manuel → pas de dirty
+  }, [onDirtyChange]);
+
+  if (!hydrated) {
+    return (
+      <SettingSection
+        title="Notifications"
+        description="Choisissez comment vous souhaitez être prévenu."
+        icon={<Bell className="w-5 h-5" />}
+        delay={100}
+      >
+        <div className="flex items-center justify-center py-8 text-muted-foreground">
+          <Loader2 className="w-5 h-5 animate-spin" />
+        </div>
+      </SettingSection>
+    );
+  }
+
+  return (
+    <SettingSection
+      title="Notifications"
+      description="Choisissez comment vous souhaitez être prévenu. Vos préférences sont sauvegardées automatiquement."
+      icon={<Bell className="w-5 h-5" />}
+      delay={100}
+    >
+      {NOTIF_ITEMS.map((item) => (
+        <div
+          key={item.key}
+          className="flex items-center justify-between gap-4 py-2 border-b border-border/40 last:border-0"
+        >
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <span className="text-muted-foreground mt-0.5">{item.icon}</span>
+            <div className="min-w-0">
+              <p className="font-medium text-sm">{item.title}</p>
+              <p className="text-xs text-muted-foreground">{item.description}</p>
+            </div>
+          </div>
+          <Switch
+            checked={prefs[item.key]}
+            onCheckedChange={(checked) => onChange(item.key, checked)}
+            aria-label={item.title}
+          />
+        </div>
+      ))}
+
+      <p className="text-xs text-muted-foreground pt-2">
+        💡 Stockées localement dans votre navigateur. Une synchronisation serveur est prévue bientôt.
+      </p>
+    </SettingSection>
+  );
+}
+
+// ============================================================================
+// 🔹 SECTION APPARENCE
+// ============================================================================
+
+interface AppearanceSectionProps {
+  theme: 'light' | 'dark';
+  onThemeChange: (theme: 'light' | 'dark') => void;
+  onDirtyChange: (dirty: boolean) => void;
+}
+
+function AppearanceSection({ theme, onThemeChange, onDirtyChange }: AppearanceSectionProps) {
+  useEffect(() => {
+    onDirtyChange(false);
+  }, [onDirtyChange]);
+
+  return (
+    <SettingSection
+      title="Apparence"
+      description="Personnalisez l'apparence de l'interface."
+      icon={<Palette className="w-5 h-5" />}
+      delay={100}
+    >
+      <div>
+        <label className="text-sm font-medium block mb-2">Thème</label>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => onThemeChange('light')}
+            className={`p-4 rounded-xl border-2 text-left transition-all ${
+              theme === 'light'
+                ? 'border-accent bg-accent/5'
+                : 'border-border hover:border-accent/50'
+            }`}
+          >
+            <div className="w-full h-16 rounded-lg bg-gradient-to-br from-white to-gray-100 border border-gray-200 mb-2" />
+            <p className="font-medium text-sm">Clair</p>
+            <p className="text-xs text-muted-foreground">Idéal en plein jour</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => onThemeChange('dark')}
+            className={`p-4 rounded-xl border-2 text-left transition-all ${
+              theme === 'dark'
+                ? 'border-accent bg-accent/5'
+                : 'border-border hover:border-accent/50'
+            }`}
+          >
+            <div className="w-full h-16 rounded-lg bg-gradient-to-br from-gray-900 to-gray-700 border border-gray-800 mb-2" />
+            <p className="font-medium text-sm">Sombre</p>
+            <p className="text-xs text-muted-foreground">Confort pour les yeux</p>
+          </button>
+        </div>
+      </div>
+    </SettingSection>
   );
 }
