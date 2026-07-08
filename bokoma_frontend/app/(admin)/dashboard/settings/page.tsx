@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store';
-import { useUiStore } from '@/store';
+import { useTheme } from 'next-themes';
 import { useNotificationPrefs } from '@/hooks/useNotificationPrefs';
 import { userApi } from '@/services';
 import { profileSchema, passwordSchema } from '@/lib/validators/settings';
@@ -65,7 +65,14 @@ type TabId = (typeof TABS)[keyof typeof TABS];
 export default function SettingsPage() {
   const { user, isLoading } = useRequireAdmin();
   const setUser = useAuthStore((s) => s.setUser);
-  const { theme, setTheme } = useUiStore();
+  // ✅ Source de vérité unique pour le thème : `next-themes` (déjà câblé
+  //    dans providers.tsx). Le bouton Night/Light du header et le toggler
+  //    de cette page partagent maintenant la même logique → class="dark"
+  //    sur <html>, ce qui fait basculer tout Tailwind `dark:*`.
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  const theme = (mounted && resolvedTheme === 'dark' ? 'dark' : 'light') as 'light' | 'dark';
   const { prefs, hydrated: prefsHydrated, updatePref } = useNotificationPrefs();
 
   const [activeTab, setActiveTab] = useState<TabId>(TABS.PROFILE);
@@ -216,7 +223,6 @@ function ProfileSection({ user, onDirtyChange, onRegisterSave }: ProfileSectionP
     () => ({
       firstName: user.firstName || '',
       lastName: user.lastName || '',
-      phone: user.phone || '',
     }),
     [user]
   );
@@ -265,7 +271,6 @@ function ProfileSection({ user, onDirtyChange, onRegisterSave }: ProfileSectionP
       const updated = await userApi.updateProfile({
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        phone: form.phone.trim() || undefined,
       });
       // ✅ Mettre à jour le store pour que la Navbar reflète le nouveau nom
       setUser({ ...user, ...updated });
@@ -344,12 +349,10 @@ function ProfileSection({ user, onDirtyChange, onRegisterSave }: ProfileSectionP
 
       <Input
         label="Téléphone"
-        value={form.phone}
-        onChange={(e) => handleChange('phone', e.target.value)}
-        error={errors.phone}
-        placeholder="+225 07 07 07 07 07"
+        value={user.phone || ''}
+        disabled
         icon={<Phone className="w-4 h-4" />}
-        helperText="Format attendu : +225 suivi de 8 à 10 chiffres (numéro ivoirien)."
+        helperText="Le téléphone est lié à votre compte et ne peut pas être modifié ici."
         autoComplete="tel"
       />
     </SettingSection>
