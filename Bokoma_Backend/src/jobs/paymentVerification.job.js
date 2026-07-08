@@ -61,10 +61,45 @@ async function verifyPendingPayments() {
         order.payment.lastVerificationAt = now;
 
         if (result.success) {
-          order.payment.status = 'paid';
-          order.payment.paidAt = new Date();
-          order.payment.amountPaid = result.amount || order.total;
-          order.status = 'confirmed';
+          // 🐛 FIX : ne plus écraser amountPaid avec order.total quand le
+          // paiement est un acompte (cash_on_delivery). À la création de la
+          // commande, payment-flow.service.js a déjà calculé paymentAmount
+          // (= 50% du total) et remainingAmount ; on doit les conserver.
+          // CinetPay renvoie rarement le montant exact via getStatus, donc le
+          // fallback `result.amount || order.total` corrompt les paiements
+          // partiels en faisant apparaître le total comme "montant payé".
+          const isPartial =
+            order.payment.method === 'cash_on_delivery' ||
+            (order.payment.remainingAmount || 0) > 0;
+
+          if (isPartial) {
+            order.payment.status = 'partial';
+            order.payment.paidAt = new Date();
+            // On ne réécrase PAS amountPaid avec order.total : on garde l'acompte
+            // déjà calculé à la création (50% pour cash_on_delivery). Si le SDK
+            // renvoie un montant et qu'il est cohérent, on l'utilise, sinon on
+            // laisse la valeur existante (= acompte).
+            if (
+              typeof result.amount === 'number' &&
+              result.amount > 0 &&
+              result.amount <= order.total
+            ) {
+              order.payment.amountPaid = result.amount;
+              order.payment.remainingAmount = order.total - result.amount;
+            }
+            // Si le statut de la commande était encore 'pending' côté front,
+            // on le passe à 'confirmed' (la commande peut partir en prépa dès
+            // que l'acompte est encaissé).
+            if (order.status === 'pending') {
+              order.status = 'confirmed';
+            }
+          } else {
+            order.payment.status = 'paid';
+            order.payment.paidAt = new Date();
+            order.payment.amountPaid = result.amount || order.total;
+            order.payment.remainingAmount = 0;
+            order.status = 'confirmed';
+          }
           await order.save();
 
           updatedCount++;

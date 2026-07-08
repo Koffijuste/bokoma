@@ -32,10 +32,34 @@ async function checkExpiredPayments() {
           const result = await paymentService.verifyPayment(order.payment.transactionId);
 
           if (result.success) {
-            order.payment.status = 'paid';
-            order.payment.paidAt = new Date();
-            order.payment.amountPaid = result.amount || order.total;
-            order.status = 'confirmed';
+            // 🐛 FIX : cf. paymentVerification.job.js — préserver l'acompte
+            // pour les paiements partiels (cash_on_delivery). Le fallback
+            // `result.amount || order.total` écrasait la valeur correcte.
+            const isPartial =
+              order.payment.method === 'cash_on_delivery' ||
+              (order.payment.remainingAmount || 0) > 0;
+
+            if (isPartial) {
+              order.payment.status = 'partial';
+              order.payment.paidAt = new Date();
+              if (
+                typeof result.amount === 'number' &&
+                result.amount > 0 &&
+                result.amount <= order.total
+              ) {
+                order.payment.amountPaid = result.amount;
+                order.payment.remainingAmount = order.total - result.amount;
+              }
+              if (order.status === 'pending') {
+                order.status = 'confirmed';
+              }
+            } else {
+              order.payment.status = 'paid';
+              order.payment.paidAt = new Date();
+              order.payment.amountPaid = result.amount || order.total;
+              order.payment.remainingAmount = 0;
+              order.status = 'confirmed';
+            }
             await order.save();
 
             if (order.user) {

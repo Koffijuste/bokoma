@@ -103,16 +103,51 @@ router.post(
 // ─── Handlers internes ──────────────────────────────────────────────────────
 
 async function handlePaymentSuccess(order, transactionId, amount) {
-  order.payment.status = 'paid';
   order.payment.paidAt = new Date();
   order.payment.transactionId = transactionId;
   order.payment.provider = 'cinetpay';
-  order.payment.amountPaid = Number(amount) || order.total;
-  order.status = 'confirmed';
+
+  // 🐛 FIX : ne pas écraser amountPaid avec order.total quand le paiement
+  // est un acompte (cash_on_delivery = 50% d'acompte). Le `amount` envoyé
+  // par CinetPay dans le webhook correspond à l'acompte encaissé, pas au
+  // total de la commande. Fallback `Number(amount) || order.total` était
+  // faux → toute la UI admin affichait le total au lieu de l'acompte.
+  const isPartial =
+    order.payment.method === 'cash_on_delivery' ||
+    (order.payment.remainingAmount || 0) > 0;
+
+  const receivedAmount = Number(amount);
+
+  if (isPartial) {
+    order.payment.status = 'partial';
+    if (Number.isFinite(receivedAmount) && receivedAmount > 0 && receivedAmount <= order.total) {
+      // CinetPay a renvoyé un montant cohérent (≤ total) : on l'utilise
+      // comme acompte et on recalcule le reste.
+      order.payment.amountPaid = receivedAmount;
+      order.payment.remainingAmount = order.total - receivedAmount;
+    } else {
+      // Pas de montant exploitable : on CONSERVE l'acompte déjà calculé
+      // à la création de la commande (payment-flow.service.js).
+      // Ne PAS écrire order.total ici.
+    }
+    if (order.status === 'pending') {
+      order.status = 'confirmed';
+    }
+  } else {
+    // Paiement 100% (mobile_money / card)
+    order.payment.status = 'paid';
+    order.payment.amountPaid = Number.isFinite(receivedAmount) && receivedAmount > 0
+      ? receivedAmount
+      : order.total;
+    order.payment.remainingAmount = 0;
+    order.status = 'confirmed';
+  }
 
   order.statusHistory.push({
-    status: 'confirmed',
-    note: `Paiement confirmé via webhook CinetPay (${transactionId})`,
+    status: order.status,
+    note: isPartial
+      ? `Acompte confirmé via webhook CinetPay (${transactionId}) — reste à encaisser à la livraison`
+      : `Paiement confirmé via webhook CinetPay (${transactionId})`,
     changedAt: new Date(),
   });
 
