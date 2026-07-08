@@ -71,27 +71,38 @@ export function AdminSidebar() {
         )}
         data-sidebar-open={sidebarOpen}
       >
-        {/* Bouton toggle (desktop seulement) */}
+        {/* Bouton toggle (desktop seulement) — volontairement bien visible :
+            44×44 (WCAG 2.5.5), icône 20px et fond accent quand la sidebar
+            est repliée pour qu'on le repère immédiatement. */}
         <button
           onClick={handleToggle}
+          title={sidebarOpen ? 'Réduire le menu' : 'Ouvrir le menu de navigation'}
+          aria-label={sidebarOpen ? 'Réduire le menu de navigation' : 'Ouvrir le menu de navigation'}
           className={cn(
-            'absolute top-20 -right-3 p-2 rounded-full bg-card border border-border',
-            'hover:bg-muted transition-all shadow-lg hover:shadow-xl hover:scale-110',
-            'hidden sm:block' // ✅ Caché sur mobile
+            // Taille ≥ 44×44px (cible tactile conforme WCAG)
+            'absolute top-20 -right-4 z-10 flex items-center justify-center',
+            'w-11 h-11 rounded-full border-2 transition-all duration-200',
+            // Visibilité : très proéminent quand la sidebar est repliée
+            // (état par défaut, c'est là que l'utilisateur cherche le toggle) ;
+            // discret quand la sidebar est dépliée (pour ne pas distraire).
+            sidebarOpen
+              ? 'bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted shadow-sm hover:shadow-md'
+              : 'bg-accent border-accent text-accent-foreground shadow-lg shadow-accent/30 hover:scale-105 hover:shadow-xl',
+            'active:scale-95',
+            'hidden sm:flex' // visible uniquement sur desktop
           )}
-          aria-label={sidebarOpen ? 'Réduire le menu' : 'Élargir le menu'}
         >
           {sidebarOpen ? (
             <ChevronLeft className="w-4 h-4" />
           ) : (
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
           )}
         </button>
 
-        {/* Bouton fermer (mobile seulement) */}
+        {/* Bouton fermer (mobile seulement) — un peu plus grand pour être facilement cliquable au tactile */}
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-muted transition-colors sm:hidden"
+          className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center rounded-full bg-background/80 backdrop-blur-sm border border-border hover:bg-muted transition-colors sm:hidden"
           aria-label="Fermer le menu"
         >
           <X className="w-5 h-5" />
