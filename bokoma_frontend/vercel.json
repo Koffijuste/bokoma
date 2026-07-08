@@ -71,8 +71,8 @@
       "statusCode": 301
     },
     {
-      "source": "/admin/:path*",
-      "destination": "/dashboard/:path*",
+      "source": "/admin/(.*)",
+      "destination": "/dashboard/$1",
       "statusCode": 301
     }
   ]

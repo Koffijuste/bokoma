@@ -85,7 +85,9 @@ const nextConfig = {
     return [
       {
         // Toutes les routes
-        source: '/:path*',
+        // Note: ancien `/:path*` supprimé (path-to-regexp v6+ exige prefix+suffix
+        // pour les repeating params). `/(.*)` regex matche tout de manière sûre.
+        source: '/(.*)',
         headers: [
           {
             key: 'Strict-Transport-Security',
@@ -117,7 +119,9 @@ const nextConfig = {
       },
       {
         // Les uploads Cloudinary restent servies sans cookies (public CDN)
-        source: '/_next/image:path*',
+        // Note: ancien `/_next/image:path*` remplacé par `/_next/image(.*)`
+        // (path-to-regexp v6+ n'accepte plus les repeating params sans suffix).
+        source: '/_next/image(.*)',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
