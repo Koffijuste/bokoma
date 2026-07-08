@@ -25,22 +25,12 @@ const IP_ECHO_SERVICES = [
   { name: 'icanhaz', url: 'https://icanhazip.com',                 parse: (d) => d.trim() },
 ];
 
-const isDebugEnabled = () => {
-  // Off par défaut si DEBUG_ROUTES===false, sinon on suit NODE_ENV
-  if (process.env.ENABLE_DEBUG_ROUTES === 'false') return false;
-  // En prod, on l'active par défaut (sinon le user ne peut pas récupérer son IP)
-  // — il peut toujours la couper via la variable ci-dessus.
-  return true;
-};
-
 // GET /api/v1/debug/ip
 // Renvoie l'IP sortante du conteneur (celle que CinetPay verra).
 exports.getOutboundIp = async (req, res) => {
-  if (!isDebugEnabled()) {
-    return res.status(404).json({ success: false, message: 'Not found' });
-  }
-
   const errors = [];
+
+  console.log('[debug] /api/v1/debug/ip hit — fetching outbound IP');
 
   for (const svc of IP_ECHO_SERVICES) {
     try {
