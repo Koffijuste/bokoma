@@ -33,17 +33,29 @@ export const STORAGE_KEYS = {
 } as const;
 
 // ============================================================================
-// 🔹 PUBLIC PATHS — Ré-export depuis `./public-paths.ts`
+// 🔹 PUBLIC PATHS — Source de vérité unique pour les routes publiques
+// ⚠️ Tout ce qui appelle ce tableau DOIT aussi mettre à jour middleware.ts
+// si tu ajoutes une nouvelle route publique (sinon l'utilisateur se fait
+// rediriger à tort par l'Edge avant même que le client ne se charge).
 // ============================================================================
-// La liste vit dans `./public-paths.ts` (single source of truth) pour pouvoir
-// être importée à la fois par le code client (hooks, services) ET par le
-// middleware Edge, sans risquer une désynchronisation.
-//
-// Re-export ici pour rétro-compat : tout le code qui faisait
-// `import { PUBLIC_PATHS, isPublicPath } from '@/constants'` continue de
-// fonctionner sans changement.
-// ============================================================================
-export { PUBLIC_PATHS, isPublicPath } from './public-paths';
+export const PUBLIC_PATHS: readonly string[] = [
+  '/',
+  '/products',
+  '/search',
+  '/categories',
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot',
+  '/auth/reset-password',
+  '/api/v1/health',
+] as const;
+
+export const isPublicPath = (path: string): boolean => {
+  if (!path) return false;
+  return PUBLIC_PATHS.some(
+    (p) => path === p || path.startsWith(p + '/'),
+  );
+};
 
 // ============================================================================
 // 🔹 ROUTES (pages frontend — pour <Link href={...}>)
