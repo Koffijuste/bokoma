@@ -16,6 +16,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { jwtDecode } from 'jwt-decode';
+import { isPublicPath } from '@/constants/public-paths';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -69,16 +70,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  // 1) Routes 100% publiques → on ne touche à rien
-  const isPublic =
-    pathname === '/' ||
-    pathname === '/products' ||
-    pathname === '/search' ||
-    pathname === '/categories' ||
-    pathname.startsWith('/auth/') ||
-    pathname.startsWith('/api/v1/health');
-
-  if (isPublic) {
+  // 1) Routes 100% publiques → on ne touche à rien.
+  // Source unique : `@/constants/public-paths.ts` — importé plus haut.
+  // Si tu ajoutes une nouvelle route publique, AJOUTE-LA dans public-paths.ts.
+  // Pas besoin de toucher ce fichier.
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
