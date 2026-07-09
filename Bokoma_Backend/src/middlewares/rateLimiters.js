@@ -51,8 +51,23 @@ const apiLimiter = rateLimit({
   },
 });
 
+// 🛠  Routes /debug (admin-only). 20 hits / 15 min / IP — un admin qui
+//     whiteliste CinetPay n'a besoin de taper la commande que 2-3 fois max.
+//     Au-delà, on bloque (anti enumeration IP-echo services / anti scan).
+const debugLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Trop de requêtes sur /debug. Réessayez dans 15 minutes.',
+  },
+});
+
 module.exports = {
   authStrictLimiter,
   authRegisterLimiter,
   apiLimiter,
+  debugLimiter,
 };

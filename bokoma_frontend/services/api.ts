@@ -87,12 +87,17 @@ class ApiClient {
           return Promise.reject(this.toApiError(error, 'Délai de réponse dépassé'));
         }
 
-        // Routes auth exclues du refresh automatique
-        // /auth/me inclus : un 401 sur /me signifie "pas de session",
-        // il n'y a rien à refresh. Empêche une cascade inutile
-        // me→refresh→401 sur chaque page publique.
+        // Routes auth exclues du refresh automatique.
+        // NB (09/07/2026) : /auth/me a été RETIRÉ de cette liste. Si le
+        // backend rejette /auth/me en 401, c'est peut-être juste parce que
+        // l'access token est expiré et que le refresh token peut encore
+        // sauver la session. On tente donc le refresh par défaut. Si
+        // vraiment aucune session n'existe, /auth/refresh renverra 401 et
+        // l'utilisateur sera déconnecté proprement (cf. onSessionExpired).
+        // Seul /auth/refresh lui-même reste exempté pour éviter une cascade
+        // refresh → 401 → refresh → 401 → ...
         const isAuthRoute = ['/auth/login', '/auth/register', '/auth/refresh',
-          '/auth/me', '/auth/logout', '/auth/forgot-password', '/auth/reset-password']
+          '/auth/logout', '/auth/forgot-password', '/auth/reset-password']
           .some(r => config?.url?.includes(r));
 
         // ── Auto-refresh sur 401 ────────────────────────────────────────────

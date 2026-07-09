@@ -16,7 +16,13 @@ if (missing.length > 0) {
 module.exports = {
   access: {
     secret: process.env.JWT_ACCESS_SECRET,
-    expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '1h',
+    // ✅ Bug fix (09/07/2026) : bumped default 1h → 24h. À 1h, l'utilisateur
+    // se faisait kicker de /dashboard toutes les heures alors que le refresh
+    // token (7j) était encore valide — combinée à un store Zustand persisté,
+    // ça créait une boucle de redirection sur /auth/login. 24h reste
+    // raisonnable côté sécurité (le refreshToken peut révoquer côté DB).
+    // Override via JWT_ACCESS_EXPIRES_IN si tu veux tuner.
+    expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h',
     issuer: process.env.JWT_ISSUER || 'bokoma-api',
     audience: process.env.JWT_AUDIENCE || 'bokoma-users',
   },

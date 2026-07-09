@@ -28,9 +28,29 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
   
-  const { login, isLoading, isAuthenticated } = useAuth();
+  const { login, isLoading, isAuthenticated, fetchUser } = useAuth();
 
-  // ✅ Redirection automatique si déjà authentifié
+  // ✅ Bug fix (09/07/2026) : on resynchronise l'état Zustand avec la
+  //    réalité du cookie AVANT de décider de rediriger. Sinon, un user
+  //    persisté ("Morning") + access token expiré déclenchait une boucle :
+  //    Zustand.isAuthenticated=true → redirect /dashboard → middleware
+  //    rejette (cookie expiré) → 307 vers /auth/login → Zustand toujours
+  //    isAuthenticated=true → redirect /dashboard → … ad vitam.
+  //
+  //    En appelant fetchUser() au montage, /auth/me (avec auto-refresh
+  //    côté interceptor) revalide la session. Si le cookie est mort,
+  //    Zustand passe à user=null et le formulaire s'affiche normalement.
+  useEffect(() => {
+    if (!isLoading) {
+      fetchUser();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ✅ Redirection automatique si vraiment authentifié
+  // (le fetchUser ci-dessus a attendu que isLoading retombe avant de
+  // mettre à jour Zustand, donc cette branche ne se déclenche plus sur
+  // un état stale)
   useEffect(() => {
     if (isAuthenticated && !isLoading && !isRedirecting) {
       setIsRedirecting(true);

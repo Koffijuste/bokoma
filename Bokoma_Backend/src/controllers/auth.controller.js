@@ -53,7 +53,7 @@ exports.register = async (req, res, next) => {
 
     res.cookie('bokoma_access_token', accessToken, {
       ...cookieOptions,
-      maxAge: 60 * 60 * 1000,
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
     res.cookie('bokoma_refresh_token', refreshToken, {
@@ -118,7 +118,7 @@ exports.login = async (req, res, next) => {
 
     res.cookie('bokoma_access_token', accessToken, {
       ...cookieOptions,
-      maxAge: 60 * 60 * 1000,
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
     res.cookie('bokoma_refresh_token', refreshToken, {
@@ -176,7 +176,7 @@ exports.refreshToken = async (req, res, next) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 60 * 60 * 1000,
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
     res.json({ success: true, message: 'Token rafraîchi', accessToken: newAccessToken });

@@ -136,6 +136,26 @@ export function useRequireAuth(redirectTo?: string) {
   const loginRoute = r(ROUTES?.AUTH?.LOGIN, '/auth/login');
   const target = r(redirectTo, loginRoute);
 
+  // ✅ Bug fix (09/07/2026) : si on arrive sur /auth/login avec un store
+  // Zustand stale (user persisté) mais un cookie httpOnly expiré, on tombait
+  // dans une boucle de redirection :
+  //   Zustand.isAuthenticated=true → redirect vers from=/dashboard
+  //   /dashboard → middleware (token expiré) → 307 vers /auth/login
+  //   /auth/login → Zustand.isAuthenticated=true → redirect vers /dashboard
+  //   … ad vitam
+  //
+  // useAuth() NE fetch PAS sur les pages publiques (cf. useAuth.ts), donc le
+  // store reste stale sur /auth/login. On force ici un fetchUser() sur les
+  // pages auth pour synchroniser l'état avec la réalité du cookie. Si le
+  // cookie est mort, fetchUser met user=null → isAuthenticated=false → plus
+  // de redirect → le formulaire de login s'affiche normalement.
+  useEffect(() => {
+    if (isAuthPath(pathname) && !auth.isLoading) {
+      auth.fetchUser();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
   useEffect(() => {
     if (auth.isLoading) return;
 

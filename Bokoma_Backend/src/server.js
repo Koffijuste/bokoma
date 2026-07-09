@@ -112,9 +112,16 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // ─── Health check (avant rate limiter global) ─────────────────────────────────
 app.use('/api/v1/health', require('./routes/health.routes'));
 
-// ─── Debug (avant rate limiter global aussi — usage ponctuel hors production) ───
-// Sert à récupérer l'IP sortante du conteneur en dev/staging. Jamais exposé en prod.
-if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEBUG_ROUTES !== 'false') {
+// ─── Debug — admin-only via middleware (defense in depth) ────────────────────
+// Sert à récupérer l'IP sortante du conteneur (utile en prod pour whitelister
+// CinetPay). La protection n'est PLUS basée sur NODE_ENV (sinon l'admin n'y
+// aurait plus accès en prod, ce qui est précisément le besoin). À la place :
+//   - Auth + RBAC appliqués directement dans debug.routes.js (protect + restrictTo('admin'))
+//   - ENABLE_DEBUG_ROUTES=false agit comme kill switch d'urgence
+//   - debugLimiter (20/15min) bloque les scans
+// On garde le montage AVANT le rate limiter global pour ne pas être étranglé
+// par apiLimiter sur des hits ponctuels de diagnostic.
+if (process.env.ENABLE_DEBUG_ROUTES !== 'false') {
   app.use('/api/v1/debug', require('./routes/debug.routes'));
 }
 

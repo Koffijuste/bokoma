@@ -1,6 +1,6 @@
 // src/controllers/debug.controller.js
 //
-// ⚠️  ROUTE DE DIAGNOSTIC — NE PAS LAISSER EN PROD INDEFIIMENT
+// 🛠  ROUTE DE DIAGNOSTIC — ADMIN ONLY (cf. debug.routes.js)
 //
 // Sert à récupérer l'IP **sortante** que Railway utilise pour appeler
 // CinetPay (et n'importe quel service externe). Nécessaire parce que
@@ -8,14 +8,16 @@
 // et Railway ne documente pas ses IPs de sortie de manière stable.
 //
 // Quand CinetPay renvoie apiCode=2011 / "This Ip is not withlisted",
-// il faut :
-//   1. curl https://bokoma-production.up.railway.app/api/v1/debug/ip
+// il faut (en tant qu'admin) :
+//   1. curl -H "Authorization: Bearer $ADMIN_JWT" \
+//          https://bokoma-production.up.railway.app/api/v1/debug/ip
 //   2. ajouter l'IP renvoyée dans le dashboard CinetPay (IP whitelist)
 //   3. tester un paiement
 //
-// Désactivable via ENABLE_DEBUG_ROUTES=false (par défaut, actif).
+// Kill switch d'urgence : ENABLE_DEBUG_ROUTES=false côté serveur.
 
 const axios = require('axios');
+const logger = require('../utils/logger');
 
 // Plusieurs services d'écho IP en fallback — si l'un est down, on tente le suivant.
 const IP_ECHO_SERVICES = [
@@ -27,10 +29,21 @@ const IP_ECHO_SERVICES = [
 
 // GET /api/v1/debug/ip
 // Renvoie l'IP sortante du conteneur (celle que CinetPay verra).
+// Protégée par protect + restrictTo('admin') au niveau du routeur.
 exports.getOutboundIp = async (req, res) => {
   const errors = [];
 
-  console.log('[debug] /api/v1/debug/ip hit — fetching outbound IP');
+  // 🪵 Audit log : on trace QUI a demandé l'IP et depuis OÙ. C'est une route
+  // sensible (leak d'infra Railway + IP de sortie = info de reconnaissance
+  // réseau). Toute consultation doit être loggée.
+  logger.info('debug', 'ip_lookup', {
+    userId:        req.user?.userId,
+    email:         req.user?.email,
+    role:          req.user?.role,
+    requestIp:     req.ip,
+    userAgent:     req.get('user-agent'),
+    timestamp:     new Date().toISOString(),
+  });
 
   for (const svc of IP_ECHO_SERVICES) {
     try {

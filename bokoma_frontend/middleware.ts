@@ -1,4 +1,4 @@
-// middleware.ts - VERSION DURCIE (RBAC + JWT decode)
+// middleware.ts - VERSION DURCIE (RBAC + JWT decode + refresh fallback)
 // ============================================================================
 // 🛡️  AUTHENTIFICATION + RBAC — Edge middleware (s'exécute avant chaque page)
 // ============================================================================
@@ -7,11 +7,17 @@
 //   APRÈS → on décode le JWT, on vérifie son expiration, et on impose un rôle
 //           spécifique pour /dashboard/* (admin ou manager).
 //
-// Note : la vérification de SIGNATURE se fait côté backend (cf.
-// Bokoma_Backend/src/middlewares/auth.js → jwt.verify). Un attaquant qui
-// forge un JWT avec role=admin passera le middleware mais se fera jeter par
-// toutes les routes /api/v1/* protégées (defense-in-depth : le backend reste
-// la source de vérité pour l'autorisation).
+// Bug fix 09/07/2026 — boucle de redirection sur /dashboard :
+//   AVANT → access expiré = 307 vers /auth/login. Sur /auth/login, Zustand
+//           avait encore le user persisté → useEffect redirigeait vers
+//           /dashboard → middleware rejetait → 307 → boucle infinie.
+//   APRÈS → si access expiré MAIS refresh token encore valide, on laisse
+//           passer la requête. L'interceptor axios (services/api.ts) appelle
+//           /auth/refresh sur le premier 401, obtient un nouveau access
+//           token, et la session reprend normalement. Aucun flash, aucun
+//           redirect. La sécurité reste identique : la SIGNATURE du JWT est
+//           validée côté backend (defense-in-depth). Le refresh token peut
+//           être révoqué côté DB (cf. auth.controller.js → logout).
 // ============================================================================
 
 import { type NextRequest, NextResponse } from 'next/server';
@@ -55,6 +61,38 @@ function decodeAccessToken(token: string | undefined): BokomaJwtPayload | null {
   }
 }
 
+/**
+ * Décode un refresh JWT sans vérifier la signature. On l'utilise ici
+ * uniquement pour vérifier SON expiration avant de laisser passer une
+ * requête alors que l'access token est mort — sans toucher la signature,
+ * qui sera re-vérifiée par /auth/refresh côté backend.
+ */
+function decodeRefreshToken(token: string | undefined): BokomaJwtPayload | null {
+  if (!token) return null;
+  try {
+    const decoded = jwtDecode<BokomaJwtPayload>(token);
+    if (typeof decoded.exp !== 'number') return null;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (decoded.exp <= nowSec) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Construit un Set de headers `x-user-*` à partir d'un payload JWT (qu'il
+ * vienne de l'access ou du refresh token). On l'attache à la requête
+ * interne pour les Server Components downstream (cf. app/(admin)/layout.tsx).
+ */
+function userHeadersFromPayload(payload: BokomaJwtPayload): Headers {
+  const forwardedHeaders = new Headers();
+  if (payload.userId) forwardedHeaders.set('x-user-id', String(payload.userId));
+  if (payload.role)   forwardedHeaders.set('x-user-role', String(payload.role));
+  if (payload.email)  forwardedHeaders.set('x-user-email', String(payload.email));
+  return forwardedHeaders;
+}
+
 // ─── Middleware principal ───────────────────────────────────────────────────
 
 export function middleware(request: NextRequest) {
@@ -91,18 +129,39 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 3) Lecture du token d'accès depuis les cookies
-  const token = request.cookies.get('bokoma_access_token')?.value;
-  const payload = decodeAccessToken(token);
+  // 3) Lecture des tokens depuis les cookies
+  const accessToken = request.cookies.get('bokoma_access_token')?.value;
+  const refreshToken = request.cookies.get('bokoma_refresh_token')?.value;
+  const accessPayload = decodeAccessToken(accessToken);
+  const refreshPayload = decodeRefreshToken(refreshToken);
 
-  // 4) Pas de token valide → redirection vers login (avec retour)
-  if (!payload) {
+  // 4) Pas d'access token valide
+  if (!accessPayload) {
+    // 4a) Refresh encore valide → on laisse passer. L'interceptor axios
+    //     appellera /auth/refresh au premier 401, le backend re-signe un
+    //     access token, et la suite fonctionne sans flash ni redirect.
+    //     Aucun risque sécurité : la SIGNATURE du JWT est validée par le
+    //     backend, et le refresh token peut être révoqué (cf. logout).
+    if (refreshPayload) {
+      const forwardedHeaders = new Headers(request.headers);
+      const userHeaders = userHeadersFromPayload(refreshPayload);
+      userHeaders.forEach((v, k) => forwardedHeaders.set(k, v));
+      return NextResponse.next({
+        request: { headers: forwardedHeaders },
+      });
+    }
+
+    // 4b) Aucun token valide (access expiré + refresh expiré/absent)
+    //     → redirection vers login. On nettoie les deux cookies pourri pour
+    //     éviter une boucle si l'un des deux est malformé sans être expiré.
     const url = new URL('/auth/login', request.url);
     url.searchParams.set('from', pathname);
     const response = NextResponse.redirect(url);
-    // Nettoie un éventuel cookie pourri pour éviter une boucle
-    if (token) {
+    if (accessToken) {
       response.cookies.delete('bokoma_access_token');
+    }
+    if (refreshToken) {
+      response.cookies.delete('bokoma_refresh_token');
     }
     return response;
   }
@@ -112,7 +171,7 @@ export function middleware(request: NextRequest) {
     pathname === '/dashboard' || pathname.startsWith('/dashboard/');
 
   if (isAdminRoute) {
-    const role = payload.role;
+    const role = accessPayload.role;
     if (!role || !ADMIN_ROLES.has(role)) {
       // Rôle insuffisant : on renvoie vers l'accueil (pas d'info leak sur
       // l'existence de la route). On efface le cookie pour forcer un
@@ -126,9 +185,8 @@ export function middleware(request: NextRequest) {
   // 6) Token valide (et rôle OK si nécessaire) → on enrichit les headers
   // pour les Server Components downstream avec les infos user.
   const forwardedHeaders = new Headers(request.headers);
-  if (payload.userId) forwardedHeaders.set('x-user-id', String(payload.userId));
-  if (payload.role)   forwardedHeaders.set('x-user-role', String(payload.role));
-  if (payload.email)  forwardedHeaders.set('x-user-email', String(payload.email));
+  const userHeaders = userHeadersFromPayload(accessPayload);
+  userHeaders.forEach((v, k) => forwardedHeaders.set(k, v));
 
   return NextResponse.next({
     request: { headers: forwardedHeaders },
