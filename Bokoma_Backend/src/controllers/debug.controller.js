@@ -8,9 +8,8 @@
 // et Railway ne documente pas ses IPs de sortie de manière stable.
 //
 // Quand CinetPay renvoie apiCode=2011 / "This Ip is not withlisted",
-// il faut (en tant qu'admin) :
-//   1. curl -H "Authorization: Bearer $ADMIN_JWT" \
-//          https://bokoma-production.up.railway.app/api/v1/debug/ip
+// il faut :
+//   1. curl https://bokoma-backend-production.up.railway.app/api/v1/debug/ip
 //   2. ajouter l'IP renvoyée dans le dashboard CinetPay (IP whitelist)
 //   3. tester un paiement
 //
