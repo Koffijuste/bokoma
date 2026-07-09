@@ -9,7 +9,7 @@
 //
 // Quand CinetPay renvoie apiCode=2011 / "This Ip is not withlisted",
 // il faut :
-//   1. curl https://bokoma-backend-production.up.railway.app/api/v1/debug/ip
+//   1. curl https://bokoma-production.up.railway.app/api/v1/debug/ip
 //   2. ajouter l'IP renvoyée dans le dashboard CinetPay (IP whitelist)
 //   3. tester un paiement
 //
