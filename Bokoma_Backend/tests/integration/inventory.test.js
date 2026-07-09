@@ -80,6 +80,22 @@ describe('inventory.service', () => {
       expect(updated.soldCount).toBe(8);
     });
 
+    it('empêche l\'overselling lors de décréments concurrents', async () => {
+      const product = await createProduct(category, { totalStock: 5 });
+
+      const results = await Promise.allSettled([
+        decrementStock([{ product: product._id, quantity: 3 }]),
+        decrementStock([{ product: product._id, quantity: 3 }]),
+      ]);
+
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+
+      const updated = await Product.findById(product._id);
+      expect(updated.totalStock).toBe(2);
+      expect(updated.soldCount).toBe(3);
+    });
+
     it('rejette si stock insuffisant (variante)', async () => {
       const product = await createProductWithVariants(category, [
         { size: 'L', stock: 1 },

@@ -62,5 +62,13 @@
     "eslint-config-next": "^15.1.0",
     "madge": "^8.0.0"
   },
+  "overrides": {
+    "dompurify": "^3.4.11",
+    "form-data": "^4.0.6",
+    "js-yaml": "^4.1.2",
+    "next": {
+      "postcss": "^8.5.16"
+    }
+  },
   "type": "module"
 }

@@ -45,24 +45,28 @@ app.use(helmet({
 }));
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-// ✅ Autorise plusieurs origines : localhost (dev) + URL Railway/Vercel frontend (prod)
-//    + toutes les previews Railway (*.up.railway.app) et Vercel (*.vercel.app)
-const allowedOrigins = [
-  process.env.CLIENT_URL,
+// ✅ CORS strict : domaines exacts uniquement (pas de regex previews Railway/Vercel)
+const parseOriginList = (value = '') => value
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter((origin) => origin && origin !== '*');
+
+const developmentOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-].filter(Boolean);
+];
 
-// ✅ Si CLIENT_URL=* (mode permissif), on autorise tout le monde
-const isWildcard = process.env.CLIENT_URL === '*';
+const allowedOrigins = [
+  'https://bokoma.vercel.app',
+  ...parseOriginList(process.env.CLIENT_URL),
+  ...parseOriginList(process.env.FRONTEND_URL),
+  ...parseOriginList(process.env.CORS_ALLOWED_ORIGINS),
+  ...(process.env.NODE_ENV === 'production' ? [] : developmentOrigins),
+].filter((origin, index, list) => list.indexOf(origin) === index);
 
 const isAllowedOrigin = (origin) => {
   if (!origin) return true; // Server-to-server / curl sans Origin
-  if (isWildcard) return true;
-  if (allowedOrigins.includes(origin)) return true;
-  if (/\.up\.railway\.app$/.test(origin)) return true; // Previews Railway
-  if (/\.vercel\.app$/.test(origin))     return true; // Previews Vercel
-  return false;
+  return allowedOrigins.includes(origin.replace(/\/$/, ''));
 };
 
 app.use(cors({
@@ -108,10 +112,11 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // ─── Health check (avant rate limiter global) ─────────────────────────────────
 app.use('/api/v1/health', require('./routes/health.routes'));
 
-// ─── Debug (avant rate limiter global aussi — usage ponctuel) ─────────────────
-// Sert à récupérer l'IP sortante du conteneur Railway (whitelist CinetPay, etc.)
-// Désactivable via ENABLE_DEBUG_ROUTES=false
-app.use('/api/v1/debug', require('./routes/debug.routes'));
+// ─── Debug (avant rate limiter global aussi — usage ponctuel hors production) ───
+// Sert à récupérer l'IP sortante du conteneur en dev/staging. Jamais exposé en prod.
+if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEBUG_ROUTES !== 'false') {
+  app.use('/api/v1/debug', require('./routes/debug.routes'));
+}
 
 // ─── Rate limiter global ──────────────────────────────────────────────────────
 app.use(apiLimiter);

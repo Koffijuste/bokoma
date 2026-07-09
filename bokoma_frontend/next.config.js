@@ -65,7 +65,7 @@ const nextConfig = {
     const csp = [
       "default-src 'self'",
       // Next.js + scripts inline (theme bootstrap, états Radix)
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.cinetpay.com https://*.cinetpay.com",
+      "script-src 'self' 'unsafe-inline' https://cdn.cinetpay.com https://*.cinetpay.com",
       // Styles inline nécessaires pour Tailwind + Radix animations
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https: res.cloudinary.com https://*.fbcdn.net https://*.cdninstagram.com https://pbs.twimg.com",
