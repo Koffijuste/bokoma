@@ -1,7 +1,7 @@
 // app/(public)/checkout/page.tsx
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFetch } from '@/hooks';
@@ -64,6 +64,38 @@ export default function CheckoutPage() {
   });
 
   const [paymentMethod, setPaymentMethod] = useState<string>('mobile_money');
+
+  // ✅ Pré-remplir depuis /cart si l'utilisateur a déjà rempli le formulaire
+  //    de livraison. Le cart page stocke les infos dans sessionStorage
+  //    (clé `bokoma_cart_shipping`) avant de rediriger ici.
+  //    On ne lit qu'au mount et on SUPPRIME la clé pour ne pas re-pré-remplir
+  //    si l'utilisateur navigue de nouveau vers /checkout plus tard.
+  useEffect(() => {
+    if (typeof sessionStorage === 'undefined') return;
+    const stored = sessionStorage.getItem('bokoma_cart_shipping');
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored);
+      setShipping(prev => ({
+        ...prev,
+        fullName:   parsed.fullName   || prev.fullName,
+        phone:      parsed.phone      || prev.phone,
+        street:     parsed.street     || prev.street,
+        city:       parsed.city       || prev.city,
+        country:    parsed.country    || prev.country,
+        postalCode: parsed.postalCode || prev.postalCode,
+        method:     parsed.method     || prev.method,
+      }));
+      if (parsed.paymentMethod &&
+          ['mobile_money', 'card', 'cash_on_delivery'].includes(parsed.paymentMethod)) {
+        setPaymentMethod(parsed.paymentMethod);
+      }
+    } catch {
+      // sessionStorage corrompu → on ignore
+    } finally {
+      sessionStorage.removeItem('bokoma_cart_shipping');
+    }
+  }, []);
 
   const handleShippingChange = useCallback((field: keyof ShippingForm, value: string) => {
     setShipping(prev => ({ ...prev, [field]: value }));
