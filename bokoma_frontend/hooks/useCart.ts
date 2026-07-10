@@ -78,7 +78,15 @@ export function useCart() {
       const extracted = extractCart(response);
       if (extracted) setCart(extracted);
       return extracted;
-    } catch {
+    } catch (err: any) {
+      // 🛡️ SÉCURITÉ CRITIQUE : si le fetch échoue (401 = autre user, token
+      // expiré, etc.), on VIDE le panier local. Sinon, le Zustand state
+      // garde l'ancien cart de l'utilisateur précédent et la page l'affiche
+      // jusqu'au prochain fetch réussi → LEAK VISIBLE entre comptes.
+      console.warn('[useCart] fetchCart failed — clearing local cart:', err?.response?.status);
+      setCart(null);
+      try { window.localStorage.removeItem('bokoma-cart'); } catch {}
+      try { window.localStorage.removeItem('bokoma-cart:userId'); } catch {}
       return null;
     }
   }, [isAuthenticated, setCart]);
@@ -91,24 +99,31 @@ export function useCart() {
     }
   }, [isAuthenticated, fetchCart, setCart]);
 
-  // 🛡️ Garde-fou : si l'utilisateur change (login d'un autre compte)
-  //    on vide le panier local avant de re-fetch depuis le backend.
-  //    Sans ça, sur la même machine, un nouveau user pourrait voir
-  //    le panier de l'ancien user pendant la fenêtre d'hydratation.
-  //    Le `user.id` est un alias défensif pour les payloads qui n'exposent
-  //    que `id` (rare, mais le backend Mongo expose parfois les deux).
+  // 🛡️ SÉCURITÉ CRITIQUE — Nettoyage à chaque changement d'userId.
+  //    On wipe le panier Zustand + localStorage À CHAQUE FOIS que le userId
+  //    change (y compris undefined → userId), pas seulement quand storedUserId
+  //    diffère. C'était le bug : si l'event `bokoma:login` arrivait avant
+  //    que ce useEffect ne s'exécute (timing Zustand/React), le panier
+  //    Zustand persisté de l'ancien user restait affiché.
   const userId = (user as any)?.id ?? user?._id;
+  const prevUserIdRef = React.useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    if (!userId) return;
-    const storedUserId = (() => {
-      try { return window.localStorage.getItem('bokoma-cart:userId'); } catch { return null; }
-    })();
-    if (storedUserId && storedUserId !== userId) {
-      // Nouveau user détecté → reset panier
+    const prev = prevUserIdRef.current;
+    prevUserIdRef.current = userId;
+
+    // Skip le tout premier render (mount) — on laisse fetchCart faire son taf
+    if (prev === undefined) return;
+
+    // Si l'userId a changé (incluant logout vers null, ou login vers un
+    // nouveau user) → reset complet
+    if (prev !== userId) {
       setCart(null);
       try { window.localStorage.removeItem('bokoma-cart'); } catch {}
+      try { window.localStorage.removeItem('bokoma-cart:userId'); } catch {}
+    } else if (userId) {
+      // Même userId → juste mettre à jour le timestamp
+      try { window.localStorage.setItem('bokoma-cart:userId', userId); } catch {}
     }
-    try { window.localStorage.setItem('bokoma-cart:userId', userId); } catch {}
   }, [userId, setCart]);
 
   const handleAddItem = useCallback(

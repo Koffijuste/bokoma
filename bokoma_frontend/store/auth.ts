@@ -24,6 +24,20 @@ function notifyCartResetOnLogin() {
   }
 }
 
+// 🛡️ Helper : wipe COMPLET des données locales user-spécifiques.
+// Utilisé sur logout + login + fetchUser-fail pour éviter que le
+// panier/wishlist Zustand d'un user précédent reste affiché quand le
+// nouveau user navigue (LEAK VISIBLE entre comptes sur même device).
+function wipeLocalUserData() {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.removeItem('bokoma-auth-v2'); } catch {}
+  try { window.localStorage.removeItem('bokoma-cart'); } catch {}
+  try { window.localStorage.removeItem('bokoma-cart:userId'); } catch {}
+  try { window.sessionStorage.removeItem('bokoma_pending_order'); } catch {}
+  // Notifie aussi les stores (pour leurs actions custom en mémoire)
+  try { window.dispatchEvent(new CustomEvent('bokoma:session-expired')); } catch {}
+}
+
 export interface AuthStore {
   user: User | null;
   isLoading: boolean;
@@ -57,12 +71,14 @@ export const useAuthStore = create<AuthStore>()(
 
           if (!user) throw new Error('Utilisateur non reçu');
 
+          // 🛡️ Reset COMPLET de toutes les données user-précédentes AVANT
+          // de set le nouveau user. Garantit qu'aucun panier/wishlist
+          // de l'ancien user ne peut subsister en mémoire.
+          wipeLocalUserData();
+
           set({ user, isLoading: false, error: null });
 
-          // ✅ Reset du panier local à chaque nouveau login : le store
-          //    Zustand persiste le panier en localStorage, donc un autre
-          //    utilisateur sur la même machine hériterait sinon des
-          //    articles de l'utilisateur précédent.
+          // Notifie aussi via event (pour les listeners custom type wishlist)
           notifyCartResetOnLogin();
 
           return user;
@@ -81,9 +97,8 @@ export const useAuthStore = create<AuthStore>()(
 
           if (!user) throw new Error('Utilisateur non reçu');
 
+          wipeLocalUserData();
           set({ user, isLoading: false, error: null });
-
-          // ✅ Idem : compte fraîchement créé = panier vierge
           notifyCartResetOnLogin();
 
           return user;
@@ -100,19 +115,14 @@ export const useAuthStore = create<AuthStore>()(
         } catch {
           // Continuer même si l'API échoue (token expiré, etc.)
         } finally {
-          // ✅ Reset complet de l'auth state
           set({ user: null, error: null });
 
-          // ✅ Cleanup localStorage auth (évite de re-hydrater un user null)
           if (typeof window !== 'undefined') {
-            try {
-              // zustand/persist utilise cette clé pour la persistance
-              window.localStorage.removeItem('bokoma-auth-v2');
-            } catch {
-              // Certains navigateurs en mode privé refusent l'accès au storage
-            }
-
-            // ✅ Notifie les stores (cart, wishlist…) de se vider
+            // 🛡️ Wipe COMPLET de TOUTES les données locales user-spécifiques
+            // (auth + cart + wishlist + session storage). Sans ça, le
+            // prochain user sur la même machine hériterait des données
+            // Zustand persistées du précédent.
+            wipeLocalUserData();
             window.dispatchEvent(new CustomEvent('bokoma:logout'));
           }
         }
@@ -130,7 +140,12 @@ export const useAuthStore = create<AuthStore>()(
 
           set({ user, isLoading: false, error: null });
         } catch {
+          // 🛡️ Session invalide (401 sur /auth/me) → reset complet du
+          // state local + localStorage. Sans ça, le Zustand persist
+          // garde l'ancien user et la page affiche "connecté" alors
+          // que le serveur rejette toutes les requêtes → CACHE LEAK.
           set({ user: null, isLoading: false, error: null });
+          wipeLocalUserData();
         }
       },
 
