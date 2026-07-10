@@ -150,10 +150,21 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2) Assets Next.js & fichiers statiques — exclus du matcher, double-check
+  // 2) Assets Next.js, fichiers statiques ET API backend — exclus du matcher
   // NB : /.well-known/security.txt est aussi exclu pour rester en accès libre
   // (RFC 9116 : les chercheurs doivent pouvoir le lire sans s'authentifier).
+  //
+  // ✅ Bug fix (10/07/2026) : on exclut /api/* du middleware Edge. Le
+  // backend a son propre middleware d'auth (src/middlewares/auth.js →
+  // protect) qui gère correctement les 401 JSON. AVANT ce fix, le
+  // middleware Edge interceptait les requêtes API et renvoyait un
+  // 307 vers /auth/login quand le cookie était absent — ce qui
+  // préservait la méthode HTTP et transformait un POST /api/v1/auth/refresh
+  // en POST /auth/login → 405 (la page Next.js /auth/login ne gère
+  // que GET). Les API calls doivent être transparentes pour le
+  // middleware Edge : leur auth vit 100% côté backend.
   if (
+    pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/robots.txt') ||
