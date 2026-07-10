@@ -188,7 +188,7 @@ export default function CartPage() {
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!validateForm()) {
       toast.error('Veuillez corriger les erreurs du formulaire');
       return;
@@ -199,37 +199,146 @@ export default function CartPage() {
     }
 
     setIsSubmitting(true);
-
+    
     try {
-      // ✅ Le cart page NE crée plus la commande directement : on délègue tout
-      //    au flow /checkout unifié (popup CinetPay 900×800, polling page
-      //    success, verifyToken, etc.). On persiste juste les infos de
-      //    livraison en sessionStorage pour pré-remplir /checkout.
-      //    Note : on ne stocke PAS le shippingMethod ici, le cart page ne
-      //    gère pas ce choix (l'utilisateur le fait sur /checkout).
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.setItem('bokoma_cart_shipping', JSON.stringify({
+      const orderPayload = {
+        shipping: {
           fullName: shippingDetails.fullName.trim(),
           phone: shippingDetails.phone.trim(),
           street: shippingDetails.address.trim(),
           city: shippingDetails.city,
           country: shippingDetails.country,
           postalCode: shippingDetails.postalCode?.trim(),
-          paymentMethod,
-          notes: orderNotes.trim() || undefined,
-        }));
+          cost: shippingCost,
+        },
+        payment: {
+          method: paymentMethod,
+          status: paymentMethod === 'cash_on_delivery' ? 'partial' : 'pending',
+          amountPaid: paymentMethod === 'cash_on_delivery' ? amountDueNow : 0,
+          details: paymentMethod === 'cash_on_delivery' ? {
+            phoneNumber: shippingDetails.phone.trim(),
+          } : {},
+        },
+        notes: orderNotes.trim() || undefined,
+        couponCode: cart.coupon?.code,
+        items: cart.items.map(item => {
+          const product = typeof item.product === 'object' ? (item.product as any)._id : item.product;
+          const variant = typeof item.variant === 'object' ? (item.variant as any)._id : item.variant;
+          
+          const cleanItem: any = {
+            product,
+            quantity: item.quantity,
+            price: item.price,
+          };
+          
+          if (variant && typeof variant === 'string' && variant.length === 24) {
+            cleanItem.variant = variant;
+          }
+          
+          if (item.size) cleanItem.size = item.size;
+          if (item.color) cleanItem.color = item.color;
+          
+          return cleanItem;
+        }),
+      };
+
+      const response = await Promise.race([
+        orderApi.createOrder(orderPayload),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout (30s)')), 30000))
+      ]);
+
+      const data = (response as any).data ?? response;
+      const paymentUrl = data?.payment?.paymentUrl || (response as any).paymentUrl;
+      const orderId = data?.order?._id || (response as any).order?._id;
+      const verifyToken = data?.verifyToken;  // ✅ requis pour la page success
+
+      if (paymentUrl) {
+        toast.success('Ouverture de la fenêtre de paiement...');
+
+        // ✅ Persist orderId + verifyToken pour la page /payment/success qui
+        //    va poller le statut (le verifyToken est REQUIS par le backend
+        //    pour exposer les détails de la commande sans auth).
+        if (typeof sessionStorage !== 'undefined' && orderId) {
+          sessionStorage.setItem('bokoma_pending_order', JSON.stringify({
+            orderId,
+            orderNumber: data?.order?.orderNumber,
+            total: data?.order?.total,
+            verifyToken,
+          }));
+        }
+
+        // Popup CinetPay 900×800 centrée (CinetPay affiche son propre bouton
+        // "Annuler" → la fermeture popup = annulation naturelle côté UX).
+        const w = 900;
+        const h = 800;
+        const dualScreenLeft = window.screenLeft ?? window.screenX;
+        const dualScreenTop  = window.screenTop  ?? window.screenY;
+        const left = (window.innerWidth  - w) / 2 + dualScreenLeft;
+        const top  = (window.innerHeight - h) / 2 + dualScreenTop;
+
+        const popup = window.open(
+          paymentUrl,
+          'bokoma_payment',
+          `width=${w},height=${h},top=${top},left=${left},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes`
+        );
+
+        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+          toast.warning('Popup bloquée — ouverture dans un nouvel onglet');
+          window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+        }
+
+        // Quand la popup se ferme (paiement validé, annulé, ou timeout CinetPay),
+        // on redirige vers la page succès qui va poller le backend pour
+        // déterminer l'état réel. On NE présume PAS du statut.
+        const pollPopup = window.setInterval(() => {
+          if (popup && popup.closed) {
+            window.clearInterval(pollPopup);
+            if (orderId) {
+              const params = new URLSearchParams({ orderId });
+              if (verifyToken) params.set('token', verifyToken);
+              router.push(`/payment/success?${params.toString()}`);
+            }
+          }
+        }, 600);
+
+        // Sécurité : on arrête le poll après 30 min max
+        window.setTimeout(() => window.clearInterval(pollPopup), 30 * 60 * 1000);
+        return;
       }
-      router.push('/checkout');
+
+      toast.success('Commande créée avec succès !');
+
+      if (orderId) {
+        const params = new URLSearchParams({ orderId });
+        if (verifyToken) params.set('token', verifyToken);
+        router.push(`/payment/success?${params.toString()}`);
+      } else {
+        router.push(ROUTES.USER.PROFILE || '/profile');
+      }
+
     } catch (err: any) {
-      toast.error('Erreur lors de la redirection vers le paiement');
+      if (err?.response?.status === 401 || err?.message?.includes('authentification') || err?.message?.includes('token')) {
+        toast.error('Session expirée. Veuillez vous reconnecter.');
+        return;
+      }
+      
+      let message = 'Erreur lors de la création de la commande';
+      
+      const validationErrors = err?.response?.data?.errors;
+      if (validationErrors && Array.isArray(validationErrors)) {
+        message = validationErrors.map((e: any) => e.msg || e.message).join(', ');
+      } else if (err?.response?.data?.message) {
+        message = err.response.data.message;
+      } else if (err?.message) {
+        message = err.message;
+      }
+      
+      toast.error(message);
+      setFormErrors(prev => ({ ...prev, submit: message }));
+      
     } finally {
       setIsSubmitting(false);
     }
-
-    // === Ancien code mort (CinetPay popup inline + postMessage) — supprimé
-    //     parce qu'il dupliquait la logique de /checkout, ne passait pas le
-    //     verifyToken au polling, et utilisait un postMessage hasardeux que
-    //     CinetPay n'envoie pas réellement. ===
   };
 
   if (!mounted || authLoading) {
