@@ -2,6 +2,7 @@
 const Order = require('../models/Order');
 const NotificationService = require('../services/notification.service');
 const paymentService = require('../services/payment.service');
+const pushService = require('../services/push.service');
 
 // ✅ Configuration optimisée
 const EXPIRY_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes au lieu de 30s
@@ -62,6 +63,9 @@ async function checkExpiredPayments() {
             }
             await order.save();
 
+            // 🔔 Push notification client
+            pushService.notifyOrderStatus(order, 'paid').catch(() => {});
+
             if (order.user) {
               await NotificationService.notifyCustomer({
                 userId: order.user._id,
@@ -86,6 +90,10 @@ async function checkExpiredPayments() {
         }
 
         order.markAsExpired();
+        await order.save();
+
+        // 🔔 Push notification expiration
+        pushService.notifyOrderStatus(order, 'payment_expired').catch(() => {});
         await order.save();
 
         if (order.user) {

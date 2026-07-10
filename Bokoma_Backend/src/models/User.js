@@ -87,7 +87,21 @@ const userSchema = new mongoose.Schema(
     resetOtpAttempts: { type: Number, default: 0, select: false },
 
     emailVerificationToken: { type: String, select: false },
-    emailVerificationExpires: { type: Date, select: false }
+    emailVerificationExpires: { type: Date, select: false },
+
+    // 🔔 Abonnements Web Push (PWA) — un user peut avoir plusieurs devices
+    //    (mobile + desktop). On supprime automatiquement les endpoints morts
+    //    (410 Gone) lors d'un send échoué.
+    pushSubscriptions: [{
+      endpoint:   { type: String, required: true, unique: true },
+      keys: {
+        p256dh: { type: String, required: true },
+        auth:   { type: String, required: true },
+      },
+      userAgent: { type: String },
+      // Quand la subscription a été créée (pour cleanup > 6 mois par ex)
+      createdAt: { type: Date, default: Date.now },
+    }],
   },
   { 
     timestamps: true,

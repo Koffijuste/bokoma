@@ -159,6 +159,9 @@ app.use('/api/v1/coupons',    require('./routes/coupon.routes'));
 app.use('/api/v1/gallery',    require('./routes/gallery.routes'));
 app.use('/api/v1/feedbacks',  require('./routes/feedback.routes'));
 
+// 🔔 Web Push (PWA) — gestion des abonnements notifications
+app.use('/api/v1/push',       require('./routes/push.routes'));
+
 // ✅ RGPD / Cookies — log de consentement CNIL (public + admin)
 app.use('/api/v1/consent',    require('./routes/consent.routes'));
 

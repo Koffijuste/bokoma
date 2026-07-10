@@ -2,6 +2,7 @@
 const Order = require('../models/Order');
 const NotificationService = require('../services/notification.service');
 const paymentService = require('../services/payment.service');
+const pushService = require('../services/push.service');
 
 const MAX_VERIFICATION_ATTEMPTS = 5;
 const VERIFICATION_COOLDOWN_MS = 2 * 60 * 1000;
@@ -102,6 +103,9 @@ async function verifyPendingPayments() {
           }
           await order.save();
 
+          // 🔔 Push notification client
+          pushService.notifyOrderStatus(order, 'paid').catch(() => {});
+
           updatedCount++;
 
           if (order.user) {
@@ -129,6 +133,9 @@ async function verifyPendingPayments() {
           order.payment.rejectionReason = `Paiement ${result.status}`;
           order.status = 'cancelled';
           await order.save();
+
+          // 🔔 Push notification échec
+          pushService.notifyOrderStatus(order, 'payment_failed').catch(() => {});
 
           failedCount++;
 

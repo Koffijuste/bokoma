@@ -12,6 +12,7 @@ const { verifyNotification, parseNotification } = require('cinetpay-js');
 const Order = require('../models/Order');
 const NotificationService = require('../services/notification.service');
 const paymentService = require('../services/payment.service');
+const pushService = require('../services/push.service');
 const logger = require('../utils/logger');
 
 // ─── POST /api/v1/webhook/cinetpay ───────────────────────────────────────────
@@ -159,6 +160,11 @@ async function handlePaymentSuccess(order, transactionId, amount) {
 
   await order.save();
 
+  // 🔔 Push notification (best-effort, ne bloque pas le webhook)
+  pushService.notifyOrderStatus(order, isPartial ? 'paid' : 'paid').catch((err) => {
+    logger.warn('webhook', 'push_failed', { error: err.message, orderNumber: order.orderNumber });
+  });
+
   if (order.user?._id) {
     await NotificationService.notifyCustomer({
       userId: order.user._id,
@@ -199,6 +205,11 @@ async function handlePaymentFailure(order, transactionId, status) {
   });
 
   await order.save();
+
+  // 🔔 Push notification échec
+  pushService.notifyOrderStatus(order, 'payment_failed').catch((err) => {
+    logger.warn('webhook', 'push_failed', { error: err.message, orderNumber: order.orderNumber });
+  });
 
   try {
     await restoreStock(order.items);

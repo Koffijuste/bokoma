@@ -21,6 +21,7 @@ const {
 const paymentFlowService = require('./payment-flow.service');
 const paymentService = require('./payment.service');
 const NotificationService = require('./notification.service');
+const pushService = require('./push.service');
 const {
   sendOrderConfirmation,
   sendOrderStatusUpdate,
@@ -613,6 +614,11 @@ const cancelOrder = async (req) => {
   order.cancel(reason || 'Annulée par le client');
   await order.save();
 
+  // 🔔 Push notification annulation
+  pushService.notifyOrderStatus(order, 'cancelled').catch((err) => {
+    logger.warn('order', 'push_cancel_failed', { error: err.message, orderNumber: order.orderNumber });
+  });
+
   return order;
 };
 
@@ -659,6 +665,24 @@ const updateOrderStatus = async (req) => {
   }
 
   await order.save();
+
+  // 🔔 Push notification (non bloquant) — on notifie sur les transitions
+  //    significatives pour le client (expédition, livraison, annulation).
+  if (status !== previousStatus) {
+    const pushEvent = status === 'cancelled' ? 'cancelled'
+                    : status === 'shipped'  ? 'shipped'
+                    : status === 'delivered' ? 'delivered'
+                    : null;
+    if (pushEvent) {
+      pushService.notifyOrderStatus(order, pushEvent).catch((err) => {
+        logger.warn('order', 'push_status_update_failed', {
+          error: err.message,
+          orderNumber: order.orderNumber,
+          event: pushEvent,
+        });
+      });
+    }
+  }
 
   // Email au client (non bloquant)
   if (status !== previousStatus) {
