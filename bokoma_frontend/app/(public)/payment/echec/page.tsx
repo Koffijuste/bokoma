@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants';
 
 const POPUP_CLOSE_DELAY = 2000; // ms avant auto-close popup
+const PARENT_FALLBACK_DELAY = 3500; // ms avant redirect parent si close échoue
 
 function isOpenedInPopup(): boolean {
   if (typeof window === 'undefined') return false;
@@ -19,6 +20,7 @@ export default function PaymentFailedPage() {
   const params  = useSearchParams();
   const router  = useRouter();
   const orderId = params.get('orderId');
+  const tokenFromUrl = params.get('token');
 
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [openedInPopup, setOpenedInPopup] = useState(false);
@@ -39,20 +41,43 @@ export default function PaymentFailedPage() {
     setOpenedInPopup(isOpenedInPopup());
   }, []);
 
-  // ── Si ouvert en popup, on notifie le parent et on se ferme après 2s ───────
+  // ── Si ouvert en popup, on notifie le parent + on tente de se fermer ───────
+  //    Fallback : si window.close() échoue (popup cross-origin, bloqueur),
+  //    on force le parent à naviguer vers cette même URL.
   useEffect(() => {
     if (!openedInPopup || !window.opener) return;
     setClosing(true);
+
+    // 1. Notifier le parent
     try {
       window.opener.postMessage(
         { type: 'bokoma_payment_failed', orderId, orderNumber },
         window.location.origin,
       );
     } catch {}
-    const t = window.setTimeout(() => {
+
+    // 2. Tenter de fermer la popup
+    const closeTimer = window.setTimeout(() => {
       try { window.close(); } catch {}
     }, POPUP_CLOSE_DELAY);
-    return () => clearTimeout(t);
+
+    // 3. Fallback : forcer la redirection du parent vers cette page
+    const fallbackTimer = window.setTimeout(() => {
+      if (!window.closed && typeof window.opener !== 'undefined') {
+        try {
+          window.opener.location.href = window.location.href;
+          window.close();
+        } catch {
+          // Dernier recours : la popup devient plein écran
+          // (elle est déjà sur la bonne page, rien à faire)
+        }
+      }
+    }, PARENT_FALLBACK_DELAY);
+
+    return () => {
+      clearTimeout(closeTimer);
+      clearTimeout(fallbackTimer);
+    };
   }, [openedInPopup, orderId, orderNumber]);
 
   return (

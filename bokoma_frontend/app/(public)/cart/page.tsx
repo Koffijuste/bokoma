@@ -287,12 +287,42 @@ export default function CartPage() {
           window.open(paymentUrl, '_blank', 'noopener,noreferrer');
         }
 
-        // Quand la popup se ferme (paiement validé, annulé, ou timeout CinetPay),
-        // on redirige vers la page succès qui va poller le backend pour
-        // déterminer l'état réel. On NE présume PAS du statut.
+        // ── Navigation du parent après paiement ─────────────────────────
+        // Trois déclencheurs (premier gagne) :
+        //   1. postMessage de /payment/success ou /payment/echec (le popup
+        //      nous dit explicitement "succès" ou "échec")
+        //   2. popup.closed (la popup s'est fermée — on ne sait pas si c'est
+        //      succès ou échec, donc on va sur /payment/success qui va poller
+        //      le backend et afficher l'état réel)
+        //   3. Timeout de 5 min (sécurité) — fallback identique à #2
+        const onMessage = (event: MessageEvent) => {
+          if (event.origin !== window.location.origin) return;
+          if (!event.data || typeof event.data.type !== 'string') return;
+          const { type, orderId: msgOrderId } = event.data;
+          if (msgOrderId && msgOrderId !== orderId) return;  // pas notre popup
+          if (type === 'bokoma_payment_success') {
+            window.removeEventListener('message', onMessage);
+            window.clearInterval(pollPopup);
+            if (orderId) router.push(`/orders/${orderId}/confirmation`);
+          } else if (type === 'bokoma_payment_failed' || type === 'bokoma_payment_expired') {
+            window.removeEventListener('message', onMessage);
+            window.clearInterval(pollPopup);
+            if (orderId) {
+              const params = new URLSearchParams({ orderId });
+              if (verifyToken) params.set('token', verifyToken);
+              router.push(`/payment/echec?${params.toString()}`);
+            }
+          }
+        };
+        window.addEventListener('message', onMessage);
+
         const pollPopup = window.setInterval(() => {
           if (popup && popup.closed) {
             window.clearInterval(pollPopup);
+            window.removeEventListener('message', onMessage);
+            // Pas de postMessage reçu : on ne sait pas si c'est succès ou échec.
+            // On envoie sur /payment/success qui va poller le backend et
+            // afficher l'état réel (succès / échoué / expiré).
             if (orderId) {
               const params = new URLSearchParams({ orderId });
               if (verifyToken) params.set('token', verifyToken);
@@ -302,7 +332,10 @@ export default function CartPage() {
         }, 600);
 
         // Sécurité : on arrête le poll après 30 min max
-        window.setTimeout(() => window.clearInterval(pollPopup), 30 * 60 * 1000);
+        window.setTimeout(() => {
+          window.clearInterval(pollPopup);
+          window.removeEventListener('message', onMessage);
+        }, 30 * 60 * 1000);
         return;
       }
 

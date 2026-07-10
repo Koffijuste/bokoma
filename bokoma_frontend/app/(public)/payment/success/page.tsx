@@ -207,40 +207,55 @@ export default function PaymentSuccessPage() {
     setOpenedInPopup(isOpenedInPopup());
   }, []);
 
-  // ── Compte à rebours après confirmation ────────────────────────────────────
-  // Deux branches selon le mode :
-  //   • Popup  → on notifie le parent et on se ferme (le parent affichera la suite)
-  //   • Plein écran → countdown puis redirect Next vers /orders/[id]/confirmation
+  // ── Auto-fermeture popup + redirection parent (succès / échec / expiré) ───
+  // Quand la page est ouverte dans la popup CinetPay :
+  //   1. On envoie un postMessage au parent (le /cart peut l'écouter)
+  //   2. On tente `window.close()` — succès si la popup a été ouverte par script
+  //   3. Fallback : on redirige le parent vers la bonne page et on se ferme
+  // En plein écran : on fait un countdown puis on redirige sur place.
   useEffect(() => {
-    if (status !== 'confirmed' || !orderId) return;
+    if (status === 'polling' || !orderId) return;
 
     if (openedInPopup && window.opener) {
-      // 1. Notifier le parent via postMessage (le checkout peut écouter)
+      setIsRedirecting(true);
+
+      // Type d'événement à envoyer au parent + URL de fallback
+      let msgType: 'bokoma_payment_success' | 'bokoma_payment_failed' | 'bokoma_payment_expired' = 'bokoma_payment_success';
+      let parentUrl = `/orders/${orderId}/confirmation`;
+      if (status === 'failed') {
+        msgType = 'bokoma_payment_failed';
+        parentUrl = `/payment/echec?orderId=${orderId}${verifyToken ? `&token=${verifyToken}` : ''}`;
+      } else if (status === 'expired') {
+        msgType = 'bokoma_payment_expired';
+        parentUrl = `/payment/echec?orderId=${orderId}${verifyToken ? `&token=${verifyToken}` : ''}`;
+      }
+
+      // 1. postMessage au parent
       try {
         window.opener.postMessage(
-          { type: 'bokoma_payment_success', orderId, orderNumber: order?.orderNumber },
+          { type: msgType, orderId, orderNumber: order?.orderNumber },
           window.location.origin,
         );
       } catch (err) {
         console.warn('[PaymentSuccess] postMessage failed:', err);
       }
 
-      // 2. Tenter de fermer la popup après un court délai
-      setIsRedirecting(true);
+      // 2. Tenter de fermer la popup (échoue souvent si la popup a navigué
+      //    vers un autre origin que son opener, mais on tente quand même).
       const closeTimer = window.setTimeout(() => {
         try { window.close(); } catch (err) { console.warn(err); }
       }, POPUP_CLOSE_DELAY);
 
-      // 3. Fallback : si le navigateur refuse la fermeture (popup ouverte
-      //    manuellement), on redirige le parent via opener.location.
+      // 3. Fallback : si la popup ne s'est pas fermée (bloqueur, navigation
+      //    cross-origin, etc.) on force la redirection du parent et on se ferme.
       const fallbackTimer = window.setTimeout(() => {
         if (!window.closed) {
           try {
-            window.opener.location.href = `/orders/${orderId}/confirmation`;
+            window.opener.location.href = parentUrl;
             window.close();
           } catch {
-            // Dernier recours : on redirige sur place
-            router.push(`/orders/${orderId}/confirmation`);
+            // Dernier recours : on redirige sur place (le popup devient plein écran)
+            router.push(parentUrl);
           }
         }
       }, PARENT_FALLBACK_DELAY);
@@ -251,14 +266,14 @@ export default function PaymentSuccessPage() {
       };
     }
 
-    // Mode plein écran — comportement existant : countdown + redirect
+    // Mode plein écran — countdown + redirect
     setIsRedirecting(true);
     const timer = setInterval(() => {
       setCountdown(prev => Math.max(0, prev - 1));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [status, orderId, openedInPopup, order?.orderNumber, router]);
+  }, [status, orderId, openedInPopup, order?.orderNumber, router, verifyToken]);
 
 // ✅ NOUVEAU : useEffect séparé pour la redirection (plein écran uniquement)
 useEffect(() => {
