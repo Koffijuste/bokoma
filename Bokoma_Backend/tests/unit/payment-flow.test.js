@@ -123,4 +123,65 @@ describe('payment-flow.service — helpers', () => {
       expect(desc).toContain('5000 FCFA à la livraison');
     });
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // 🔒 Tests de NON-RÉGRESSION : vérifient qu'on envoie bien 50% à CinetPay
+  //    pour les paiements cash_on_delivery, et JAMAIS le total.
+  //    Bug historique : on écrasait amountPaid avec order.total, faisant
+  //    apparaître le total comme "montant payé" et cassant l'UI admin
+  //    et la page de confirmation.
+  // ───────────────────────────────────────────────────────────────────────
+  describe('🔒 NON-RÉGRESSION : acompte 50% pour cash_on_delivery', () => {
+    it('un total de 20200 XOF débite 10100 XOF, pas le total', () => {
+      const { paymentAmount, remainingAmount, isPartialPayment } =
+        computePaymentAmounts(20200, 'cash_on_delivery');
+      expect(paymentAmount).toBe(10100);
+      expect(remainingAmount).toBe(10100);
+      expect(isPartialPayment).toBe(true);
+      // Le client est débité EXACTEMENT de 50% du total
+      expect(paymentAmount).toBe(Math.ceil(20200 * 0.5));
+    });
+
+    it('un total impair (10001) arrondit le ceil vers le haut', () => {
+      const { paymentAmount, remainingAmount } = computePaymentAmounts(10001, 'cash_on_delivery');
+      // 50% de 10001 = 5000.5 → ceil = 5001
+      expect(paymentAmount).toBe(5001);
+      expect(remainingAmount).toBe(5000);
+    });
+
+    it('le total = paymentAmount + remainingAmount (pas de fuite)', () => {
+      const totals = [5000, 10000, 19500, 20200, 50000, 100000, 99999];
+      for (const t of totals) {
+        const { paymentAmount, remainingAmount } = computePaymentAmounts(t, 'cash_on_delivery');
+        expect(paymentAmount + remainingAmount).toBe(t);
+      }
+    });
+
+    it('le ratio est exactement 50% (pas 60%, pas 100%)', () => {
+      const { paymentAmount } = computePaymentAmounts(50000, 'cash_on_delivery');
+      // 50000 * 0.5 = 25000 exactement
+      expect(paymentAmount).toBe(25000);
+      expect(paymentAmount / 50000).toBe(0.5);
+    });
+
+    it('mobile_money débite le TOTAL intégral (pas 50%)', () => {
+      const { paymentAmount, remainingAmount, isPartialPayment } =
+        computePaymentAmounts(20200, 'mobile_money');
+      expect(paymentAmount).toBe(20200);
+      expect(remainingAmount).toBe(0);
+      expect(isPartialPayment).toBe(false);
+    });
+
+    it('card débite le TOTAL intégral (pas 50%)', () => {
+      const { paymentAmount, remainingAmount, isPartialPayment } =
+        computePaymentAmounts(20200, 'card');
+      expect(paymentAmount).toBe(20200);
+      expect(remainingAmount).toBe(0);
+      expect(isPartialPayment).toBe(false);
+    });
+
+    it('PARTIAL_PAYMENT_RATIO est bien 0.5 (pas modifié par erreur)', () => {
+      expect(PARTIAL_PAYMENT_RATIO).toBe(0.5);
+    });
+  });
 });
