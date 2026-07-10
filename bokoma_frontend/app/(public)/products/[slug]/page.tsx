@@ -119,6 +119,18 @@ export default function ProductDetailsPage() {
       return;
     }
 
+    // ✅ Bug fix (10/07/2026) : si l'utilisateur n'est pas connecté, on
+    //    redirige vers /auth/login au lieu d'appeler l'API panier (qui
+    //    renvoie 401). Le bouton reste cliquable, mais on remonte l'info
+    //    à l'user via un toast avant la redirection.
+    if (!isAuthenticated) {
+      toast.error('Connexion requise', {
+        description: 'Veuillez vous connecter pour ajouter au panier',
+      });
+      router.push(`/auth/login?from=/products/${slug}`);
+      return;
+    }
+
     // ✅ Validation selon catégorie
     if (isFootwearProduct) {
       if (!customSize) {
@@ -174,6 +186,17 @@ export default function ProductDetailsPage() {
   const handleBuyNow = useCallback(async () => {
     if (!productId || !product) {
       toast.error('Produit non chargé');
+      return;
+    }
+
+    // ✅ Bug fix (10/07/2026) : même logique que handleAddToCart — on
+    //    redirige vers login si pas connecté au lieu de tenter l'ajout
+    //    (qui reviendrait en 401).
+    if (!isAuthenticated) {
+      toast.error('Connexion requise', {
+        description: 'Veuillez vous connecter pour acheter',
+      });
+      router.push(`/auth/login?from=/products/${slug}`);
       return;
     }
 
