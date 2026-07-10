@@ -121,9 +121,15 @@ app.use('/api/v1/health', require('./routes/health.routes'));
 //   - debugLimiter (20/15min) bloque les scans
 // On garde le montage AVANT le rate limiter global pour ne pas être étranglé
 // par apiLimiter sur des hits ponctuels de diagnostic.
-if (process.env.ENABLE_DEBUG_ROUTES !== 'false') {
-  app.use('/api/v1/debug', require('./routes/debug.routes'));
-}
+// ✅ Bug fix (10/07/2026) : on monte la route /api/v1/debug/* en dur
+// (sans kill switch d'env var). La protection reste 3 couches :
+//   1. debugLimiter     → anti brute-force / scan
+//   2. protect          → JWT valide, charge req.user
+//   3. restrictTo('admin') → refuse tout rôle ≠ admin
+// L'env var ENABLE_DEBUG_ROUTES est ignorée : le seul kill switch
+// est maintenant l'auth + le RBAC (defense in depth). Si tu veux
+// vraiment désactiver les routes debug, supprime ce bloc.
+app.use('/api/v1/debug', require('./routes/debug.routes'));
 
 // ─── Rate limiter global ──────────────────────────────────────────────────────
 app.use(apiLimiter);
