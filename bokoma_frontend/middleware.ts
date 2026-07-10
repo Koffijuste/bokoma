@@ -108,13 +108,43 @@ export function middleware(request: NextRequest) {
   }
 
   // 1) Routes 100% publiques → on ne touche à rien
+  // ✅ Bug fix (10/07/2026) : la liste était trop restrictive. Beaucoup de
+  //    pages d'info / légales / paiement étaient protégées alors qu'elles
+  //    doivent être accessibles sans login :
+  //      - /cart, /wishlist, /checkout (parcours d'achat guest)
+  //      - /faq, /terms, /privacy-policy, /contact, /gallery, /guide,
+  //        /feedback, /home (pages publiques)
+  //      - /payment/success, /payment/echec, /verify/:orderId (URLs de
+  //        retour paiement CinetPay — si le user est kické vers /auth/login
+  //        après paiement, il ne voit jamais la confirmation)
+  //      - /orders/:orderId/confirmation (page de confirmation post-commande)
+  //    On utilise désormais startsWith() partout pour matcher aussi les
+  //    sous-routes (/products/abc, /orders/abc/confirmation, etc.).
   const isPublic =
     pathname === '/' ||
-    pathname === '/products' ||
-    pathname === '/search' ||
-    pathname === '/categories' ||
+    pathname.startsWith('/products') ||
+    pathname.startsWith('/search') ||
+    pathname.startsWith('/categories') ||
+    pathname.startsWith('/cart') ||
+    pathname.startsWith('/wishlist') ||
+    pathname.startsWith('/checkout') ||
+    pathname.startsWith('/faq') ||
+    pathname.startsWith('/terms') ||
+    pathname.startsWith('/privacy-policy') ||
+    pathname.startsWith('/contact') ||
+    pathname.startsWith('/gallery') ||
+    pathname.startsWith('/guide') ||
+    pathname.startsWith('/feedback') ||
+    pathname.startsWith('/home') ||
+    pathname.startsWith('/payment') ||
+    pathname.startsWith('/verify') ||
     pathname.startsWith('/auth/') ||
-    pathname.startsWith('/api/v1/health');
+    pathname.startsWith('/api/v1/health') ||
+    // Cas spécial : /orders/:id/confirmation doit être public (page de
+    // confirmation partageable par QR code / email) tout en gardant
+    // /orders et /orders/:id privées. Cf. useAuth et la constante
+    // PUBLIC_PATH_PATTERNS dans constants/index.ts.
+    /^\/orders\/[^/]+\/confirmation$/.test(pathname);
 
   if (isPublic) {
     return NextResponse.next();

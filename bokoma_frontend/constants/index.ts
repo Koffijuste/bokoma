@@ -37,21 +37,60 @@ export const STORAGE_KEYS = {
 // ⚠️ Tout ce qui appelle ce tableau DOIT aussi mettre à jour middleware.ts
 // si tu ajoutes une nouvelle route publique (sinon l'utilisateur se fait
 // rediriger à tort par l'Edge avant même que le client ne se charge).
+//
+// ✅ Bug fix (10/07/2026) : ajout de toutes les pages d'info / légales /
+//    paiement qui étaient protégées à tort (cf. middleware.ts pour le détail).
+//    Le check `isPublicPath` utilise `path === p || path.startsWith(p + '/')`,
+//    donc ajouter la racine du sous-arbre rend toute la sous-arborescence
+//    publique (ex: ajouter /products couvre /products/abc).
+//
+//    Pour les cas où on veut matcher un pattern plus fin (ex: rendre
+//    publiques les /orders/:id/confirmation tout en gardant /orders
+//    protégées), utiliser PUBLIC_PATH_PATTERNS (regex) ci-dessous.
 // ============================================================================
 export const PUBLIC_PATHS: readonly string[] = [
   '/',
+  // Catalogue
   '/products',
-  '/search',
   '/categories',
+  '/search',
+  // Parcours d'achat guest
+  '/cart',
+  '/wishlist',
+  '/checkout',
+  // Pages d'info / légales
+  '/faq',
+  '/terms',
+  '/privacy-policy',
+  '/contact',
+  '/gallery',
+  '/guide',
+  '/feedback',
+  '/home',
+  // Paiement (URLs de retour CinetPay + vérification commande)
+  '/payment',
+  '/verify',
+  // Auth
   '/auth/login',
   '/auth/register',
-  '/auth/forgot',
+  '/auth/forgot-password',
   '/auth/reset-password',
+  // API
   '/api/v1/health',
+] as const;
+
+/**
+ * Patterns regex pour les routes publiques dont le préfixe entre en
+ * conflit avec une route privée. Ex : /orders/:id/confirmation doit
+ * être public même si /orders (l'historique) doit rester privé.
+ */
+export const PUBLIC_PATH_PATTERNS: readonly RegExp[] = [
+  /^\/orders\/[^/]+\/confirmation$/, // /orders/:id/confirmation
 ] as const;
 
 export const isPublicPath = (path: string): boolean => {
   if (!path) return false;
+  if (PUBLIC_PATH_PATTERNS.some((re) => re.test(path))) return true;
   return PUBLIC_PATHS.some(
     (p) => path === p || path.startsWith(p + '/'),
   );
