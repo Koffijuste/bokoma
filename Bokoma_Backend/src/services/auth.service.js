@@ -2,31 +2,34 @@
 // ============================================================================
 // 🔐 AUTH SERVICE - Gestion centralisée des tokens JWT et cookies
 // ============================================================================
+//
+// ⚠️  Ce service est conservé comme wrapper optionnel au-dessus des méthodes
+// du modèle User. La SOURCE UNIQUE DE VÉRITÉ pour la config JWT vit dans
+// `src/config/jwt.js`. On ne la redéfinit PAS ici pour éviter les
+// divergences (historiquement, on avait `expiresIn: '15m'` en dur dans ce
+// fichier alors que config/jwt.js utilisait 24h, ce qui créait des bugs
+// pénibles à débugger).
+//
+// Le controller `auth.controller.js` continue d'utiliser directement
+// `user.generateAccessToken()` / `user.generateRefreshToken()` du modèle,
+// donc ce service est surtout utile pour le helper `sendTokens` ci-dessous.
+// ============================================================================
 
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const jwtConfig = require('../config/jwt'); // ✅ Source unique
 
 // ============================================================================
-// 🔹 CONFIGURATION JWT (centralisée)
+// 🔹 CONFIGURATION JWT (importée de config/jwt.js — pas de redéfinition)
 // ============================================================================
 
 const JWT_CONFIG = {
-  access: {
-    secret: process.env.JWT_ACCESS_SECRET || 'dev-access-secret-change-in-prod',
-    expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
-    issuer: 'bokoma-api',
-    audience: 'bokoma-users',
-  },
-  refresh: {
-    secret: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-in-prod',
-    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-    issuer: 'bokoma-api',
-    audience: 'bokoma-users',
-  },
+  access:  jwtConfig.access,
+  refresh: jwtConfig.refresh,
   cookie: {
-    name: 'bokoma_refresh_token', // ✅ Nom cohérent avec le frontend/backend
+    name:   'bokoma_refresh_token', // ✅ Nom cohérent avec le frontend/backend
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 jours en ms
-    path: '/',
+    path:   '/',
   },
 };
 
@@ -55,9 +58,10 @@ const signAccessToken = (user) => {
     JWT_CONFIG.access.secret,
     {
       expiresIn: JWT_CONFIG.access.expiresIn,
-      issuer: JWT_CONFIG.access.issuer,
+      issuer:   JWT_CONFIG.access.issuer,
       audience: JWT_CONFIG.access.audience,
-      jwtid: crypto.randomBytes(8).toString('hex'), // ✅ JTI unique pour révocation
+      jwtid:    crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+      ...jwtConfig.options,
     }
   );
 };
@@ -80,9 +84,10 @@ const signRefreshToken = (user) => {
     JWT_CONFIG.refresh.secret,
     {
       expiresIn: JWT_CONFIG.refresh.expiresIn,
-      issuer: JWT_CONFIG.refresh.issuer,
+      issuer:   JWT_CONFIG.refresh.issuer,
       audience: JWT_CONFIG.refresh.audience,
-      jwtid: crypto.randomBytes(8).toString('hex'), // ✅ JTI unique
+      jwtid:    crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+      ...jwtConfig.options,
     }
   );
 };

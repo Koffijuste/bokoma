@@ -82,5 +82,11 @@
       "destination": "/dashboard/$1",
       "statusCode": 301
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://bokoma-production.up.railway.app/api/:path*"
+    }
   ]
 }
