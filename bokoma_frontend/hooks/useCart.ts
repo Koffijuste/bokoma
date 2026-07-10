@@ -1,7 +1,7 @@
 // hooks/useCart.ts
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useCartStore } from '@/store/cart';
 import { useMutation } from './useApi';
 import { cartApi } from '@/services';
