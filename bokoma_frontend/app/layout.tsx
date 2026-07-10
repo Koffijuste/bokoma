@@ -8,6 +8,11 @@ import { Footer } from '@/components/layout/Footer';
 import { SessionWatcher } from '@/components/SessionWatcher';
 import { CookieBanner } from '@/components/legal/CookieBanner';
 import RatingPromptHost from '@/components/features/RatingPromptHost';
+import {
+  PWAInstallPrompt,
+  PWAFloatingButton,
+  PWAInstalledToast,
+} from '@/components/PWAInstallPrompt';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -81,6 +86,17 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+        {/* 📱 iOS Smart App Banner — propose l'install aux utilisateurs Safari iOS */}
+        <meta name="apple-itunes-app" content="app-id=000000000" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Bokoma" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="application-name" content="Bokoma Store" />
+        <meta name="msapplication-TileColor" content="#0a0a0a" />
+        <meta name="msapplication-square150x150logo" content="/icon.png" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        <link rel="apple-touch-startup-image" href="/icon.png" />
       </head>
       <body
         className={`
@@ -107,6 +123,11 @@ export default function RootLayout({
 
           {/* ⭐ Modale "noter ce produit" — déclenchée par useAddToCart depuis n'importe où */}
           <RatingPromptHost />
+
+          {/* 📱 PWA : install prompt + floating button + confirmation toast */}
+          <PWAInstallPrompt />
+          <PWAFloatingButton />
+          <PWAInstalledToast />
         </Providers>
       </body>
     </html>

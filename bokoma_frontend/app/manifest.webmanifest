@@ -1,7 +1,17 @@
+// app/manifest.webmanifest
+// ============================================================================
+// 📱 MANIFEST PWA Bokoma Store
+// ============================================================================
+// Permet aux utilisateurs d'installer l'app sur leur écran d'accueil (Android,
+// iOS Safari via "Ajouter à l'écran d'accueil", desktop Chrome/Edge).
+// Aussi utilisé pour les raccourcis d'app (long-press sur l'icône) et le
+// splash screen au lancement.
+// ============================================================================
 {
   "name": "Bokoma Store",
   "short_name": "Bokoma",
   "description": "Boutique en ligne premium — vêtements, chaussures, parfums & accessoires livrés en Côte d'Ivoire",
+  "id": "/",
   "icons": [
     {
       "src": "/icon.png",
@@ -28,11 +38,72 @@
       "purpose": "any"
     }
   ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home.png",
+      "sizes": "1170x2532",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Accueil Bokoma Store"
+    },
+    {
+      "src": "/screenshots/catalog.png",
+      "sizes": "1170x2532",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Catalogue produits"
+    }
+  ],
   "theme_color": "#0a0a0a",
   "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait",
-  "start_url": "/",
+  "start_url": "/?utm_source=pwa",
   "scope": "/",
-  "lang": "fr"
+  "lang": "fr",
+  "dir": "ltr",
+  "categories": ["shopping", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "Accueil",
+      "short_name": "Accueil",
+      "description": "Voir les nouveautés Bokoma",
+      "url": "/?utm_source=pwa_shortcut",
+      "icons": [
+        { "src": "/icon.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Mon panier",
+      "short_name": "Panier",
+      "description": "Voir mon panier",
+      "url": "/cart?utm_source=pwa_shortcut",
+      "icons": [
+        { "src": "/icon.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Mes commandes",
+      "short_name": "Commandes",
+      "description": "Suivre mes commandes",
+      "url": "/orders?utm_source=pwa_shortcut",
+      "icons": [
+        { "src": "/icon.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Mon profil",
+      "short_name": "Profil",
+      "description": "Mon compte Bokoma",
+      "url": "/profile?utm_source=pwa_shortcut",
+      "icons": [
+        { "src": "/icon.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    }
+  ],
+  "prefer_related_applications": false,
+  "edge_side_panel": { "preferred_width": 480 },
+  "launch_handler": {
+    "client_mode": "auto"
+  }
 }
