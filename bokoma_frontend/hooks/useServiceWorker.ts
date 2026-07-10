@@ -110,7 +110,11 @@ export function useServiceWorker(): UseServiceWorkerResult {
     try {
       const sub = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        // Cast: TypeScript strict mode infers Uint8Array<ArrayBufferLike> qui
+        // inclut SharedArrayBuffer, mais PushManager.subscribe attend
+        // strictement ArrayBuffer. La conversion est safe car on construit
+        // nous-mêmes le buffer via new Uint8Array(length) → ArrayBuffer.
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
       });
       setPushStatus('subscribed');
 
