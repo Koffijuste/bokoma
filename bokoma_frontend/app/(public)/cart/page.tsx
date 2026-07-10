@@ -83,7 +83,7 @@ export default function CartPage() {
   const mounted = useMounted();
   const router = useRouter();
   
-  const { cart, cartCount, updateItem, removeItem } = useCart();
+  const { cart, cartCount, updateItem, removeItem, clearCart } = useCart();
   
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   
@@ -252,6 +252,21 @@ export default function CartPage() {
       const orderId = data?.order?._id || (response as any).order?._id;
       const verifyToken = data?.verifyToken;  // ✅ requis pour la page success
 
+      // ✅ SÉCURITÉ : on vide le panier LOCAL immédiatement après création
+      //    de la commande (avant même l'ouverture de la popup CinetPay). Sans
+      //    ça, si l'utilisateur kill la popup / ferme l'onglet, le panier
+      //    resterait plein et un autre utilisateur sur la même machine
+      //    pourrait le voir. `clearCart` du hook useCart appelle :
+      //      - cartApi.clearCart()  → backend DELETE /api/v1/cart
+      //      - wipeLocalCartData() → state + localStorage + sessionStorage
+      if (orderId) {
+        try {
+          await clearCart();
+        } catch (err) {
+          console.warn('[Cart] post-order clear failed (non-bloquant):', err);
+        }
+      }
+
       if (paymentUrl) {
         toast.success('Ouverture de la fenêtre de paiement...');
 
@@ -288,54 +303,68 @@ export default function CartPage() {
         }
 
         // ── Navigation du parent après paiement ─────────────────────────
-        // Trois déclencheurs (premier gagne) :
-        //   1. postMessage de /payment/success ou /payment/echec (le popup
-        //      nous dit explicitement "succès" ou "échec")
-        //   2. popup.closed (la popup s'est fermée — on ne sait pas si c'est
-        //      succès ou échec, donc on va sur /payment/success qui va poller
-        //      le backend et afficher l'état réel)
-        //   3. Timeout de 5 min (sécurité) — fallback identique à #2
+        // Stratégie "3 déclencheurs" — le PREMIER qui gagne :
+        //   1. postMessage de /payment/success ou /payment/echec (la popup
+        //      nous dit explicitement "succès" ou "échec" et se ferme)
+        //   2. popup.closed → on HIT directement /api/v1/orders/verify/:orderId
+        //      (pas la peine d'attendre 5s de polling, le backend a peut-être
+        //      déjà reçu le webhook CinetPay)
+        //   3. Timeout 5 min (sécurité) — fallback identique à #2
+        const orderApiModule = await import('@/services').then(m => m.orderApi);
+        let navigated = false;
+        const navigateAfterCheck = (status: string) => {
+          if (navigated || !orderId) return;
+          navigated = true;
+          window.clearInterval(pollPopup);
+          window.removeEventListener('message', onMessage);
+          if (status === 'paid' || status === 'partial') {
+            router.push(`/orders/${orderId}/confirmation`);
+          } else if (status === 'failed' || status === 'expired' || status === 'cancelled') {
+            const params = new URLSearchParams({ orderId });
+            if (verifyToken) params.set('token', verifyToken);
+            router.push(`/payment/echec?${params.toString()}`);
+          } else {
+            // pending → fallback sur la page de polling
+            const params = new URLSearchParams({ orderId });
+            if (verifyToken) params.set('token', verifyToken);
+            router.push(`/payment/success?${params.toString()}`);
+          }
+        };
+
         const onMessage = (event: MessageEvent) => {
           if (event.origin !== window.location.origin) return;
           if (!event.data || typeof event.data.type !== 'string') return;
           const { type, orderId: msgOrderId } = event.data;
-          if (msgOrderId && msgOrderId !== orderId) return;  // pas notre popup
-          if (type === 'bokoma_payment_success') {
-            window.removeEventListener('message', onMessage);
-            window.clearInterval(pollPopup);
-            if (orderId) router.push(`/orders/${orderId}/confirmation`);
-          } else if (type === 'bokoma_payment_failed' || type === 'bokoma_payment_expired') {
-            window.removeEventListener('message', onMessage);
-            window.clearInterval(pollPopup);
-            if (orderId) {
-              const params = new URLSearchParams({ orderId });
-              if (verifyToken) params.set('token', verifyToken);
-              router.push(`/payment/echec?${params.toString()}`);
-            }
-          }
+          if (msgOrderId && msgOrderId !== orderId) return;
+          if (type === 'bokoma_payment_success')         navigateAfterCheck('paid');
+          else if (type === 'bokoma_payment_failed')     navigateAfterCheck('failed');
+          else if (type === 'bokoma_payment_expired')    navigateAfterCheck('expired');
         };
         window.addEventListener('message', onMessage);
 
         const pollPopup = window.setInterval(() => {
           if (popup && popup.closed) {
-            window.clearInterval(pollPopup);
-            window.removeEventListener('message', onMessage);
-            // Pas de postMessage reçu : on ne sait pas si c'est succès ou échec.
-            // On envoie sur /payment/success qui va poller le backend et
-            // afficher l'état réel (succès / échoué / expiré).
-            if (orderId) {
-              const params = new URLSearchParams({ orderId });
-              if (verifyToken) params.set('token', verifyToken);
-              router.push(`/payment/success?${params.toString()}`);
-            }
+            // ✅ Vérification IMMÉDIATE du statut backend (pas d'attente
+            //    du polling 5s). CinetPay a normalement déjà envoyé le
+            //    webhook avant la fermeture de la popup, donc on a
+            //    souvent la réponse en 1 seul hit.
+            (async () => {
+              try {
+                const r = await orderApiModule.verifyPaymentPublic({ orderId, token: verifyToken });
+                const o = (r as any)?.data?.order ?? (r as any)?.order;
+                const payStatus = o?.payment?.status;
+                navigateAfterCheck(payStatus || 'pending');
+              } catch {
+                navigateAfterCheck('pending');
+              }
+            })();
           }
-        }, 600);
+        }, 400);  // 400ms = plus rapide que 600ms pour la réactivité
 
-        // Sécurité : on arrête le poll après 30 min max
+        // Sécurité : on arrête le poll après 5 min max
         window.setTimeout(() => {
-          window.clearInterval(pollPopup);
-          window.removeEventListener('message', onMessage);
-        }, 30 * 60 * 1000);
+          if (!navigated) navigateAfterCheck('pending');
+        }, 5 * 60 * 1000);
         return;
       }
 

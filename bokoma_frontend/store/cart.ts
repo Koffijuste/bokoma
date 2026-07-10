@@ -2,6 +2,12 @@
 // ============================================================================
 // 🛒 CART STORE — Cleanup auto sur logout / session expirée
 // ============================================================================
+// 🛡️ SÉCURITÉ : on wipe TOUTES les traces locales du panier à chaque
+//    clear (Zustand persist, clé userId, et même les items de session
+//    qui pourraient être re-hydratés). Sans ça, un second utilisateur
+//    sur la même machine pourrait voir les articles du précédent
+//    pendant la fenêtre d'hydratation Zustand.
+// ============================================================================
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -35,23 +41,33 @@ export const useCartStore = create<CartState>()(
   )
 );
 
+/**
+ * 🛡️ Wipe complet de TOUTES les traces locales du panier.
+ *  - État Zustand (state)
+ *  - Clé persist localStorage `bokoma-cart`
+ *  - Clé user-id `bokoma-cart:userId` (utilisée par useCart pour détecter
+ *    un changement d'utilisateur et re-fetcher)
+ *  - SessionStorage `bokoma_pending_order` (info de la commande en cours)
+ * Appelé sur : clearCart manuel (après achat), logout, session expirée,
+ * login d'un nouvel utilisateur.
+ */
+export const wipeLocalCartData = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    useCartStore.getState().clearCart();
+  } catch {}
+  try { window.localStorage.removeItem('bokoma-cart'); } catch {}
+  try { window.localStorage.removeItem('bokoma-cart:userId'); } catch {}
+  try { window.sessionStorage.removeItem('bokoma_pending_order'); } catch {}
+};
+
 // ============================================================================
 // 🔁 Auto-cleanup : panier vidé à la déconnexion ou session expirée
 // ============================================================================
 if (typeof window !== 'undefined') {
   const cleanup = () => {
     try {
-      // 1) Reset du state
-      useCartStore.getState().clearCart();
-
-      // 2) Supprime la clé localStorage (le `persist` peut laisser une
-      //    entrée résiduelle ; on l'enlève pour éviter qu'un nouvel
-      //    utilisateur hérite du panier du précédent sur la même machine).
-      try {
-        window.localStorage.removeItem('bokoma-cart');
-      } catch {
-        // Certains navigateurs en mode privé refusent l'accès au storage
-      }
+      wipeLocalCartData();
     } catch (err) {
       console.warn('[CartStore] cleanup failed:', err);
     }
