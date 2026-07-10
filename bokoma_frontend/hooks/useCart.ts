@@ -106,7 +106,7 @@ export function useCart() {
   //    que ce useEffect ne s'exécute (timing Zustand/React), le panier
   //    Zustand persisté de l'ancien user restait affiché.
   const userId = (user as any)?.id ?? user?._id;
-  const prevUserIdRef = React.useRef<string | null | undefined>(undefined);
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     const prev = prevUserIdRef.current;
     prevUserIdRef.current = userId;
