@@ -462,49 +462,57 @@ export default function CartPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8 pb-32 lg:pb-8">
-        <div className="text-center mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-2">Finaliser votre commande</h1>
-          <p className="text-muted-foreground">{cart.items.length} produit{cart.items.length > 1 ? 's' : ''} • Total: {formatPrice(total)}</p>
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8 pb-32 lg:pb-8">
+        <div className="text-center mb-6 sm:mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
+          <h1 className="text-2xl sm:text-4xl font-bold mb-2">Finaliser votre commande</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">{cart.items.length} produit{cart.items.length > 1 ? 's' : ''} • Total: {formatPrice(total)}</p>
         </div>
 
-        <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-8">
-          <div className="animate-in fade-in slide-in-from-left-4 duration-500">
-            <form id="cart-checkout-form" onSubmit={handleSubmitOrder} className="space-y-6">
-              <div className="rounded-3xl border border-border bg-card p-6">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Package className="w-5 h-5" /> Vos articles ({cart.items.length})</h2>
-                <div className="space-y-4">
+        <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-6 lg:gap-8">
+          <div className="animate-in fade-in slide-in-from-left-4 duration-500 min-w-0">
+            <form id="cart-checkout-form" onSubmit={handleSubmitOrder} className="space-y-4 sm:space-y-6">
+              <div className="rounded-2xl sm:rounded-3xl border border-border bg-card p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 flex items-center gap-2"><Package className="w-5 h-5" /> Vos articles ({cart.items.length})</h2>
+                <div className="space-y-3 sm:space-y-4">
                   {cart.items.map((item, index) => {
                     const product = item.product as any;
                     const productName = typeof product === 'object' ? product.name : item.name || 'Produit';
                     const productImage = typeof product === 'object' ? product.images?.[0]?.url || product.images?.[0] || item.image : item.image;
                     const itemTotal = (item.price || 0) * (item.quantity || 1);
                     return (
-                      <div key={item._id} className="flex gap-4 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
-                        <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-                          {productImage ? (<img src={productImage} alt={productName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.svg'; }} />) : (<div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">Pas d'image</div>)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-sm line-clamp-2">{productName}</h4>
-                          {(item.size || item.color) && (<div className="flex gap-2 mt-1">{item.size && <SimpleBadge variant="outline">{item.size}</SimpleBadge>}{item.color && <SimpleBadge variant="outline">{item.color}</SimpleBadge>}</div>)}
-                          <div className="flex items-center gap-3 mt-3">
-                            <div className="flex items-center border border-border rounded-lg">
-                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) - 1)} disabled={(item.quantity || 1) <= 1 || updatingItemId === item._id}><Minus className="w-3 h-3" /></Button>
-                              <span className="w-8 text-center text-sm font-medium">{updatingItemId === item._id ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : item.quantity}</span>
-                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) + 1)} disabled={updatingItemId === item._id || (item.quantity || 1) >= ((item.product as any)?.totalStock || (item as any)?.totalStock || 999)}><Plus className="w-3 h-3" /></Button>
+                      // 📱 Mobile : image+info sur une ligne, qty+price en dessous
+                      // 💻 sm+ : layout horizontal classique
+                      <div key={item._id} className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
+                        <div className="flex gap-3 sm:gap-4 flex-1 min-w-0">
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+                            {productImage ? (<img src={productImage} alt={productName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-product.svg'; }} />) : (<div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">Pas d'image</div>)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-sm line-clamp-2 break-words">{productName}</h4>
+                            {(item.size || item.color) && (<div className="flex flex-wrap gap-1.5 mt-1">{item.size && <SimpleBadge variant="outline">{item.size}</SimpleBadge>}{item.color && <SimpleBadge variant="outline">{item.color}</SimpleBadge>}</div>)}
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 sm:mt-3">
+                              <div className="flex items-center border border-border rounded-lg">
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) - 1)} disabled={(item.quantity || 1) <= 1 || updatingItemId === item._id}><Minus className="w-3 h-3" /></Button>
+                                <span className="w-8 text-center text-sm font-medium">{updatingItemId === item._id ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : item.quantity}</span>
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-none" onClick={() => handleUpdateQuantity(item._id!, (item.quantity || 1) + 1)} disabled={updatingItemId === item._id || (item.quantity || 1) >= ((item.product as any)?.totalStock || (item as any)?.totalStock || 999)}><Plus className="w-3 h-3" /></Button>
+                              </div>
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleRemoveItem(item._id!)} disabled={updatingItemId === item._id} title="Retirer du panier"><Trash2 className="w-4 h-4" /></Button>
                             </div>
-                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleRemoveItem(item._id!)} disabled={updatingItemId === item._id} title="Retirer du panier"><Trash2 className="w-4 h-4" /></Button>
                           </div>
                         </div>
-                        <div className="text-right flex-shrink-0"><p className="font-semibold text-accent">{formatPrice(itemTotal)}</p>{item.price && <p className="text-xs text-muted-foreground">{formatPrice(item.price)}/unité</p>}</div>
+                        {/* Prix : sous l'image sur mobile, à droite sur desktop */}
+                        <div className="flex sm:block items-center justify-between sm:text-right flex-shrink-0 pl-1 sm:pl-0">
+                          <p className="font-semibold text-accent text-sm sm:text-base">{formatPrice(itemTotal)}</p>
+                          {item.price && <p className="text-xs text-muted-foreground">{formatPrice(item.price)}/unité</p>}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-border bg-card p-6">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><MapPin className="w-5 h-5" /> Adresse de livraison</h2>
+              <div className="rounded-2xl sm:rounded-3xl border border-border bg-card p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 flex items-center gap-2"><MapPin className="w-5 h-5" /> Adresse de livraison</h2>
                 <div className="space-y-4">
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -543,8 +551,8 @@ export default function CartPage() {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-border bg-card p-6">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5" /> Méthode de paiement</h2>
+              <div className="rounded-2xl sm:rounded-3xl border border-border bg-card p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5" /> Méthode de paiement</h2>
                 <div className="space-y-3">
                   {[
                     { id: 'mobile_money' as const, label: 'Mobile Money / Carte', icon: Smartphone, desc: 'Orange Money, MTN, Wave, Visa, Mastercard...' },
@@ -581,8 +589,8 @@ export default function CartPage() {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-border bg-card p-6">
-                <h2 className="text-xl font-bold mb-4">Notes de commande (optionnel)</h2>
+              <div className="rounded-2xl sm:rounded-3xl border border-border bg-card p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4">Notes de commande (optionnel)</h2>
                 <textarea 
                   value={orderNotes} 
                   onChange={(e) => setOrderNotes(e.target.value)} 
@@ -621,8 +629,8 @@ export default function CartPage() {
             </form>
           </div>
 
-          <div className="lg:sticky lg:top-24 h-fit animate-in fade-in slide-in-from-right-4 duration-500 delay-200">
-            <div className="rounded-3xl border-2 border-border/50 bg-card p-6">
+          <div className="lg:sticky lg:top-24 h-fit animate-in fade-in slide-in-from-right-4 duration-500 delay-200 min-w-0">
+            <div className="rounded-2xl sm:rounded-3xl border-2 border-border/50 bg-card p-4 sm:p-6">
               <h2 className="text-xl font-bold mb-4 flex items-center justify-between">
                 <span>Récapitulatif</span>
                 <SimpleBadge>{cart.items.length} article{cart.items.length > 1 ? 's' : ''}</SimpleBadge>
@@ -708,12 +716,12 @@ export default function CartPage() {
           Pour éviter de scroller sur petit écran
          ═══════════════════════════════════════════════════════════════ */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-3 py-2.5 flex items-center gap-2">
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</p>
-            <p className="text-lg font-bold text-accent truncate">{formatPrice(total)}</p>
+            <p className="text-base font-bold text-accent truncate">{formatPrice(total)}</p>
             {discount > 0 && (
-              <p className="text-[10px] text-emerald-600">-{formatPrice(discount)} promo</p>
+              <p className="text-[10px] text-emerald-600 truncate">-{formatPrice(discount)} promo</p>
             )}
           </div>
           <Button
@@ -721,15 +729,15 @@ export default function CartPage() {
             size="lg"
             form="cart-checkout-form"
             variant="primary"
-            className="flex-shrink-0 h-12 px-5 text-sm font-semibold"
+            className="flex-shrink-0 h-11 px-4 text-sm font-semibold"
             disabled={isSubmitting || !shippingDetails.fullName || !shippingDetails.phone || !shippingDetails.address || !shippingDetails.country || !shippingDetails.city}
           >
             {isSubmitting ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> ...</>
+              <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> ...</>
             ) : paymentMethod === 'cash_on_delivery' ? (
-              <><Banknote className="w-4 h-4 mr-2" /> Payer maintenant</>
+              <><Banknote className="w-4 h-4 mr-1.5" /> Payer</>
             ) : (
-              <><CheckCircle className="w-4 h-4 mr-2" /> Commander</>
+              <><CheckCircle className="w-4 h-4 mr-1.5" /> Commander</>
             )}
           </Button>
         </div>
