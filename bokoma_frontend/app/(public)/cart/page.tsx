@@ -205,6 +205,8 @@ export default function CartPage() {
       //    au flow /checkout unifié (popup CinetPay 900×800, polling page
       //    success, verifyToken, etc.). On persiste juste les infos de
       //    livraison en sessionStorage pour pré-remplir /checkout.
+      //    Note : on ne stocke PAS le shippingMethod ici, le cart page ne
+      //    gère pas ce choix (l'utilisateur le fait sur /checkout).
       if (typeof sessionStorage !== 'undefined') {
         sessionStorage.setItem('bokoma_cart_shipping', JSON.stringify({
           fullName: shippingDetails.fullName.trim(),
@@ -213,7 +215,6 @@ export default function CartPage() {
           city: shippingDetails.city,
           country: shippingDetails.country,
           postalCode: shippingDetails.postalCode?.trim(),
-          method: shippingMethod,
           paymentMethod,
           notes: orderNotes.trim() || undefined,
         }));
