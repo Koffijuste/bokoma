@@ -80,7 +80,13 @@ app.use(cors({
 // Le webhook s'authentifie par `notifyToken` (API CinetPay v1), pas par HMAC.
 // On le monte AVANT le rate limiter global pour ne pas être étranglé par
 // apiLimiter (CinetPay peut envoyer plusieurs notifications en rafale).
-app.use('/api/v1/webhook', require('./routes/webhook.routes'));
+// IMPORTANT : express.json() doit être monté ici pour que req.body soit parsé
+// (sinon parseNotification du SDK reçoit undefined et throw "Payload invalide").
+app.use(
+  '/api/v1/webhook',
+  express.json({ limit: '1mb' }),
+  require('./routes/webhook.routes'),
+);
 
 // ─── Parsers ──────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));           // ✅ 100mb → 10mb (sécurité)
