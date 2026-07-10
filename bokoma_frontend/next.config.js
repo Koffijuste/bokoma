@@ -51,6 +51,31 @@ const nextConfig = {
   typedRoutes: false,
 
   // ============================================================================
+  // 🔁 REWRITES — Proxy /api/* vers le backend
+  // ============================================================================
+  // ✅ Bug fix (10/07/2026) : on déclare aussi le rewrite ici (en plus de
+  //    vercel.json) pour qu'il fonctionne en dev local (next dev) ET en
+  //    production Vercel. Sans ça, l'URL relative '/api/v1' du client
+  //    axios renverrait 404 sur localhost.
+  //
+  //    La variable d'env NEXT_PUBLIC_API_URL est utilisée comme cible :
+  //      - dev : http://localhost:5000/api/v1
+  //      - prod : laissé à NEXT_PUBLIC_API_URL côté Vercel (qui devrait
+  //        pointer sur Railway) MAIS en pratique le rewrite vercel.json
+  //        prend le dessus sur Vercel.
+  // ============================================================================
+  async rewrites() {
+    const backendUrl =
+      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${backendUrl.replace(/\/$/, '')}/:path*`,
+      },
+    ];
+  },
+
+  // ============================================================================
   // 🛡️ HEADERS DE SÉCURITÉ — appliqués sur toutes les réponses
   // ============================================================================
   // Réponse à l'audit HackerAI du 08/07/2026 (score 5.8/10 → cible ≥ 8.0/10)

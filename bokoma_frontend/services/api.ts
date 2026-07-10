@@ -41,6 +41,45 @@ type ExtendedConfig = InternalAxiosRequestConfig & {
 // 🔹 API CLIENT
 // ============================================================================
 
+/**
+ * ✅ Bug fix (10/07/2026) : on utilise une URL relative par défaut
+ * ('/api/v1') pour passer par le rewrite Vercel (configuré dans
+ * vercel.json) au lieu d'appeler directement Railway. Conséquence :
+ *
+ *   AVANT : le navigateur faisait des requêtes vers
+ *           https://bokoma-production.up.railway.app/api/v1/...
+ *           → Set-Cookie posé sur le domaine .railway.app
+ *           → le middleware Vercel sur .vercel.app ne voyait JAMAIS
+ *             les cookies → 401 sur /auth/me, /auth/refresh, etc.
+ *             → boucle de redirection sur /auth/login
+ *
+ *   APRÈS : le navigateur fait des requêtes vers /api/v1/...
+ *           → Vercel proxy vers Railway (rewrite)
+ *           → Set-Cookie revient avec le domaine .vercel.app
+ *           → le middleware Vercel voit les cookies → 200
+ *
+ * En dev local, la valeur est overridée par NEXT_PUBLIC_API_URL dans
+ * .env (par défaut http://localhost:5000/api/v1). En production
+ * Vercel, il suffit que la variable d'env NE soit PAS définie (ou
+ * pointe sur '/api/v1') pour passer par le rewrite.
+ */
+const resolveBaseURL = (): string => {
+  const env = process.env.NEXT_PUBLIC_API_URL;
+  // Si l'env pointe explicitement sur Railway en prod, c'est probablement
+  // un oubli de config → on retombe sur le rewrite pour éviter le bug
+  // cross-origin cookie. En dev, l'env est sur localhost:5000 donc OK.
+  if (env && /^https?:\/\//.test(env)) {
+    const isLocalDev = env.includes('localhost') || env.includes('127.0.0.1');
+    if (!isLocalDev) {
+      // Override défensif : en prod on force le rewrite Vercel
+      return '/api/v1';
+    }
+    return env;
+  }
+  // Pas d'env (ou chemin relatif) → on utilise le rewrite
+  return env && env.startsWith('/') ? env : '/api/v1';
+};
+
 class ApiClient {
   private client: AxiosInstance;
   private isRefreshing = false;
@@ -48,7 +87,7 @@ class ApiClient {
 
   constructor() {
     this.client = axios.create({
-      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1',
+      baseURL: resolveBaseURL(),
       timeout: 30_000,
       // ✅ CRITIQUE : envoie automatiquement les cookies httpOnly
       withCredentials: true,
