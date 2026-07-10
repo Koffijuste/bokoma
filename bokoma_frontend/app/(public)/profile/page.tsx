@@ -20,6 +20,7 @@ import { ROUTES } from '@/constants';
 import { formatPrice } from '@/utils/helpers';
 import { toast } from 'sonner';
 import type { Order } from '@/types';
+import { NotificationPermissionToggle } from '@/components/NotificationPermissionToggle';
 
 // ─── Hook focus page ──────────────────────────────────────────────────────────
 function usePageFocus(callback: () => void) {
@@ -655,6 +656,15 @@ export default function ProfilePage() {
                     </div>
                   </div>
                   <hr className="border-border" />
+
+                  {/* 🔔 Notifications de commande (PWA Web Push) */}
+                  <div>
+                    <h4 className="font-medium mb-3">Notifications</h4>
+                    <NotificationPermissionToggle />
+                  </div>
+
+                  <hr className="border-border" />
+
                   <div className="space-y-3">
                     <Link href="/profile/settings">
                       <Button variant="outline" className="w-full gap-2">

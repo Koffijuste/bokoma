@@ -99,10 +99,26 @@ export function useServiceWorker(): UseServiceWorkerResult {
     if (perm === 'default') perm = await requestPermission();
     if (perm !== 'granted') return null;
 
-    // 2. Récupérer la clé publique VAPID depuis le backend
-    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    // 2. Récupérer la clé publique VAPID — on tente d'abord le backend,
+    //    puis fallback sur l'env var (cas où le backend est down mais
+    //    on a déjà la clé en cache).
+    let vapidKey: string | null = null;
+    try {
+      const res = await fetch('/api/v1/push/vapid-public-key', {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const json = await res.json();
+        vapidKey = json?.data?.publicKey || null;
+      }
+    } catch (err) {
+      console.warn('[Push] backend VAPID fetch failed, fallback env:', err);
+    }
     if (!vapidKey) {
-      console.warn('[Push] NEXT_PUBLIC_VAPID_PUBLIC_KEY non configurée');
+      vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || null;
+    }
+    if (!vapidKey) {
+      console.warn('[Push] VAPID public key indisponible (backend + env)');
       return null;
     }
 
