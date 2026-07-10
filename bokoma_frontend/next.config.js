@@ -87,6 +87,16 @@ const nextConfig = {
   //   - Content-Security-Policy: anti XSS (CinetPay + Cloudinary whitelistés)
   // ============================================================================
   async headers() {
+    // ✅ Bug fix (10/07/2026) : en dev local, le frontend (localhost:3000)
+    // doit pouvoir joindre le backend (localhost:5000). La CSP prod
+    // n'autorise que https:, ce qui bloque http://localhost:5000 avec
+    // "Refused to connect because it violates the document's Content
+    // Security Policy". On ajoute donc http://localhost:* en dev.
+    const isDev = process.env.NODE_ENV !== 'production';
+    const connectSrc = isDev
+      ? "'self' https: http://localhost:* http://127.0.0.1:* ws: wss: https://api.cinetpay.com https://api.cinetpay.net https://*.cinetpay.com https://bokoma-production.up.railway.app"
+      : "'self' https: https://api.cinetpay.com https://api.cinetpay.net https://*.cinetpay.com https://bokoma-production.up.railway.app wss:";
+
     const csp = [
       "default-src 'self'",
       // Next.js + scripts inline (theme bootstrap, états Radix)
@@ -98,8 +108,8 @@ const nextConfig = {
       "font-src 'self' data: https://fonts.gstatic.com",
       // CinetPay ouvre des iframes + popups de paiement
       "frame-src 'self' https://*.cinetpay.com https://*.cinetpay.net https://secure.cinetpay.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.facebook.com https://web.facebook.com https://www.tiktok.com https://www.instagram.com https://platform.twitter.com",
-      // Connexions : backend Railway, Cloudinary, CinetPay API
-      "connect-src 'self' https: https://api.cinetpay.com https://api.cinetpay.net https://*.cinetpay.com https://bokoma-production.up.railway.app",
+      // Connexions : backend Railway (prod) + localhost (dev) + CinetPay API
+      `connect-src ${connectSrc}`,
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self' https://*.cinetpay.com",
