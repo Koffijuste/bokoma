@@ -392,8 +392,9 @@ class PaymentService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  //  COMPAT RETRO — shims pour ne pas casser d'anciens imports
-  //  (test.cinetpay.routes.js, scripts, etc.)
+  //  COMPAT RETRO — shims de rétro-compat (authenticate/getAccessToken)
+  //  Conservés au cas où d'anciens scripts/test les appelleraient encore.
+  //  Avec cinetpay-js, l'auth est gérée en interne par le SDK.
   // ───────────────────────────────────────────────────────────────────────────
 
   /**

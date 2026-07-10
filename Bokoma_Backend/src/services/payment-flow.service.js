@@ -174,6 +174,7 @@ const initializeCinetPayPayment = async ({
     return {
       paymentToken: result.paymentToken,
       paymentUrl: result.paymentUrl,
+      notifyToken: result.notifyToken,
       paymentAmount,
       remainingAmount,
       isPartialPayment,
@@ -197,36 +198,8 @@ const initializeCinetPayPayment = async ({
   }
 };
 
-/**
- * Vérifie la signature d'un webhook CinetPay (HMAC-SHA256 sur le body brut).
- * Utilise le mot de passe API comme clé secrète.
- *
- * @param {Buffer|string} rawBody - Le body brut de la requête
- * @param {String} providedSignature - Signature fournie dans le header
- * @param {String} secret - Clé secrète (mot de passe API CinetPay)
- * @returns {Boolean}
- */
-const verifyWebhookSignature = (rawBody, providedSignature, secret) => {
-  if (!rawBody || !providedSignature || !secret) return false;
-
-  const body = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody);
-
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(body)
-    .digest('hex');
-
-  // Comparaison en temps constant pour éviter les attaques timing
-  const expectedBuf = Buffer.from(expected, 'utf8');
-  const providedBuf = Buffer.from(String(providedSignature), 'utf8');
-
-  if (expectedBuf.length !== providedBuf.length) return false;
-  return crypto.timingSafeEqual(expectedBuf, providedBuf);
-};
-
 module.exports = {
   initializeCinetPayPayment,
-  verifyWebhookSignature,
   // Helpers exportés pour les tests unitaires
   computePaymentAmounts,
   normalizePhoneNumber,

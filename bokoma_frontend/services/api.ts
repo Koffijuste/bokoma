@@ -389,10 +389,12 @@ export const orderApi = {
                      apiClient.patch<ApiResponse<{ order: Order }>>(`/orders/${id}/cancel`, { reason }),
   deleteOrder:     (id: string) => apiClient.delete<ApiResponse>(`/orders/${id}`),
 
-  verifyPaymentPublic: (params: { orderId?: string | null; merchantTransactionId?: string | null }) => {
+  verifyPaymentPublic: (params: { orderId?: string | null; merchantTransactionId?: string | null; token?: string | null }) => {
     const id = params.orderId || params.merchantTransactionId;
     if (!id) throw new Error('Identifiant de commande manquant');
-    return apiClient.get<ApiResponse<{ order: Order }>>(`/orders/verify/${id}`);
+    return apiClient.get<ApiResponse<{ order: Order }>>(`/orders/verify/${id}`, {
+      params: params.token ? { token: params.token } : undefined,
+    });
   },
 };
 

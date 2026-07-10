@@ -13,7 +13,6 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
 const orderService = require('../services/order.service');
-const paymentService = require('../services/payment.service');
 const {
   formatOrderForClient,
   formatOrderList,
@@ -35,6 +34,10 @@ exports.createOrder = async (req, res, next) => {
       message: 'Commande créée avec succès',
       data: {
         order: formatOrderForClient(order),
+        // ✅ Token public de vérification — le client doit le passer en
+        //    query param à /payment/success?orderId=X&token=... pour que
+        //    la page puisse poller le statut sans être authentifiée.
+        verifyToken: order.verifyToken,
         ...(paymentData && {
           payment: {
             paymentToken: paymentData.paymentToken,
@@ -281,14 +284,20 @@ exports.deleteOrder = async (req, res, next) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  PUBLIC VERIFY — GET /api/v1/orders/verify/:orderId (sans auth)
+//  PUBLIC VERIFY — GET /api/v1/orders/verify/:orderId?token=...
+// ⚠️ Sans auth — mais REQUIERT un verifyToken (généré à la création de la
+//    commande, stocké en sessionStorage côté client). Sans token, on n'expose
+//    que le strict minimum (statut + paymentStatus) — pas de nom, tél, adresse.
 // ─────────────────────────────────────────────────────────────────────────────
 
 exports.verifyOrderPublic = async (req, res, next) => {
   try {
     const { orderId } = req.params;
+    const providedToken = req.query.token;
+
+    // On a besoin du verifyToken pour comparer. Il est `select: false`.
     const order = await Order.findById(orderId)
-      .select('orderNumber status createdAt total subtotal shippingCost discount currency items shipping payment notes')
+      .select('+verifyToken orderNumber status createdAt total subtotal shippingCost discount currency items shipping payment notes')
       .populate({ path: 'items.product', select: 'name slug images basePrice variants' })
       .lean();
 
@@ -299,6 +308,44 @@ exports.verifyOrderPublic = async (req, res, next) => {
     // 🐛 FIX : répare les snapshots cassés (lecture seule)
     await orderService.enrichOrderItems(order);
 
+    // Sécurité : si le token est manquant ou invalide, on NE retourne PAS
+    // les infos détaillées. Juste un statut minimal (commande existe).
+    const hasValidToken =
+      providedToken &&
+      order.verifyToken &&
+      // Comparaison timing-safe via crypto.timingSafeEqual sur Buffers de même longueur
+      (() => {
+        try {
+          const a = Buffer.from(String(providedToken), 'utf8');
+          const b = Buffer.from(String(order.verifyToken), 'utf8');
+          if (a.length !== b.length) return false;
+          return require('crypto').timingSafeEqual(a, b);
+        } catch {
+          return false;
+        }
+      })();
+
+    if (!hasValidToken) {
+      // Réponse ultra-minimale — pas de fuite de données client
+      return res.json({
+        success: true,
+        message: 'Commande vérifiée (accès limité)',
+        data: {
+          order: {
+            _id: order._id,
+            orderNumber: order.orderNumber,
+            status: order.status,
+            payment: order.payment ? {
+              method: order.payment.method,
+              status: order.payment.status,
+            } : null,
+            createdAt: order.createdAt,
+            requiresToken: true,
+          },
+        },
+      });
+    }
+
     res.json({
       success: true,
       message: 'Commande vérifiée',
@@ -306,52 +353,6 @@ exports.verifyOrderPublic = async (req, res, next) => {
     });
   } catch (err) {
     next(err);
-  }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  CINETPAY WEBHOOK — POST /api/v1/orders/webhook/cinetpay
-// ⚠️ Conservé pour rétro-compatibilité — la route principale est dans
-// src/routes/webhook.routes.js avec vérification de signature.
-// ─────────────────────────────────────────────────────────────────────────────
-
-exports.cinetpayWebhook = async (req, res) => {
-  try {
-    const { merchant_transaction_id, status, amount } = req.body;
-
-    if (!merchant_transaction_id) {
-      return res.status(400).json({ message: 'Transaction ID manquant' });
-    }
-
-    const order = await Order.findOne({ 'payment.transactionId': merchant_transaction_id });
-    if (!order) {
-      return res.status(404).json({ message: 'Commande non trouvée' });
-    }
-
-    let verification;
-    try {
-      verification = await paymentService.verifyPayment(merchant_transaction_id);
-    } catch (err) {
-      verification = { success: false, status: 'UNKNOWN' };
-    }
-
-    if (verification.success || verification.status === 'SUCCESS') {
-      if (order.payment.status !== 'paid') {
-        order.markAsPaid(merchant_transaction_id, 'cinetpay');
-        order.payment.amountPaid = Number(amount) || order.total;
-        await order.save();
-      }
-    } else if (['FAILED', 'REFUSED'].includes(verification.status)) {
-      if (order.payment.status !== 'failed') {
-        order.markAsFailed(`Paiement ${verification.status}`);
-        await order.save();
-        await require('../services/inventory.service').restoreStock(order.items);
-      }
-    }
-
-    res.status(200).json({ message: 'Webhook reçu avec succès' });
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur interne webhook' });
   }
 };
 

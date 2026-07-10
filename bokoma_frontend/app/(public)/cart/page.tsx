@@ -188,7 +188,7 @@ export default function CartPage() {
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       toast.error('Veuillez corriger les erreurs du formulaire');
       return;
@@ -199,150 +199,36 @@ export default function CartPage() {
     }
 
     setIsSubmitting(true);
-    
+
     try {
-      const orderPayload = {
-        shipping: {
+      // ✅ Le cart page NE crée plus la commande directement : on délègue tout
+      //    au flow /checkout unifié (popup CinetPay 900×800, polling page
+      //    success, verifyToken, etc.). On persiste juste les infos de
+      //    livraison en sessionStorage pour pré-remplir /checkout.
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('bokoma_cart_shipping', JSON.stringify({
           fullName: shippingDetails.fullName.trim(),
           phone: shippingDetails.phone.trim(),
           street: shippingDetails.address.trim(),
           city: shippingDetails.city,
           country: shippingDetails.country,
           postalCode: shippingDetails.postalCode?.trim(),
-          cost: shippingCost,
-        },
-        payment: {
-          method: paymentMethod,
-          status: paymentMethod === 'cash_on_delivery' ? 'partial' : 'pending',
-          amountPaid: paymentMethod === 'cash_on_delivery' ? amountDueNow : 0,
-          details: paymentMethod === 'cash_on_delivery' ? {
-            phoneNumber: shippingDetails.phone.trim(),
-          } : {},
-        },
-        notes: orderNotes.trim() || undefined,
-        couponCode: cart.coupon?.code,
-        items: cart.items.map(item => {
-          const product = typeof item.product === 'object' ? (item.product as any)._id : item.product;
-          const variant = typeof item.variant === 'object' ? (item.variant as any)._id : item.variant;
-          
-          const cleanItem: any = {
-            product,
-            quantity: item.quantity,
-            price: item.price,
-          };
-          
-          if (variant && typeof variant === 'string' && variant.length === 24) {
-            cleanItem.variant = variant;
-          }
-          
-          if (item.size) cleanItem.size = item.size;
-          if (item.color) cleanItem.color = item.color;
-          
-          return cleanItem;
-        }),
-      };
-
-      const response = await Promise.race([
-        orderApi.createOrder(orderPayload),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout (30s)')), 30000))
-      ]);
-      
-      const paymentUrl = (response as any).data?.payment?.paymentUrl || (response as any).paymentUrl;
-      const orderId = (response as any).data?.order?._id || (response as any).order?._id;
-      
-      if (paymentUrl) {
-        toast.success('Ouverture de la fenêtre de paiement...');
-        
-        if (orderId) {
-          localStorage.setItem('pending_order_id', orderId);
-        }
-        
-        const popupWidth = 500;
-        const popupHeight = 700;
-        const left = (window.innerWidth - popupWidth) / 2;
-        const top = (window.innerHeight - popupHeight) / 2;
-        
-        const popup = window.open(
-          paymentUrl,
-          'CinetPayCheckout',
-          `width=${popupWidth},height=${popupHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`
-        );
-        
-        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-          toast.error('Popup bloquée. Veuillez autoriser les popups pour ce site.');
-          window.location.href = paymentUrl;
-          return;
-        }
-        
-        const handleMessage = (event: MessageEvent) => {
-          if (!event.origin.includes('cinetpay')) return;
-          
-          const data = event.data;
-          
-          if (data.status === 'ACCEPTED' || data.status === 'SUCCESS') {
-            toast.success('Paiement réussi !');
-            popup.close();
-            
-            if (orderId) {
-              router.push(`/orders/${orderId}/confirmation`);
-            }
-            
-            window.removeEventListener('message', handleMessage);
-          } else if (data.status === 'REFUSED' || data.status === 'FAILED') {
-            toast.error('Paiement échoué. Veuillez réessayer.');
-            popup.close();
-            window.removeEventListener('message', handleMessage);
-          }
-        };
-        
-        window.addEventListener('message', handleMessage);
-        
-        const checkPopupClosed = setInterval(() => {
-          if (popup.closed) {
-            clearInterval(checkPopupClosed);
-            window.removeEventListener('message', handleMessage);
-            
-            if (orderId) {
-              toast.info('Vérification du paiement...');
-              router.push(`/orders/${orderId}/confirmation`);
-            }
-          }
-        }, 500);
-        
-        return;
+          method: shippingMethod,
+          paymentMethod,
+          notes: orderNotes.trim() || undefined,
+        }));
       }
-
-      toast.success('Commande créée avec succès !');
-      
-      if (orderId) {
-        router.push(`/orders/${orderId}/confirmation`);
-      } else {
-        router.push(ROUTES.USER.PROFILE || '/profile');
-      }
-      
+      router.push('/checkout');
     } catch (err: any) {
-      if (err?.response?.status === 401 || err?.message?.includes('authentification') || err?.message?.includes('token')) {
-        toast.error('Session expirée. Veuillez vous reconnecter.');
-        return;
-      }
-      
-      let message = 'Erreur lors de la création de la commande';
-      
-      const validationErrors = err?.response?.data?.errors;
-      if (validationErrors && Array.isArray(validationErrors)) {
-        message = validationErrors.map((e: any) => e.msg || e.message).join(', ');
-      } else if (err?.response?.data?.message) {
-        message = err.response.data.message;
-      } else if (err?.message) {
-        message = err.message;
-      }
-      
-      toast.error(message);
-      setFormErrors(prev => ({ ...prev, submit: message }));
-      
+      toast.error('Erreur lors de la redirection vers le paiement');
     } finally {
       setIsSubmitting(false);
     }
+
+    // === Ancien code mort (CinetPay popup inline + postMessage) — supprimé
+    //     parce qu'il dupliquait la logique de /checkout, ne passait pas le
+    //     verifyToken au polling, et utilisait un postMessage hasardeux que
+    //     CinetPay n'envoie pas réellement. ===
   };
 
   if (!mounted || authLoading) {

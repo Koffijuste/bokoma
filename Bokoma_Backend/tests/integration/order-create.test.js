@@ -24,7 +24,6 @@ const Cart = require('../../src/models/Cart');
 // Mock payment-flow.service pour ne pas appeler CinetPay réellement
 jest.mock('../../src/services/payment-flow.service', () => ({
   initializeCinetPayPayment: jest.fn(),
-  verifyWebhookSignature: jest.fn().mockReturnValue(true),
   computePaymentAmounts: jest.requireActual('../../src/services/payment-flow.service').computePaymentAmounts,
   normalizePhoneNumber: jest.requireActual('../../src/services/payment-flow.service').normalizePhoneNumber,
   resolveCinetPayMethod: jest.requireActual('../../src/services/payment-flow.service').resolveCinetPayMethod,

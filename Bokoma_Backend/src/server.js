@@ -76,21 +76,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// ─── Webhook raw body (avant express.json) ───────────────────────────────────
-// Le webhook CinetPay a besoin du body brut pour vérifier la signature HMAC.
-// On capture le raw body ici et on le rend dispo à req.rawBody dans le handler.
-// IMPORTANT : on monte le webhook AVANT le rate limiter global pour ne pas
-// être limité par CinetPay (qui peut envoyer plusieurs notifications en rafale).
-app.use(
-  '/api/v1/webhook',
-  express.json({
-    limit: '1mb',
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-  require('./routes/webhook.routes'),
-);
+// ─── Webhook CinetPay ──────────────────────────────────────────────────────────
+// Le webhook s'authentifie par `notifyToken` (API CinetPay v1), pas par HMAC.
+// On le monte AVANT le rate limiter global pour ne pas être étranglé par
+// apiLimiter (CinetPay peut envoyer plusieurs notifications en rafale).
+app.use('/api/v1/webhook', require('./routes/webhook.routes'));
 
 // ─── Parsers ──────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));           // ✅ 100mb → 10mb (sécurité)
@@ -166,10 +156,6 @@ app.use('/api/v1/feedbacks',  require('./routes/feedback.routes'));
 // ✅ RGPD / Cookies — log de consentement CNIL (public + admin)
 app.use('/api/v1/consent',    require('./routes/consent.routes'));
 
-if (process.env.NODE_ENV !== 'production') {
-  app.use('/api/v1/test/cinetpay', require('./routes/test.cinetpay.routes'));
-}
-
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route non trouvée: ${req.originalUrl}` });
@@ -216,6 +202,31 @@ connectDB()
       // Conserver aussi les logs "console.log" pour les outils qui les grep
       console.log(`🚀 Serveur : http://localhost:${PORT}`);
       console.log(`🏥 Health  : http://localhost:${PORT}/api/v1/health`);
+
+      // ✅ Log l'IP sortante du conteneur Railway au démarrage.
+      //    Sert à whitelister CinetPay sans avoir à interroger /api/v1/debug/ip.
+      //    Best-effort : ne bloque pas le boot si l'echo service est down.
+      if (process.env.NODE_ENV === 'production') {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), 3000);
+        fetch('https://api.ipify.org?format=json', {
+          signal: ctl.signal,
+          headers: { Accept: 'application/json' },
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => {
+            clearTimeout(t);
+            const egressIp = j?.ip || null;
+            logger.info('boot', 'railway_egress_ip', {
+              egressIp,
+              cinetpayWhitelistHint: egressIp
+                ? `Ajoute ${egressIp} à la whitelist CinetPay (https://app-new.cinetpay.com → Intégrations)`
+                : 'IP non détectée — utilise GET /api/v1/debug/ip pour la récupérer',
+            });
+            console.log(`🌐 Egress IP Railway : ${egressIp || 'indéterminée'}`);
+          })
+          .catch(() => clearTimeout(t));
+      }
     });
   })
   .catch((err) => {

@@ -88,6 +88,10 @@ const paymentSchema = new mongoose.Schema(
     amountPaid: { type: Number, default: 0, min: 0 },
     remainingAmount: { type: Number, default: 0, min: 0 },
     rejectionReason: { type: String, trim: true },
+    // ✅ Token de notification CinetPay — sert à authentifier le webhook v1
+    //    (comparaison timing-safe avec le `notify_token` envoyé dans le body).
+    //    Stocké ici car le webhook ne connaît pas le secret API.
+    notifyToken: { type: String, trim: true, select: false },
     details: {
       cardLast4: { type: String },
       cardName: { type: String },
@@ -172,7 +176,15 @@ const orderSchema = new mongoose.Schema(
     },
     notes: { type: String, trim: true },
     cancelReason: { type: String, trim: true },
-    
+
+    // ✅ Token de vérification publique — permet à la page /payment/success
+    //    de poller le statut de la commande sans authentification (l'orderId
+    //    seul ne doit pas suffire, sinon n'importe qui avec l'ID accède aux
+    //    données de la commande : nom, tél, adresse...).
+    //    Généré à la création de la commande, renvoyé au client lors du
+    //    checkout, et vérifié sur GET /api/v1/orders/verify/:orderId?token=...
+    verifyToken: { type: String, trim: true, index: true, select: false },
+
     // ✅ Gestion de l'expiration du paiement
     paymentExpiresAt: { 
       type: Date, 

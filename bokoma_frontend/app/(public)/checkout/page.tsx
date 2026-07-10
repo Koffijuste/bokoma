@@ -128,14 +128,18 @@ export default function CheckoutPage() {
       // détecte via window.focus()/interval et on redirige vers la page
       // de succès qui poll le backend pour confirmer le paiement.
       if (data?.payment?.paymentUrl) {
-        // Stocker l'orderId en session pour la page de succès/échec
+        // Stocker l'orderId + verifyToken en session pour la page de succès/échec
         // (utile aussi si l'utilisateur revient manuellement après avoir
         // fermé l'onglet CinetPay : il sera redirigé vers la bonne page).
+        // Le verifyToken est REQUIS par /api/v1/orders/verify/:orderId pour
+        // accéder aux détails complets de la commande (sécurité : sans token,
+        // seul le statut minimal est retourné).
         if (typeof sessionStorage !== 'undefined') {
           sessionStorage.setItem('bokoma_pending_order', JSON.stringify({
             orderId:     data.order?._id,
             orderNumber: data.order?.orderNumber,
             total:       data.order?.total,
+            verifyToken: data.verifyToken,
           }));
         }
 
@@ -170,8 +174,11 @@ export default function CheckoutPage() {
               // la page /payment/success POLL le backend pour vérifier
               // le statut réel (cf. bug où la page affichait un succès trompeur).
               const orderId = data.order?._id;
+              const verifyToken = data.verifyToken;
               if (orderId) {
-                router.push(`/payment/success?orderId=${orderId}`);
+                const params = new URLSearchParams({ orderId });
+                if (verifyToken) params.set('token', verifyToken);
+                router.push(`/payment/success?${params.toString()}`);
               }
             }
           }, 600);
@@ -188,7 +195,9 @@ export default function CheckoutPage() {
       // "Paiement confirmé !" même si le backend n'a jamais validé la
       // commande (cf. bug où la page affichait un succès trompeur).
       if (data?.order?._id) {
-        router.push(`/payment/success?orderId=${data.order._id}`);
+        const params = new URLSearchParams({ orderId: data.order._id });
+        if (data.verifyToken) params.set('token', data.verifyToken);
+        router.push(`/payment/success?${params.toString()}`);
       }
 
     } catch (err: any) {

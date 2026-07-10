@@ -25,6 +25,7 @@ const {
   sendOrderConfirmation,
   sendOrderStatusUpdate,
 } = require('./email.service');
+const crypto = require('crypto');
 
 // Tarifs de livraison (en FCFA)
 const SHIPPING_RATES = {
@@ -41,6 +42,13 @@ const VALID_ORDER_STATUSES = [
   'pending', 'confirmed', 'processing', 'shipped',
   'delivered', 'cancelled', 'refunded',
 ];
+
+/**
+ * Génère un token opaque (hex 32 octets) pour la vérification publique
+ * de la commande. Suffisamment long pour résister aux attaques par force
+ * brute (probabilité de collision négligeable sur 10^6 commandes).
+ */
+const generateVerifyToken = () => crypto.randomBytes(32).toString('hex');
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  HELPERS
@@ -416,6 +424,9 @@ const createOrder = async (req) => {
 
   // 5. Créer la commande (statut "pending")
   const transactionId = generateTransactionId(userId);
+  // ✅ Token public pour la vérification sans auth (sécurité : ne pas
+  //    exposer les détails commande juste avec l'orderId).
+  const verifyToken = generateVerifyToken();
 
   const order = await Order.create({
     user: userId,
@@ -439,6 +450,7 @@ const createOrder = async (req) => {
       amountPaid: 0,
       remainingAmount: 0,
     },
+    verifyToken,
     subtotal,
     shippingCost,
     discount,
@@ -474,6 +486,9 @@ const createOrder = async (req) => {
 
       order.payment.provider = 'cinetpay';
       order.payment.paymentToken = paymentData.paymentToken;
+      // ✅ notifyToken CinetPay v1 — sert à authentifier le webhook
+      //    (vérification timing-safe contre le `notify_token` du body).
+      order.payment.notifyToken = paymentData.notifyToken;
       order.payment.amountPaid = paymentData.paymentAmount;
       order.payment.remainingAmount = paymentData.remainingAmount;
       order.payment.correlationId = paymentData.correlationId;

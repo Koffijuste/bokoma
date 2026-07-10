@@ -109,6 +109,10 @@ export default function PaymentSuccessPage() {
 
   const orderId = params.get('orderId');
   const statusParam = params.get('status');
+  // ✅ Token de vérification passé par le checkout (ou récupéré du sessionStorage
+  //    si l'utilisateur a rechargé la page). REQUIS par /orders/verify/:orderId
+  //    pour accéder aux détails complets de la commande.
+  const tokenFromUrl = params.get('token');
 
   const [status, setStatus] = useState<PaymentStatus>(
     statusParam === 'confirmed' ? 'confirmed' : 'polling'
@@ -117,6 +121,7 @@ export default function PaymentSuccessPage() {
   const [pollCount, setPollCount] = useState(0);
   const [countdown, setCountdown] = useState(4);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [verifyToken, setVerifyToken] = useState<string | null>(tokenFromUrl);
 
   // ── Récupère les détails depuis sessionStorage ─────────────────────────────
   useEffect(() => {
@@ -126,6 +131,9 @@ export default function PaymentSuccessPage() {
         try {
           const parsed = JSON.parse(stored);
           setOrder(prev => prev ?? parsed);
+          if (!verifyToken && parsed.verifyToken) {
+            setVerifyToken(parsed.verifyToken);
+          }
         } catch {}
       }
     }
@@ -136,7 +144,10 @@ export default function PaymentSuccessPage() {
     if (!orderId || status !== 'polling') return;
 
     try {
-      const response = await orderApi.verifyPaymentPublic({ orderId });
+      const response = await orderApi.verifyPaymentPublic({
+        orderId,
+        token: verifyToken,
+      });
       const o = (response as any)?.data?.order ?? (response as any)?.order;
 
       if (!o) return;
@@ -179,7 +190,7 @@ export default function PaymentSuccessPage() {
       if (next >= MAX_POLLS) setStatus('expired');
       return next;
     });
-  }, [orderId, status]);
+  }, [orderId, status, verifyToken]);
 
   useEffect(() => {
     if (status !== 'polling' || !orderId) return;

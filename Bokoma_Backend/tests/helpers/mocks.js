@@ -28,7 +28,6 @@ const mockPaymentService = () => {
         amount: 5000,
         transactionId: 'CMD-MOCK-12345',
       }),
-      verifyWebhookSignature: jest.fn().mockReturnValue(true),
     }));
   });
 };

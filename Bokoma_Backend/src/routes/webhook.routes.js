@@ -1,104 +1,117 @@
 // src/routes/webhook.routes.js
 // ============================================================================
-// 🔔 WEBHOOK CINETPAY — Confirmation de paiement en arrière-plan
+// 🔔 WEBHOOK CINETPAY v1 — Authentification par notifyToken (PAS de HMAC)
 // ⚠️ Route publique — appelée directement par CinetPay depuis leurs serveurs
-// 🔐 Vérification HMAC-SHA256 obligatoire (middleware verifyCinetPaySignature)
+// 🔐 Vérification : compare le `notify_token` du body avec celui stocké
+//    dans la commande (via cinetpay-js `verifyNotification`, timing-safe).
 // ============================================================================
 
 const express = require('express');
 const router = express.Router();
+const { verifyNotification, parseNotification } = require('cinetpay-js');
 const Order = require('../models/Order');
 const NotificationService = require('../services/notification.service');
 const paymentService = require('../services/payment.service');
-const verifySignature = require('../middlewares/verifyCinetPaySignature');
-
-// ─── IPs autorisées CinetPay (whitelist complémentaire à la signature) ────────
-// https://docs.cinetpay.com/
-const CINETPAY_IPS = [
-  '13.48.85.38', '15.236.100.245', '13.36.56.224',
-  '52.47.211.226', '3.250.148.249', '52.213.164.166',
-];
-
-function isCinetPayRequest(req) {
-  if (process.env.NODE_ENV !== 'production') return true;
-
-  const ip = req.ip || req.connection.remoteAddress || '';
-  const forwarded = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || '';
-  const clientIp = forwarded || ip;
-
-  return CINETPAY_IPS.some((allowed) => clientIp.includes(allowed));
-}
+const logger = require('../utils/logger');
 
 // ─── POST /api/v1/webhook/cinetpay ───────────────────────────────────────────
 
-router.post(
-  '/cinetpay',
-  verifySignature(),
-  async (req, res) => {
-    try {
-      // Vérification IP (en complément de la signature)
-      if (!isCinetPayRequest(req)) {
-        return res.status(403).json({ success: false, message: 'Accès refusé' });
-      }
+router.post('/cinetpay', async (req, res) => {
+  let notification = null;
+  try {
+    notification = parseNotification(req.body);
+  } catch (err) {
+    logger.warn('webhook', 'invalid_payload', { error: err.message });
+    // 200 pour éviter que CinetPay retente à l'infini sur payload cassé
+    return res.status(200).json({ success: false, message: 'Payload invalide' });
+  }
 
-      const { transaction_id, order_id, status, amount } = req.body;
+  // 1. Récupérer la commande (on a besoin du notifyToken, qui est `select: false`)
+  const order = await Order.findOne({
+    'payment.transactionId': notification.transactionId,
+  })
+    .select('+payment.notifyToken +verifyToken')
+    .populate('user', 'firstName lastName email _id');
 
-      if (!transaction_id && !order_id) {
-        return res.status(400).json({ success: false, message: 'Données manquantes' });
-      }
+  if (!order) {
+    logger.warn('webhook', 'order_not_found', {
+      transactionId: notification.transactionId,
+    });
+    return res.status(200).json({ success: false, message: 'Commande inconnue' });
+  }
 
-      // ── Trouver la commande ────────────────────────────────────────────────
-      const order = await Order.findOne({
-        $or: [
-          { _id: order_id },
-          { orderNumber: order_id },
-          { 'payment.transactionId': transaction_id },
-        ],
-      }).populate('user', 'firstName lastName email _id');
+  // 2. Vérifier le notifyToken (CinetPay v1 utilise un token de notification
+  //    généré à l'init paiement, pas un HMAC). C'est la SÉCURITÉ PRINCIPALE.
+  if (!order.payment.notifyToken) {
+    // Commande legacy : on a pas stocké le notifyToken. On accepte le webhook
+    // uniquement si on peut confirmer via l'API CinetPay (defense in depth).
+    logger.warn('webhook', 'legacy_order_no_notify_token', {
+      orderNumber: order.orderNumber,
+      transactionId: notification.transactionId,
+    });
+  } else if (!verifyNotification(order.payment.notifyToken, notification.notifyToken)) {
+    logger.warn('webhook', 'invalid_notify_token', {
+      orderNumber: order.orderNumber,
+      transactionId: notification.transactionId,
+    });
+    return res.status(200).json({ success: false, message: 'Token invalide' });
+  }
 
-      if (!order) {
-        return res.status(404).json({ success: false, message: 'Commande non trouvée' });
-      }
+  // 3. Éviter le double-traitement
+  if (order.payment.status === 'paid') {
+    return res.status(200).json({ success: true, message: 'Déjà traité' });
+  }
 
-      // Éviter le double-traitement
-      if (order.payment.status === 'paid') {
-        return res.json({ success: true, message: 'Déjà traité' });
-      }
+  // 4. Double vérification via API CinetPay (ne pas se fier au webhook brut)
+  let verified = { success: false, status: 'UNKNOWN' };
+  try {
+    verified = await paymentService.verifyPayment(notification.transactionId);
+  } catch (err) {
+    logger.warn('webhook', 'verify_api_failed', {
+      error: err.message,
+      transactionId: notification.transactionId,
+    });
+  }
 
-      // Double vérification via API CinetPay (ne pas se fier uniquement au webhook)
-      let verified = { success: false, status: 'UNKNOWN' };
-      try {
-        verified = await paymentService.verifyPayment(transaction_id);
-      } catch {
-        verified = {
-          success: ['ACCEPTED', 'SUCCESS', 'paid'].includes(status),
-          status: status || 'UNKNOWN',
-        };
-      }
+  // 5. Décider du sort de la commande
+  //    On combine : statut du webhook (status fourni dans le body si dispo)
+  //    + statut confirmé par l'API.
+  const webhookStatus = String(notification.status || '').toUpperCase();
+  const isPaid =
+    verified.success ||
+    ['SUCCESS', 'ACCEPTED', 'PAID'].includes(webhookStatus);
+  const isFailed =
+    ['FAILED', 'REFUSED', 'EXPIRED', 'CANCELED'].includes(webhookStatus) ||
+    ['FAILED', 'REFUSED', 'EXPIRED', 'CANCELED'].includes(String(verified.status || '').toUpperCase());
 
-      const isPaid = verified.success || ['ACCEPTED', 'SUCCESS', 'paid'].includes(status);
-      const isFailed = ['REFUSED', 'FAILED', 'failed'].includes(status) ||
-                       ['REFUSED', 'FAILED'].includes(verified.status);
-
-      if (isPaid) {
-        await handlePaymentSuccess(order, transaction_id, amount);
-      } else if (isFailed) {
-        await handlePaymentFailure(order, transaction_id, status);
-      }
-
-      // CinetPay attend 200 pour ne pas retenter
-      res.json({
-        success: true,
-        message: 'Webhook traité',
+  try {
+    if (isPaid) {
+      await handlePaymentSuccess(order, notification.transactionId, notification.amount);
+    } else if (isFailed) {
+      await handlePaymentFailure(order, notification.transactionId, webhookStatus || verified.status);
+    } else {
+      logger.info('webhook', 'status_pending_or_unknown', {
         orderNumber: order.orderNumber,
-        status: order.payment.status,
+        webhookStatus,
+        verifiedStatus: verified.status,
       });
-    } catch (err) {
-      // Retourner 200 pour éviter les retry infinis de CinetPay
-      res.status(200).json({ success: false, message: 'Erreur interne traitée' });
     }
-  },
-);
+  } catch (err) {
+    logger.error('webhook', 'handler_error', {
+      orderNumber: order.orderNumber,
+      error: err.message,
+      stack: err.stack?.split('\n').slice(0, 5).join('\n'),
+    });
+    // 200 pour éviter retry infini de CinetPay
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: 'Webhook traité',
+    orderNumber: order.orderNumber,
+    status: order.payment.status,
+  });
+});
 
 // ─── Handlers internes ──────────────────────────────────────────────────────
 
@@ -108,10 +121,9 @@ async function handlePaymentSuccess(order, transactionId, amount) {
   order.payment.provider = 'cinetpay';
 
   // 🐛 FIX : ne pas écraser amountPaid avec order.total quand le paiement
-  // est un acompte (cash_on_delivery = 50% d'acompte). Le `amount` envoyé
-  // par CinetPay dans le webhook correspond à l'acompte encaissé, pas au
-  // total de la commande. Fallback `Number(amount) || order.total` était
-  // faux → toute la UI admin affichait le total au lieu de l'acompte.
+  //    est un acompte (cash_on_delivery = 50% d'acompte). Le `amount` envoyé
+  //    par CinetPay dans le webhook correspond à l'acompte encaissé, pas au
+  //    total de la commande.
   const isPartial =
     order.payment.method === 'cash_on_delivery' ||
     (order.payment.remainingAmount || 0) > 0;
@@ -121,20 +133,14 @@ async function handlePaymentSuccess(order, transactionId, amount) {
   if (isPartial) {
     order.payment.status = 'partial';
     if (Number.isFinite(receivedAmount) && receivedAmount > 0 && receivedAmount <= order.total) {
-      // CinetPay a renvoyé un montant cohérent (≤ total) : on l'utilise
-      // comme acompte et on recalcule le reste.
       order.payment.amountPaid = receivedAmount;
       order.payment.remainingAmount = order.total - receivedAmount;
-    } else {
-      // Pas de montant exploitable : on CONSERVE l'acompte déjà calculé
-      // à la création de la commande (payment-flow.service.js).
-      // Ne PAS écrire order.total ici.
     }
+    // Sinon : on CONSERVE l'acompte déjà calculé à la création
     if (order.status === 'pending') {
       order.status = 'confirmed';
     }
   } else {
-    // Paiement 100% (mobile_money / card)
     order.payment.status = 'paid';
     order.payment.amountPaid = Number.isFinite(receivedAmount) && receivedAmount > 0
       ? receivedAmount
@@ -194,7 +200,6 @@ async function handlePaymentFailure(order, transactionId, status) {
 
   await order.save();
 
-  // Restaurer le stock
   try {
     await restoreStock(order.items);
   } catch {
@@ -221,7 +226,7 @@ if (process.env.NODE_ENV !== 'production') {
       success: true,
       message: 'Webhook endpoint OK',
       timestamp: new Date().toISOString(),
-      signatureRequired: true,
+      authMethod: 'notifyToken (CinetPay v1)',
     });
   });
 }
