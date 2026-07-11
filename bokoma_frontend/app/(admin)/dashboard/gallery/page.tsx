@@ -92,6 +92,51 @@ const inferProviderFromUrl = (rawUrl: string): GalleryProvider | null => {
   return null;
 };
 
+/**
+ * 🎬 Extrait l'ID d'une vidéo YouTube à partir de n'importe quelle URL
+ * (watch?v=, youtu.be/, /embed/, /shorts/).
+ */
+const extractYouTubeId = (rawUrl: string): string | null => {
+  if (!rawUrl) return null;
+  const m = rawUrl.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+};
+
+/**
+ * 🖼️ Retourne la meilleure URL de miniature disponible pour un item.
+ * - Vidéo YouTube : génère le thumbnail standard img.youtube.com
+ * - Sinon : utilise item.thumbnail, puis item.url en fallback
+ * Retourne null si rien d'exploitable (ex: MP4 distant sans miniature).
+ */
+const getItemThumbnail = (item: GalleryItem): string | null => {
+  if (item.type === 'video') {
+    if (item.thumbnail) return item.thumbnail;
+    const ytId = extractYouTubeId(item.url);
+    if (ytId) return `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+    return null; // Pas de miniature connue → on affichera un placeholder
+  }
+  return item.thumbnail || item.url || null;
+};
+
+/**
+ * 🎨 Petit gradient coloré par provider pour le placeholder vidéo.
+ * Évite le carré noir quand on n'a pas de miniature (YouTube, Vimeo, MP4…).
+ */
+const getProviderAccent = (provider?: GalleryProvider): string => {
+  switch (provider) {
+    case 'youtube':    return 'from-red-600/40 via-red-900/60 to-black';
+    case 'vimeo':      return 'from-cyan-500/30 via-sky-900/60 to-black';
+    case 'tiktok':     return 'from-pink-500/40 via-cyan-500/30 to-black';
+    case 'instagram':  return 'from-fuchsia-500/40 via-purple-900/60 to-black';
+    case 'facebook':   return 'from-blue-600/40 via-blue-900/60 to-black';
+    case 'x':          return 'from-slate-500/40 via-slate-900/60 to-black';
+    case 'mp4':        return 'from-amber-500/30 via-slate-900/60 to-black';
+    case 'local':      return 'from-emerald-500/30 via-slate-900/60 to-black';
+    case 'cloudinary': return 'from-violet-500/30 via-slate-900/60 to-black';
+    default:           return 'from-slate-600/40 via-slate-900/70 to-black';
+  }
+};
+
 const PAGE_SIZE = 20;
 
 // ============================================================================
@@ -665,6 +710,8 @@ export default function AdminGalleryPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const cancelledRef = useRef(false);
 
@@ -751,13 +798,22 @@ export default function AdminGalleryPage() {
   }, [fetchItems]);
 
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Supprimer définitivement « ${title} » ?`)) return;
+    // Ouvre un vrai modal de confirmation (au lieu d'un confirm() natif).
+    setDeleteConfirm({ id, title });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
     try {
-      await galleryApi.remove(id);
+      await galleryApi.remove(deleteConfirm.id);
       toast.success('Média supprimé');
+      setDeleteConfirm(null);
       fetchItems(1);
     } catch (err: any) {
       toast.error('Suppression impossible', { description: err?.message });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1015,20 +1071,36 @@ export default function AdminGalleryPage() {
               >
                 {/* Thumbnail + overlay */}
                 <div className="relative aspect-square bg-muted overflow-hidden">
-                  {item.thumbnail || item.url ? (
+                  {(() => {
+                    const thumb = getItemThumbnail(item);
+                    if (item.type === 'video' && !thumb) {
+                      // 🎬 Placeholder stylé quand pas de miniature (YouTube, MP4, etc.)
+                      return (
+                        <div className={cn(
+                          'w-full h-full flex flex-col items-center justify-center text-white relative overflow-hidden bg-gradient-to-br',
+                          getProviderAccent(item.provider),
+                        )}>
+                          <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.15), transparent 60%)' }} />
+                          <div className="w-16 h-16 rounded-full bg-white/95 text-black flex items-center justify-center shadow-xl mb-3 relative">
+                            <Play className="w-7 h-7 ml-0.5" fill="currentColor" />
+                          </div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider opacity-90 relative px-2 text-center line-clamp-1">
+                            {item.provider ? PROVIDER_LABELS[item.provider] : 'Vidéo'}
+                          </span>
+                        </div>
+                      );
+                    }
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.thumbnail || item.url}
-                      alt={item.title}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/40">
-                      {item.type === 'video' ? <Play className="w-10 h-10 text-muted-foreground/60" /> : <ImageIcon className="w-10 h-10 text-muted-foreground/60" />}
-                    </div>
-                  )}
+                    return (
+                      <img
+                        src={thumb || item.url}
+                        alt={item.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    );
+                  })()}
 
                   {/* Dégradé permanent pour lisibilité des badges */}
                   <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
@@ -1052,6 +1124,16 @@ export default function AdminGalleryPage() {
                     )}
                   </div>
 
+                  {/* Bouton supprimer — toujours visible (top-right) */}
+                  <button
+                    onClick={() => handleDelete(item._id, item.title)}
+                    title="Supprimer"
+                    aria-label={`Supprimer ${item.title}`}
+                    className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 hover:bg-destructive text-white flex items-center justify-center transition-colors backdrop-blur-sm shadow-lg z-10"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+
                   {/* Brouillon overlay */}
                   {!item.isPublished && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-white font-semibold">
@@ -1062,7 +1144,7 @@ export default function AdminGalleryPage() {
                   )}
 
                   {/* Vidéo play overlay (toujours visible, plus grand) */}
-                  {item.type === 'video' && item.isPublished && (
+                  {item.type === 'video' && item.isPublished && getItemThumbnail(item) && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="w-14 h-14 rounded-full bg-white/95 text-black flex items-center justify-center shadow-xl transition-transform duration-300 group-hover:scale-110">
                         <Play className="w-6 h-6 ml-0.5" fill="currentColor" />
@@ -1096,6 +1178,14 @@ export default function AdminGalleryPage() {
                         className="flex-1 h-9 rounded-lg text-white hover:bg-white/20 flex items-center justify-center transition-colors"
                       >
                         <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item._id, item.title)}
+                        title="Supprimer"
+                        aria-label={`Supprimer ${item.title}`}
+                        className="flex-1 h-9 rounded-lg text-white hover:bg-red-500/80 bg-red-500/30 flex items-center justify-center transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -1306,6 +1396,67 @@ export default function AdminGalleryPage() {
         onClose={() => setModalOpen(false)}
         onSaved={() => fetchItems(pagination.page)}
       />
+
+      {/* Modal de confirmation de suppression (au lieu du confirm() natif) */}
+      {deleteConfirm && (
+        <div
+          className="fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => !deleting && setDeleteConfirm(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-confirm-title"
+        >
+          <div
+            className="bg-card border border-border rounded-2xl max-w-md w-full p-6 shadow-2xl animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-destructive" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 id="delete-confirm-title" className="text-lg font-bold">
+                  Supprimer ce média ?
+                </h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Cette action est irréversible.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/30 p-3 mb-5">
+              <p className="text-sm text-muted-foreground">
+                Vous allez supprimer définitivement :
+              </p>
+              <p className="font-semibold text-foreground mt-1 line-clamp-2 break-words">
+                « {deleteConfirm.title} »
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+              >
+                Annuler
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="gap-2"
+              >
+                {deleting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Suppression…</>
+                ) : (
+                  <><Trash2 className="w-4 h-4" /> Supprimer définitivement</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
