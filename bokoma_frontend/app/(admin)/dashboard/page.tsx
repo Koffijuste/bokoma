@@ -432,29 +432,32 @@ export default function DashboardPage() {
       )}
 
       <div className="space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {statCards.map((stat, i) => (
             <div
               key={stat.label}
-              className="bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-500"
+              className="bg-card border border-border rounded-xl p-3 sm:p-5 hover:shadow-md transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-500 min-w-0 overflow-hidden"
               style={{ animationDelay: `${i * 50}ms` }}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className={`p-2.5 ${stat.bg} rounded-lg`}>
-                  <stat.icon className={`w-5 h-5 ${stat.color}`} aria-hidden="true" />
+              <div className="flex items-start justify-between mb-2 sm:mb-3 gap-2">
+                <div className={`p-2 sm:p-2.5 ${stat.bg} rounded-lg flex-shrink-0`}>
+                  <stat.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${stat.color}`} aria-hidden="true" />
                 </div>
-                <span className={`flex items-center gap-0.5 text-xs font-medium ${stat.color}`}>
+                <span className={`hidden sm:inline-flex items-center gap-0.5 text-xs font-medium ${stat.color} flex-shrink-0`}>
                   {stat.change}
                 </span>
               </div>
-              <p className="text-muted-foreground text-sm mb-1">{stat.label}</p>
-              <p className="text-2xl font-bold">
+              <p className="text-muted-foreground text-xs sm:text-sm mb-1 truncate">{stat.label}</p>
+              <p className="text-base sm:text-2xl font-bold break-words leading-tight">
                 {stats.orders === 0 && isRefreshing ? (
-                  <span className="inline-block w-16 h-6 bg-muted rounded animate-pulse" />
+                  <span className="inline-block w-12 sm:w-16 h-5 sm:h-6 bg-muted rounded animate-pulse" />
                 ) : (
                   stat.value
                 )}
               </p>
+              <span className={`sm:hidden inline-flex items-center gap-0.5 text-[10px] font-medium ${stat.color} mt-1`}>
+                {stat.change}
+              </span>
             </div>
           ))}
         </div>
@@ -555,75 +558,78 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-card border border-border rounded-xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 delay-400">
-          <div className="p-5 border-b border-border flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-lg">Commandes Récentes</h3>
-              <p className="text-sm text-muted-foreground">Dernières transactions</p>
+          <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-base sm:text-lg">Commandes Récentes</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {recentOrders.length > 0
+                  ? `5 dernières sur ${stats.orders} au total`
+                  : 'Dernières transactions'}
+              </p>
             </div>
-            <Link 
-              href={ROUTES.ADMIN.ORDERS} 
-              className="text-sm text-accent hover:underline inline-flex items-center gap-1"
+            <Link
+              href={ROUTES.ADMIN.ORDERS}
+              className="text-xs sm:text-sm text-accent hover:underline inline-flex items-center gap-1 flex-shrink-0"
             >
-              Voir tout <ExternalLink className="w-4 h-4" aria-hidden="true" />
+              Voir tout <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" aria-hidden="true" />
             </Link>
           </div>
-          
-          <div className="overflow-x-auto">
-            {recentOrders.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                {isRefreshing ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="w-6 h-6 animate-spin text-accent" aria-hidden="true" />
-                    <p>Chargement...</p>
-                  </div>
-                ) : (
-                  <p>Aucune commande récente</p>
-                )}
-              </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    {['Commande', 'Client', 'Date', 'Montant', 'Statut'].map(h => (
-                      <th key={h} className="text-left py-3 px-5 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOrders.map((order) => {
-                    return (
-                      <tr key={order._id} className="border-t border-border hover:bg-muted/30 transition-colors">
-                        <td className="py-3 px-5 font-mono text-xs font-medium">
+
+          {recentOrders.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              {isRefreshing ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-6 h-6 animate-spin text-accent" aria-hidden="true" />
+                  <p>Chargement...</p>
+                </div>
+              ) : (
+                <p>Aucune commande récente</p>
+              )}
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {recentOrders.slice(0, 5).map((order) => {
+                const statusColor = STATUS_COLORS[order.status] || '#F59E0B';
+                return (
+                  <div
+                    key={order._id}
+                    className="p-4 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-xs font-semibold text-foreground">
                           #{order.orderNumber?.slice(-6) || order._id?.slice(-6)}
-                        </td>
-                        <td className="py-3 px-5 text-xs">
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
                           {order.user?.name || order.user?.email || 'Client'}
-                        </td>
-                        <td className="py-3 px-5 text-muted-foreground text-xs">
-                          {new Date(order.createdAt).toLocaleDateString('fr-FR')}
-                        </td>
-                        <td className="py-3 px-5 font-medium text-xs">
-                          {formatPrice(order.total)}
-                        </td>
-                        <td className="py-3 px-5">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-medium`}
-                            style={{ 
-                              backgroundColor: `${STATUS_COLORS[order.status] || '#F59E0B'}20`, 
-                              color: STATUS_COLORS[order.status] || '#F59E0B' 
-                            }}
-                          >
-                            {STATUS_LABELS[order.status] || order.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
+                        </p>
+                      </div>
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-medium flex-shrink-0 whitespace-nowrap"
+                        style={{
+                          backgroundColor: `${statusColor}20`,
+                          color: statusColor,
+                        }}
+                      >
+                        {STATUS_LABELS[order.status] || order.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        {new Date(order.createdAt).toLocaleDateString('fr-FR', {
+                          day: '2-digit',
+                          month: 'short',
+                        })}
+                      </span>
+                      <span className="font-semibold text-foreground">
+                        {formatPrice(order.total)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

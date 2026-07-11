@@ -31,7 +31,7 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-type IosState = 'unsupported' | 'installed' | 'show' | 'dismissed';
+type IosState = 'unsupported' | 'installed' | 'show' | 'modal-open' | 'dismissed';
 
 export function PWAInstallPrompt() {
   // Chrome/Edge : on stocke l'event
@@ -172,55 +172,136 @@ export function PWAInstallPrompt() {
     );
   }
 
-  // iOS Safari tip
-  if (iosState === 'show') {
+  // iOS Safari — banner "Installer" (style Android) + modal d'instructions
+  // Sur iOS Safari ne supporte pas beforeinstallprompt, donc le bouton
+  // "Installer" ne peut pas déclencher le prompt natif : il ouvre une modal
+  // avec les 3 étapes manuelles (Partager > Sur l'écran d'accueil > Ajouter).
+  if (iosState === 'show' || iosState === 'modal-open') {
     return (
-      <div
-        role="dialog"
-        aria-label="Ajouter Bokoma à l'écran d'accueil"
-        className={cn(
-          'fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md',
-          'rounded-2xl border border-border bg-card/95 backdrop-blur-md shadow-2xl',
-          'animate-in slide-in-from-bottom-4 fade-in duration-500',
-        )}
-      >
-        <div className="flex items-start gap-3 p-4">
-          <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
-            <Share className="w-6 h-6 text-accent" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm">Ajouter à l'écran d'accueil</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Installez Bokoma en 3 étapes :
-            </p>
-            <ol className="text-xs text-muted-foreground mt-2 space-y-1">
-              <li className="flex items-center gap-1.5">
-                <span className="inline-flex w-4 h-4 rounded-full bg-accent/20 text-accent text-[10px] font-bold items-center justify-center flex-shrink-0">1</span>
-                Appuyez sur <Share className="inline w-3 h-3" /> <strong>Partager</strong>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <span className="inline-flex w-4 h-4 rounded-full bg-accent/20 text-accent text-[10px] font-bold items-center justify-center flex-shrink-0">2</span>
-                Choisissez <Plus className="inline w-3 h-3" /> <strong>Sur l'écran d'accueil</strong>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <span className="inline-flex w-4 h-4 rounded-full bg-accent/20 text-accent text-[10px] font-bold items-center justify-center flex-shrink-0">3</span>
-                Appuyez <strong>Ajouter</strong>
-              </li>
-            </ol>
-            <Button size="sm" variant="ghost" onClick={dismiss} className="mt-3">
-              Compris
-            </Button>
-          </div>
-          <button
-            type="button"
-            onClick={dismiss}
-            aria-label="Fermer"
-            className="flex-shrink-0 p-1 rounded-lg hover:bg-muted transition-colors"
+      <>
+        {/* Auto banner — même forme que le banner Android, CTA "Installer" */}
+        {iosState === 'show' && (
+          <div
+            role="dialog"
+            aria-label="Installer l'application Bokoma"
+            className={cn(
+              'fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md',
+              'rounded-2xl border border-border bg-card/95 backdrop-blur-md shadow-2xl',
+              'animate-in slide-in-from-bottom-4 fade-in duration-500',
+            )}
           >
-            <X className="w-4 h-4 text-muted-foreground" />
-          </button>
-        </div>
-      </div>
+            <div className="flex items-start gap-3 p-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
+                <Share className="w-6 h-6 text-accent" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm">Installer Bokoma Store</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Ajoutez l'app à votre écran d'accueil pour un accès en 1 clic, même hors ligne.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    onClick={() => setIosState('modal-open')}
+                    className="flex-1"
+                  >
+                    <Download className="w-4 h-4 mr-1.5" /> Installer
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={dismiss}>
+                    Plus tard
+                  </Button>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={dismiss}
+                aria-label="Fermer"
+                className="flex-shrink-0 p-1 rounded-lg hover:bg-muted transition-colors"
+              >
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal d'instructions (3 étapes illustrées) */}
+        {iosState === 'modal-open' && (
+          <div
+            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setIosState('show')}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Comment installer Bokoma sur iPhone"
+          >
+            <div
+              className={cn(
+                'bg-card border border-border w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl p-6',
+                'animate-in slide-in-from-bottom-4 fade-in duration-300',
+                'max-h-[90vh] overflow-y-auto shadow-2xl',
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
+                    <Download className="w-5 h-5 text-accent" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-base">Installer Bokoma</h3>
+                    <p className="text-xs text-muted-foreground">3 étapes rapides sur iPhone</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIosState('show')}
+                  aria-label="Revenir au bandeau"
+                  className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                >
+                  <X className="w-5 h-5 text-muted-foreground" />
+                </button>
+              </div>
+
+              <ol className="space-y-4">
+                <li className="flex items-start gap-3">
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-accent text-accent-foreground text-xs font-bold flex items-center justify-center">1</span>
+                  <div className="flex-1 pt-0.5">
+                    <p className="text-sm font-medium">Appuyez sur le bouton Partager</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      En bas de Safari, l'icône{' '}
+                      <Share className="inline w-3 h-3 align-text-bottom mx-0.5" />
+                      carrée avec une flèche vers le haut.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-accent text-accent-foreground text-xs font-bold flex items-center justify-center">2</span>
+                  <div className="flex-1 pt-0.5">
+                    <p className="text-sm font-medium">Choisir « Sur l'écran d'accueil »</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Faites défiler le menu et appuyez sur{' '}
+                      <Plus className="inline w-3 h-3 align-text-bottom mx-0.5" />
+                      <strong>Sur l'écran d'accueil</strong>.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-accent text-accent-foreground text-xs font-bold flex items-center justify-center">3</span>
+                  <div className="flex-1 pt-0.5">
+                    <p className="text-sm font-medium">Appuyez sur Ajouter</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      En haut à droite, puis confirmez. L'icône Bokoma apparaît sur votre écran d'accueil.
+                    </p>
+                  </div>
+                </li>
+              </ol>
+
+              <Button onClick={dismiss} className="w-full mt-6">
+                Compris
+              </Button>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
