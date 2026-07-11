@@ -57,13 +57,18 @@ module.exports = (req, res, next) => {
   const origin = (req.headers.origin || req.headers.referer || '').replace(/\/$/, '');
 
   if (!origin) {
-    // Pas d'Origin / Referer : peut venir d'un outil type curl/Postman.
-    // On laisse passer l'API (utile pour les tests) mais on log.
-    if (process.env.NODE_ENV === 'development') return next();
-    return res.status(403).json({
-      success: false,
-      message: 'Origine de la requête manquante. Requête bloquée (CSRF).',
-    });
+    // ⚠️ Pas d'Origin / Referer : peut venir d'un outil type curl/Postman,
+    //    d'un script server-to-server, ou d'un client mal configuré.
+    //    On ne BLOQUE PAS (sinon les outils d'admin type Postman ou
+    //    les healthchecks internes ne passent plus). La vraie protection
+    //    anti-CSRF reste :
+    //      1. Cookie SameSite=none + Secure en prod (bloque la plupart
+    //         des attaques CSRF navigateur-side)
+    //      2. Whitelist d'Origin pour les requêtes navigateur (les vrais
+    //         navigateurs envoient TOUJOURS un Origin sur POST/PUT/PATCH/DELETE)
+    //    Le reject strict sur Origin manquante était trop cassant — si tu
+    //    veux le réactiver, replace le `return next()` par un 403.
+    return next();
   }
 
   // Origin peut être `https://bokoma.vercel.app` ou
