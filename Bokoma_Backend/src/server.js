@@ -100,6 +100,12 @@ app.use(require('./middlewares/sanitize'));
 app.use(hpp({
   whitelist: ['category', 'type', 'tags', 'sort', 'fields'],
 }));
+// 🛡️ H5 (audit Bokoma 11/07/2026) : anti-CSRF via Origin check.
+//    Le cookie d'auth est SameSite=none en prod (front Vercel ≠ API Railway),
+//    donc on vérifie manuellement que les requêtes mutantes (POST/PUT/PATCH/
+//    DELETE) proviennent bien d'un front autorisé. Bloque les attaques CSRF
+//    classiques (form action sur un site tiers qui soumet vers notre API).
+app.use(require('./middlewares/csrf'));
 app.use(morgan('dev'));
 
 // ─── Fichiers statiques ───────────────────────────────────────────────────────

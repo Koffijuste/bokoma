@@ -8,6 +8,47 @@ const { deleteImages } = require('../services/upload.service');
 const { cleanupTempFiles } = require('../middlewares/upload');
 const { isValidObjectId } = require('mongoose');
 
+// ============================================================================
+// 🔒 H4 (audit Bokoma 11/07/2026) : champs publics des produits
+// ============================================================================
+// On cache de la réponse API publique :
+//   - soldCount       : métrique business concurrentielle (nb ventes)
+//   - createdBy       : référence admin (ObjectId), énumération possible
+//   - __v, updatedAt  : métadonnées Mongoose, jamais utiles au client
+//
+// On GARDE totalStock : nécessaire pour l'UX (bouton "Plus que 3 en stock",
+// désactivation de l'ajout au panier quand 0, etc.). Ce n'est pas un secret
+// défense — c'est juste un signal d'inventaire.
+// ============================================================================
+
+const PUBLIC_PRODUCT_SELECT_EXCLUDE = '-soldCount -createdBy -__v -updatedAt';
+
+/**
+ * Calcule un booléen "inStock" pratique (dérivé de totalStock + variants).
+ * Le frontend peut utiliser `inStock` pour l'affichage "En stock / Rupture"
+ * même si on garde totalStock dans la réponse.
+ */
+const computeInStock = (p) => {
+  if (typeof p.totalStock === 'number' && p.totalStock > 0) return true;
+  if (Array.isArray(p.variants) && p.variants.some((v) => v.stock > 0)) return true;
+  return false;
+};
+
+/**
+ * Projette un document produit (Mongoose ou lean) sur la forme publique :
+ * - retire les champs sensibles (soldCount, createdBy, __v, updatedAt)
+ * - ajoute un booléen inStock dérivé
+ */
+const projectPublicProduct = (p) => {
+  if (!p) return p;
+  // eslint-disable-next-line no-unused-vars
+  const { soldCount, createdBy, __v, updatedAt, ...rest } = p;
+  return {
+    ...rest,
+    inStock: computeInStock(p),
+  };
+};
+
 // ───────── Helpers ─────────
 
 const getUploadedFileUrl = (file) => {
@@ -135,30 +176,32 @@ exports.getProducts = async (req, res) => {
     const total = await countQuery.query.clone().countDocuments();
 
     // ───────── MAIN QUERY ─────────
-    const defaultFields = 'name,slug,images,brand,basePrice,totalStock,category';
-    const requestQuery = {
-      ...req.query,
-      fields: req.query.fields || defaultFields,
-    };
-
-    const features = new ApiFeatures(Product.find(filter), requestQuery)
+    // 🔒 H4 : on exclut explicitement les champs sensibles via
+    //    PUBLIC_PRODUCT_SELECT_EXCLUDE (-soldCount -createdBy -__v -updatedAt).
+    //    totalStock reste exposé pour l'UX du front.
+    const features = new ApiFeatures(
+      Product.find(filter).select(PUBLIC_PRODUCT_SELECT_EXCLUDE),
+      req.query,
+    )
       .search(['name', 'brand'])
       .sort()
-      .limitFields()
       .paginate();
 
     const products = await features.query
       .populate('category', 'name slug')
       .lean();
 
+    // Projette sur la forme publique (supprime __v + ajoute inStock)
+    const safeProducts = products.map(projectPublicProduct);
+
     return res.json({
       success: true,
       total,
-      results: products.length,
+      results: safeProducts.length,
       page: features._page,
       pages: Math.ceil(total / (features._limit || 24)),
       limit: features._limit,
-      products,
+      products: safeProducts,
     });
 
   } catch (err) {
@@ -175,12 +218,13 @@ exports.getProducts = async (req, res) => {
 exports.getProduct = async (req, res) => {
   try {
     const product = await Product.findOne({ slug: req.params.slug, isActive: true })
+      .select(PUBLIC_PRODUCT_SELECT_EXCLUDE)
       .populate('category', 'name slug')
       .lean();
-    
+
     if (!product) throw new AppError('Produit introuvable', 404);
-    
-    res.json({ success: true, product });
+
+    res.json({ success: true, product: projectPublicProduct(product) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ success: false, message: err.message });
   }
@@ -191,10 +235,12 @@ exports.getProduct = async (req, res) => {
 exports.getFeaturedProducts = async (req, res) => {
   try {
     const products = await Product.find({ isActive: true, isFeatured: true })
+      .select(PUBLIC_PRODUCT_SELECT_EXCLUDE)
       .limit(8)
-      .populate('category', 'name slug');
-    
-    res.json({ success: true, products });
+      .populate('category', 'name slug')
+      .lean();
+
+    res.json({ success: true, products: products.map(projectPublicProduct) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
