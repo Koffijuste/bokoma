@@ -1,23 +1,30 @@
 # ============================================================================
 # Bokoma Store — robots.txt
 # ============================================================================
-# Bloque les robots sur les zones admin et privées, autorise le reste.
-# /dashboard, /admin, /profile, /cart, /checkout, /auth/* = NO INDEX.
+# Stratégie minimaliste : on ne liste QUE ce qui est inutile aux moteurs
+# de recherche et qui n'a aucune valeur d'indexation.
+#
+# On NE liste PAS :
+#   - /profile, /orders, /cart, /checkout, /wishlist
+#     → ces pages exigent une auth. Google ne peut pas les crawler
+#       de toute façon, et les lister ici ne ferait que révéler
+#       l'architecture de l'app à un attaquant (fingerprinting).
+#   - /auth/ en entier
+#     → /auth/login et /auth/register sont publics (et doivent l'être
+#       pour le SEO Google Ads / landing pages). Les lister ferait
+#       penser à un attaquant qu'il y a un système d'auth custom
+#       à bruteforcer.
+#   - /dashboard, /admin
+#     → idem, mieux vaut ne PAS confirmer publiquement l'existence
+#       d'un back-office. (Google ne le crawlerait pas sans auth,
+#       donc le Disallow est redondant.)
+#
+# On bloque /api/ parce que les endpoints JSON ne sont pas des pages
+# indexables (ça évite que Google indexe par erreur des réponses JSON).
 # ============================================================================
 
 User-agent: *
 Allow: /
-Disallow: /dashboard
-Disallow: /dashboard/*
-Disallow: /admin
-Disallow: /admin/*
-Disallow: /profile
-Disallow: /profile/*
-Disallow: /cart
-Disallow: /checkout
-Disallow: /orders
-Disallow: /wishlist
-Disallow: /auth/
 Disallow: /api/
 
 # Référence au sitemap
