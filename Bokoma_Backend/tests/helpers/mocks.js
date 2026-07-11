@@ -78,13 +78,18 @@ const mockCloudinary = () => {
 };
 
 /**
- * Mock Nodemailer.
+ * Mock Resend.
+ * (Plus utilisé directement — `mockEmailService()` mocke déjà le service
+ * complet. Conservé au cas où un test veuille mocker l'appel HTTP bas
+ * niveau plutôt que le wrapper.)
  */
-const mockNodemailer = () => {
-  jest.mock('nodemailer', () => ({
-    createTransport: jest.fn().mockReturnValue({
-      sendMail: jest.fn().mockResolvedValue({ messageId: 'mock-message-id' }),
-    }),
+const mockResend = () => {
+  jest.mock('resend', () => ({
+    Resend: jest.fn().mockImplementation(() => ({
+      emails: {
+        send: jest.fn().mockResolvedValue({ data: { id: 'mock-resend-id' }, error: null }),
+      },
+    })),
   }));
 };
 
@@ -104,7 +109,6 @@ const setupAllMocks = () => {
   mockEmailService();
   mockNotificationService();
   mockCloudinary();
-  mockNodemailer();
   // Note: payment.service est mocké sélectivement dans les tests
   // qui en ont besoin (pour pouvoir contrôler les réponses).
 };
@@ -114,7 +118,7 @@ module.exports = {
   mockEmailService,
   mockNotificationService,
   mockCloudinary,
-  mockNodemailer,
+  mockResend,
   setupAllMocks,
   generateWebhookSignature,
 };

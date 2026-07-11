@@ -36,7 +36,7 @@ npm start
 - **CLIENT_URL** : URL frontend (CORS)
 - **JWT_SECRET**, **JWT_EXPIRES_IN**
 - **JWT_REFRESH_SECRET**, **JWT_REFRESH_EXPIRES_IN**
-- **SMTP_HOST**, **SMTP_PORT**, **SMTP_USER**, **SMTP_PASS**, **EMAIL_FROM** (envoi mails)
+- **RESEND_API_KEY** (et optionnellement **RESEND_FROM**) — service d'envoi email transactionnel (Resend)
 - **CLOUDINARY_CLOUD_NAME**, **CLOUDINARY_API_KEY**, **CLOUDINARY_API_SECRET**
 - **STRIPE_SECRET_KEY**, **STRIPE_WEBHOOK_SECRET**
 - **CINETPAY_API_KEY**

@@ -1,14 +1,43 @@
-const nodemailer = require('nodemailer');
+// src/services/email.service.js
+// ============================================================================
+// 📧 EMAIL SERVICE — Resend SDK
+// ============================================================================
+// Remplace l'ancien transporteur nodemailer + SMTP Gmail (qui obligeait à
+// générer un "app password" Google à chaque réinitialisation de 2FA).
+//
+// Resend = API key au lieu d'app password, deliverability native (DKIM/SPF/
+// DMARC gérés), gratuit jusqu'à 3000 emails/mois. Setup : 2 min, juste
+// copier RESEND_API_KEY dans le .env.
+//
+// Setup local / dev sans domaine vérifié :
+//   - Le `from` par défaut est `onboarding@resend.dev` (l'adresse partagée
+//     de Resend, utilisable SANS vérification de domaine).
+//   - Pour envoyer à de vrais destinataires, Resend impose que le `from`
+//     soit un domaine vérifié. En prod, on met `RESEND_FROM=Bokoma
+//     <noreply@bokoma.ci>` après avoir vérifié bokoma.ci sur resend.com.
+//
+// Tous les templates ci-dessous (welcome, password reset, order confirm,
+// status update) gardent la même signature → aucun changement dans les
+// contrôleurs qui les appellent.
+// ============================================================================
 
-const transporter = nodemailer.createTransport({
-  host:   process.env.SMTP_HOST,
-  port:   parseInt(process.env.SMTP_PORT, 10) || 587,
-  secure: process.env.SMTP_PORT === '465',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const { Resend } = require('resend');
+
+const apiKey = process.env.RESEND_API_KEY;
+if (!apiKey) {
+  // Fail-fast au démarrage : pas question d'attendre le premier email
+  // pour découvrir qu'on a oublié la clé.
+  throw new Error(
+    '❌ [email] RESEND_API_KEY manquant dans le .env. ' +
+    'Crée un compte sur https://resend.com, copie la clé, et redémarre.',
+  );
+}
+
+const resend = new Resend(apiKey);
+
+// `from` configurable. Default = adresse de test Resend (pas de domaine
+// requis). En prod : RESEND_FROM="Bokoma <noreply@bokoma.ci>"
+const DEFAULT_FROM = 'Bokoma <onboarding@resend.dev>';
 
 const baseTemplate = (title, content) => `
 <!DOCTYPE html>
@@ -36,12 +65,19 @@ const baseTemplate = (title, content) => `
 </html>`;
 
 const sendEmail = async ({ to, subject, html }) => {
-  await transporter.sendMail({
-    from:    process.env.EMAIL_FROM,
-    to,
+  const from = process.env.RESEND_FROM || DEFAULT_FROM;
+  const { data, error } = await resend.emails.send({
+    from,
+    to: Array.isArray(to) ? to : [to],
     subject,
     html,
   });
+  if (error) {
+    // Resend renvoie un objet { error } au lieu de throw sur les 4xx.
+    // On remballe en Error pour que les contrôleurs catchent comme avant.
+    throw new Error(`[Resend] ${error.name || 'send_failed'}: ${error.message}`);
+  }
+  return { id: data?.id, to, subject };
 };
 
 // ─── Templates ─────────────────────────────────────────────────────────────
