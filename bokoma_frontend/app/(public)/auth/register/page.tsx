@@ -6,9 +6,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, User, Phone, MapPin, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { authApi } from '@/services';
 import { ROUTES } from '@/constants';
 import { validEmail, validPassword } from '@/utils/helpers';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
 const COUNTRIES = [
@@ -47,6 +47,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const router = useRouter();
+  const { register: registerUser, isLoading: isAuthLoading } = useAuth();
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -82,7 +83,12 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
-      await authApi.register({
+      // ✅ On passe par le store (useAuth().register) plutôt que par
+      // authApi.register() directement : ça set Zustand `user` immédiatement,
+      // wipe les données locales du user précédent (panier, wishlist), et
+      // notifie les autres stores. Le cookie httpOnly est set par le backend
+      // dans la réponse de /auth/register.
+      await registerUser({
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         email: formData.email.trim().toLowerCase(),
@@ -91,11 +97,15 @@ export default function RegisterPage() {
         country: formData.country,
         password: formData.password,
       });
-      
+
       toast.success('🎉 Compte créé avec succès !');
-      router.push(ROUTES.AUTH.LOGIN);
+      // Le user est déjà authentifié (cookie set + Zustand hydraté) → on
+      // va directement à /profile. Sauter /login évite une double
+      // redirection et un état Zustand stale qui causait le "figé" sur
+      // /login (cf. login page useEffect avec deps [] + isLoading guard).
+      router.replace(ROUTES.USER?.PROFILE || '/profile');
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err.message || 'Erreur lors de l\'inscription');
+      toast.error(err?.response?.data?.message || err?.message || "Erreur lors de l'inscription");
     } finally {
       setIsLoading(false);
     }
@@ -246,8 +256,8 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <Button type="submit" size="lg" variant="primary" className="w-full mt-2" disabled={isLoading}>
-              {isLoading ? (
+            <Button type="submit" size="lg" variant="primary" className="w-full mt-2" disabled={isLoading || isAuthLoading}>
+              {isLoading || isAuthLoading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
                   Inscription...

@@ -1,7 +1,7 @@
 // app/(public)/auth/login/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
@@ -29,6 +29,10 @@ export default function LoginPage() {
   const [isRedirecting, setIsRedirecting] = useState(false);
   
   const { login, isLoading, isAuthenticated, fetchUser } = useAuth();
+  // ✅ Guard pour ne fetchUser qu'une seule fois par mount (évite les
+  // doubles appels quand isLoading oscille entre true/false pendant
+  // l'hydratation Zustand).
+  const initialFetchAttemptedRef = useRef(false);
 
   // ✅ Bug fix (09/07/2026) : on resynchronise l'état Zustand avec la
   //    réalité du cookie AVANT de décider de rediriger. Sinon, un user
@@ -40,12 +44,19 @@ export default function LoginPage() {
   //    En appelant fetchUser() au montage, /auth/me (avec auto-refresh
   //    côté interceptor) revalide la session. Si le cookie est mort,
   //    Zustand passe à user=null et le formulaire s'affiche normalement.
+  //
+  // ✅ Bug fix (10/07/2026) : useEffect avec deps [] + guard sur
+  //    isLoading ratait le fetch si isLoading=true au mount (Zustand en
+  //    cours d'hydratation depuis localStorage). Le state restait alors
+  //    figé sur le formulaire de login sans qu'aucun /auth/me ne parte
+  //    jamais. On utilise un ref pour retry dès que isLoading retombe à
+  //    false, et on évite le double-fetch avec initialFetchAttemptedRef.
   useEffect(() => {
-    if (!isLoading) {
-      fetchUser();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (initialFetchAttemptedRef.current) return;
+    if (isLoading) return; // Attend que le store ait fini d'hydrater
+    initialFetchAttemptedRef.current = true;
+    fetchUser();
+  }, [isLoading, fetchUser]);
 
   // ✅ Redirection automatique si vraiment authentifié
   // (le fetchUser ci-dessus a attendu que isLoading retombe avant de

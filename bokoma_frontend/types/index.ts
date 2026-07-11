@@ -72,6 +72,12 @@ export interface RegisterData extends LoginCredentials {
   firstName: string;
   lastName: string;
   phone?: string;
+  // Champs additionnels collectés par le formulaire d'inscription.
+  // Le backend les accepte optionnellement (country est sur le User
+  // model, address est juste transmis à des fins de pré-remplissage
+  // post-inscription — non persisté pour l'instant).
+  country?: string;
+  address?: string;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
