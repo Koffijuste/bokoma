@@ -27,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { galleryApi } from '@/services';
 import { cn, formatBytes } from '@/utils/helpers';
 import { compressImage, computeCompressionInfo } from '@/lib/image-compress';
+import { getItemPreview, getProviderAccent } from '@/lib/gallery-preview';
 import type {
   GalleryItem,
   GalleryType,
@@ -91,51 +92,9 @@ const inferProviderFromUrl = (rawUrl: string): GalleryProvider | null => {
   if (/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url))                           return 'mp4';
   return null;
 };
-
-/**
- * 🎬 Extrait l'ID d'une vidéo YouTube à partir de n'importe quelle URL
- * (watch?v=, youtu.be/, /embed/, /shorts/).
- */
-const extractYouTubeId = (rawUrl: string): string | null => {
-  if (!rawUrl) return null;
-  const m = rawUrl.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
-};
-
-/**
- * 🖼️ Retourne la meilleure URL de miniature disponible pour un item.
- * - Vidéo YouTube : génère le thumbnail standard img.youtube.com
- * - Sinon : utilise item.thumbnail, puis item.url en fallback
- * Retourne null si rien d'exploitable (ex: MP4 distant sans miniature).
- */
-const getItemThumbnail = (item: GalleryItem): string | null => {
-  if (item.type === 'video') {
-    if (item.thumbnail) return item.thumbnail;
-    const ytId = extractYouTubeId(item.url);
-    if (ytId) return `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
-    return null; // Pas de miniature connue → on affichera un placeholder
-  }
-  return item.thumbnail || item.url || null;
-};
-
-/**
- * 🎨 Petit gradient coloré par provider pour le placeholder vidéo.
- * Évite le carré noir quand on n'a pas de miniature (YouTube, Vimeo, MP4…).
- */
-const getProviderAccent = (provider?: GalleryProvider): string => {
-  switch (provider) {
-    case 'youtube':    return 'from-red-600/40 via-red-900/60 to-black';
-    case 'vimeo':      return 'from-cyan-500/30 via-sky-900/60 to-black';
-    case 'tiktok':     return 'from-pink-500/40 via-cyan-500/30 to-black';
-    case 'instagram':  return 'from-fuchsia-500/40 via-purple-900/60 to-black';
-    case 'facebook':   return 'from-blue-600/40 via-blue-900/60 to-black';
-    case 'x':          return 'from-slate-500/40 via-slate-900/60 to-black';
-    case 'mp4':        return 'from-amber-500/30 via-slate-900/60 to-black';
-    case 'local':      return 'from-emerald-500/30 via-slate-900/60 to-black';
-    case 'cloudinary': return 'from-violet-500/30 via-slate-900/60 to-black';
-    default:           return 'from-slate-600/40 via-slate-900/70 to-black';
-  }
-};
+// 🎬 Les helpers de preview vidéo (getItemPreview, getProviderAccent,
+//    extractYouTubeId) sont dans @/lib/gallery-preview et partagés entre
+//    les pages admin et public gallery.
 
 const PAGE_SIZE = 20;
 
@@ -1072,33 +1031,63 @@ export default function AdminGalleryPage() {
                 {/* Thumbnail + overlay */}
                 <div className="relative aspect-square bg-muted overflow-hidden">
                   {(() => {
-                    const thumb = getItemThumbnail(item);
-                    if (item.type === 'video' && !thumb) {
-                      // 🎬 Placeholder stylé quand pas de miniature (YouTube, MP4, etc.)
+                    const preview = getItemPreview(item);
+
+                    if (preview.kind === 'image') {
+                      // eslint-disable-next-line @next/next/no-img-element
                       return (
-                        <div className={cn(
-                          'w-full h-full flex flex-col items-center justify-center text-white relative overflow-hidden bg-gradient-to-br',
-                          getProviderAccent(item.provider),
-                        )}>
-                          <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.15), transparent 60%)' }} />
-                          <div className="w-16 h-16 rounded-full bg-white/95 text-black flex items-center justify-center shadow-xl mb-3 relative">
-                            <Play className="w-7 h-7 ml-0.5" fill="currentColor" />
-                          </div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider opacity-90 relative px-2 text-center line-clamp-1">
-                            {item.provider ? PROVIDER_LABELS[item.provider] : 'Vidéo'}
-                          </span>
-                        </div>
+                        <img
+                          src={preview.src}
+                          alt={item.title}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          loading="lazy"
+                          decoding="async"
+                        />
                       );
                     }
-                    // eslint-disable-next-line @next/next/no-img-element
+
+                    if (preview.kind === 'video') {
+                      // 🎥 Vidéo directe (MP4 / Cloudinary / local) : on
+                      // charge les métadonnées et on seek à 0.1s pour afficher
+                      // la première frame comme poster. Muté obligatoire pour
+                      // que l'autoplay silencieux passe. Le navigateur montre
+                      // alors un aperçu du contenu de la vidéo.
+                      return (
+                        <video
+                          src={preview.src}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          onLoadedMetadata={(e) => {
+                            // Seek à 0.1s pour garantir l'affichage de la
+                            // première frame (sinon le navigateur peut
+                            // laisser un cadre noir jusqu'au 1er play).
+                            try {
+                              const v = e.currentTarget;
+                              if (v.duration && v.duration > 0.2) {
+                                v.currentTime = 0.1;
+                              }
+                            } catch { /* CORS ou autre — pas grave */ }
+                          }}
+                        />
+                      );
+                    }
+
+                    // kind === 'none' → placeholder stylé (Vimeo, TikTok, etc.)
                     return (
-                      <img
-                        src={thumb || item.url}
-                        alt={item.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                        loading="lazy"
-                        decoding="async"
-                      />
+                      <div className={cn(
+                        'w-full h-full flex flex-col items-center justify-center text-white relative overflow-hidden bg-gradient-to-br',
+                        getProviderAccent(item.provider),
+                      )}>
+                        <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.15), transparent 60%)' }} />
+                        <div className="w-16 h-16 rounded-full bg-white/95 text-black flex items-center justify-center shadow-xl mb-3 relative">
+                          <Play className="w-7 h-7 ml-0.5" fill="currentColor" />
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-90 relative px-2 text-center line-clamp-1">
+                          {item.provider ? PROVIDER_LABELS[item.provider] : 'Vidéo'}
+                        </span>
+                      </div>
                     );
                   })()}
 
@@ -1143,8 +1132,8 @@ export default function AdminGalleryPage() {
                     </div>
                   )}
 
-                  {/* Vidéo play overlay (toujours visible, plus grand) */}
-                  {item.type === 'video' && item.isPublished && getItemThumbnail(item) && (
+                  {/* Vidéo play overlay (visible si on a un preview, ou un placeholder) */}
+                  {item.type === 'video' && item.isPublished && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="w-14 h-14 rounded-full bg-white/95 text-black flex items-center justify-center shadow-xl transition-transform duration-300 group-hover:scale-110">
                         <Play className="w-6 h-6 ml-0.5" fill="currentColor" />
@@ -1277,16 +1266,40 @@ export default function AdminGalleryPage() {
                 <div className="flex items-center gap-3 p-3">
                   {/* Mini thumbnail */}
                   <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-muted shrink-0">
-                    {item.thumbnail || item.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.thumbnail || item.url} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        {item.type === 'video' ? <Play className="w-5 h-5 text-muted-foreground" /> : <ImageIcon className="w-5 h-5 text-muted-foreground" />}
-                      </div>
-                    )}
+                    {(() => {
+                      const preview = getItemPreview(item);
+                      if (preview.kind === 'image') {
+                        // eslint-disable-next-line @next/next/no-img-element
+                        return <img src={preview.src} alt={item.title} className="w-full h-full object-cover" loading="lazy" />;
+                      }
+                      if (preview.kind === 'video') {
+                        return (
+                          <video
+                            src={preview.src}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="w-full h-full object-cover"
+                            onLoadedMetadata={(e) => {
+                              try {
+                                const v = e.currentTarget;
+                                if (v.duration && v.duration > 0.2) v.currentTime = 0.1;
+                              } catch {}
+                            }}
+                          />
+                        );
+                      }
+                      return (
+                        <div className={cn(
+                          'w-full h-full flex items-center justify-center text-white bg-gradient-to-br',
+                          getProviderAccent(item.provider),
+                        )}>
+                          {item.type === 'video' ? <Play className="w-5 h-5" fill="currentColor" /> : <ImageIcon className="w-5 h-5" />}
+                        </div>
+                      );
+                    })()}
                     {item.type === 'video' && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
                         <Play className="w-4 h-4 text-white" fill="currentColor" />
                       </div>
                     )}

@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { galleryApi } from '@/services';
 import { cn } from '@/utils/helpers';
+import { getItemPreview, getProviderAccent } from '@/lib/gallery-preview';
 import type { GalleryItem } from '@/types';
 
 // ============================================================================
@@ -345,9 +346,10 @@ interface MediaCardProps {
 const MediaCard: React.FC<MediaCardProps> = React.memo(({ item, onOpen }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
 
   const isVideo = item.type === 'video';
-  const previewUrl = item.thumbnail || (isVideo ? '' : item.url);
+  const preview = getItemPreview(item);
 
   return (
     <button
@@ -355,32 +357,81 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ item, onOpen }) => {
       className="group relative block w-full aspect-square overflow-hidden rounded-2xl bg-gradient-to-br from-muted to-muted/50 border border-border hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10 transition-all duration-300"
       aria-label={`Ouvrir ${item.title}`}
     >
-      {!imgError && previewUrl ? (
+      {/* Preview : image (NextImage), image externe (img simple — YouTube),
+          vidéo directe (<video> avec seek première frame), ou placeholder */}
+      {preview.kind === 'image' && !imgError ? (
         <>
           {!imgLoaded && <div className="absolute inset-0 bg-muted animate-pulse" />}
-          <NextImage
-            src={previewUrl}
-            alt={item.title}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            onLoad={() => setImgLoaded(true)}
-            onError={() => setImgError(true)}
+          {preview.src.includes('img.youtube.com') || preview.src.includes('ytimg.com') ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview.src}
+              alt={item.title}
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgError(true)}
+              className={cn(
+                'absolute inset-0 w-full h-full object-cover transition-all duration-500',
+                'group-hover:scale-110',
+                imgLoaded ? 'opacity-100' : 'opacity-0',
+              )}
+            />
+          ) : (
+            <NextImage
+              src={preview.src}
+              alt={item.title}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgError(true)}
+              className={cn(
+                'object-cover transition-all duration-500',
+                'group-hover:scale-110',
+                imgLoaded ? 'opacity-100' : 'opacity-0',
+              )}
+            />
+          )}
+        </>
+      ) : preview.kind === 'video' ? (
+        <>
+          {!videoReady && <div className="absolute inset-0 bg-muted animate-pulse" />}
+          <video
+            src={preview.src}
+            muted
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={(e) => {
+              try {
+                const v = e.currentTarget;
+                if (v.duration && v.duration > 0.2) v.currentTime = 0.1;
+                setVideoReady(true);
+              } catch { /* CORS / autre */ }
+            }}
             className={cn(
-              'object-cover transition-all duration-500',
+              'absolute inset-0 w-full h-full object-cover transition-all duration-500',
               'group-hover:scale-110',
-              imgLoaded ? 'opacity-100' : 'opacity-0',
+              videoReady ? 'opacity-100' : 'opacity-0',
             )}
           />
         </>
       ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          {isVideo ? <Play className="w-12 h-12 text-muted-foreground/50" /> : <ImageIcon className="w-12 h-12 text-muted-foreground/50" />}
+        // kind === 'none' → placeholder stylé
+        <div className={cn(
+          'w-full h-full flex flex-col items-center justify-center text-white relative overflow-hidden bg-gradient-to-br',
+          getProviderAccent(item.provider),
+        )}>
+          <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.15), transparent 60%)' }} />
+          <div className="w-14 h-14 rounded-full bg-white/95 text-black flex items-center justify-center shadow-xl mb-2 relative">
+            <Play className="w-6 h-6 ml-0.5" fill="currentColor" />
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-wider opacity-90 relative px-2 text-center line-clamp-1">
+            {item.provider || 'Vidéo'}
+          </span>
         </div>
       )}
 
-      {/* Overlay vidéo */}
+      {/* Overlay vidéo — toujours présent (au-dessus du preview) */}
       {isVideo && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors pointer-events-none">
           <div className="w-14 h-14 rounded-full bg-white/90 text-black flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
             <Play className="w-6 h-6 ml-0.5" fill="currentColor" />
           </div>
@@ -401,7 +452,7 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ item, onOpen }) => {
       )}
 
       {/* Hover overlay */}
-      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
         <p className="text-white font-semibold text-sm line-clamp-2 text-left">{item.title}</p>
         {item.description && (
           <p className="text-white/70 text-xs line-clamp-1 mt-0.5 text-left">{item.description}</p>
