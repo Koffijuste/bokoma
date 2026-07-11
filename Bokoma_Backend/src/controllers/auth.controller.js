@@ -405,7 +405,20 @@ exports.forgotPassword = async (req, res, next) => {
     const resetUrl = `${process.env.CLIENT_URL}/auth/reset-password?token=${resetToken}`;
 
     // Envoi du mail avec le code OTP en clair + lien (le hash est en DB)
-    await sendPasswordReset(user, resetUrl, otpCode);
+    // 🛡️ On isole l'envoi email : si Resend rejette (domaine non vérifié,
+    //    quota dépassé, etc.), on log l'erreur mais on NE FAIT PAS échouer
+    //    la requête. Le code OTP est déjà en DB → l'user peut le récupérer
+    //    via "renvoyer" ou via un retry. UX > strictness.
+    try {
+      await sendPasswordReset(user, resetUrl, otpCode);
+    } catch (emailErr) {
+      console.error(
+        '⚠️ [forgotPassword] Email send failed (OTP still in DB):',
+        emailErr.message,
+      );
+      // On continue — le 200 ci-dessous dit à l'user "on a traité ta demande"
+      // même si l'email a planté. Mieux que de lui balancer un 500.
+    }
 
     // En dev uniquement : on renvoie l'OTP au front pour faciliter les tests
     const payload = {
