@@ -1,4 +1,15 @@
 // app/(public)/auth/reset-password/page.tsx
+// ============================================================================
+// 🔐 ÉTAPE 2/2 — Saisie du nouveau mot de passe
+// ============================================================================
+// Deux façons d'arriver ici :
+//   (a) Clic sur le LIEN dans l'email → URL avec ?token=XXX
+//   (b) Après vérification OTP sur /auth/forgot-password → token dans
+//       sessionStorage
+// Dans les 2 cas on appelle PATCH /auth/reset-password/:token avec le
+// nouveau mot de passe. Si aucun token n'est dispo → redirect vers
+// /auth/forgot-password (l'user doit prouver son identité d'abord).
+// ============================================================================
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
@@ -12,10 +23,16 @@ import { Label } from '@/components/ui/label';
 import { authApi } from '@/services';
 import { ROUTES } from '@/constants';
 
+// Clé partagée avec /forgot-password (et d'autres pages au besoin)
+const RESET_TOKEN_KEY = 'bokoma:reset-token';
+
 function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get('token');
+  const tokenFromUrl = searchParams.get('token');
+
+  const [token, setToken] = useState<string | null>(tokenFromUrl);
+  const [tokenReady, setTokenReady] = useState(!!tokenFromUrl);
 
   const [formData, setFormData] = useState({
     password: '',
@@ -28,21 +45,33 @@ function ResetPasswordContent() {
   const [success, setSuccess] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
 
+  // Si on n'a pas de token dans l'URL, on lit sessionStorage.
+    // Si toujours rien → on redirige vers forgot-password.
   useEffect(() => {
-    if (!token) {
-      setError('Lien de réinitialisation invalide ou expiré.');
+    if (tokenFromUrl) {
+      setToken(tokenFromUrl);
+      setTokenReady(true);
+      return;
     }
-  }, [token]);
+    try {
+      const stored = sessionStorage.getItem(RESET_TOKEN_KEY);
+      if (stored) {
+        setToken(stored);
+        setTokenReady(true);
+        return;
+      }
+    } catch {}
+    // Pas de token → faut passer par forgot-password d'abord
+    router.replace(ROUTES.AUTH.FORGOT_PASSWORD);
+  }, [tokenFromUrl, router]);
 
   useEffect(() => {
     const password = formData.password;
     let strength = 0;
-    
     if (password.length >= 8) strength += 25;
     if (/[A-Z]/.test(password)) strength += 25;
     if (/[0-9]/.test(password)) strength += 25;
     if (/[^A-Za-z0-9]/.test(password)) strength += 25;
-    
     setPasswordStrength(strength);
   }, [formData.password]);
 
@@ -78,28 +107,25 @@ function ResetPasswordContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
     if (!token) {
-      setError('Lien de réinitialisation invalide');
+      setError('Session expirée. Recommencez la procédure.');
+      setTimeout(() => router.replace(ROUTES.AUTH.FORGOT_PASSWORD), 1500);
       return;
     }
 
     setIsSubmitting(true);
     setError(null);
-
     try {
       await authApi.resetPassword(token, formData.password);
+      // Clean le token de sessionStorage
+      try { sessionStorage.removeItem(RESET_TOKEN_KEY); } catch {}
       setSuccess(true);
-      
-      setTimeout(() => {
-        router.push(ROUTES.AUTH.LOGIN);
-      }, 3000);
-      
+      setTimeout(() => router.push(ROUTES.AUTH.LOGIN), 3000);
     } catch (err: any) {
       setError(
-        err?.response?.data?.message || 
-        err?.message || 
+        err?.response?.data?.message ||
+        err?.message ||
         'Erreur lors de la réinitialisation du mot de passe'
       );
     } finally {
@@ -117,13 +143,11 @@ function ResetPasswordContent() {
               <CheckCircle className="relative w-20 h-20 text-emerald-500 mx-auto" />
             </div>
           </div>
-          
           <h2 className="text-2xl font-bold mb-3">Mot de passe réinitialisé !</h2>
           <p className="text-muted-foreground mb-6">
-            Votre mot de passe a été mis à jour avec succès. 
+            Votre mot de passe a été mis à jour avec succès.
             Vous allez être redirigé vers la page de connexion...
           </p>
-          
           <Link href={ROUTES.AUTH.LOGIN}>
             <Button variant="outline" className="gap-2">
               <ArrowLeft className="w-4 h-4" />
@@ -135,20 +159,11 @@ function ResetPasswordContent() {
     );
   }
 
-  if (!token) {
+  // En attente de la résolution du token
+  if (!tokenReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-b from-background to-muted/30">
-        <div className="max-w-md w-full text-center animate-in fade-in zoom-in duration-500">
-          <AlertCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-3">Lien invalide</h2>
-          <p className="text-muted-foreground mb-6">
-            Ce lien de réinitialisation est invalide ou a expiré. 
-            Veuillez demander un nouveau lien.
-          </p>
-          <Link href={ROUTES.AUTH.FORGOT_PASSWORD}>
-            <Button variant="primary">Demander un nouveau lien</Button>
-          </Link>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
       </div>
     );
   }
@@ -163,10 +178,9 @@ function ResetPasswordContent() {
               <Lock className="relative w-16 h-16 text-accent mx-auto" />
             </div>
           </div>
-          
           <h1 className="text-3xl font-bold mb-2">Nouveau mot de passe</h1>
           <p className="text-muted-foreground">
-            Entrez votre nouveau mot de passe ci-dessous
+            Choisissez un nouveau mot de passe pour votre compte
           </p>
         </div>
 
@@ -183,6 +197,7 @@ function ResetPasswordContent() {
                 placeholder="••••••••"
                 disabled={isSubmitting}
                 className="pr-10"
+                autoFocus
               />
               <button
                 type="button"
@@ -192,7 +207,7 @@ function ResetPasswordContent() {
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            
+
             {formData.password && (
               <div className="space-y-1">
                 <div className="flex gap-1">
@@ -233,15 +248,15 @@ function ResetPasswordContent() {
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            
+
             {formData.confirmPassword && (
               <p className={`text-xs ${
-                formData.password === formData.confirmPassword 
-                  ? 'text-emerald-600' 
+                formData.password === formData.confirmPassword
+                  ? 'text-emerald-600'
                   : 'text-destructive'
               }`}>
-                {formData.password === formData.confirmPassword 
-                  ? '✓ Les mots de passe correspondent' 
+                {formData.password === formData.confirmPassword
+                  ? '✓ Les mots de passe correspondent'
                   : '✗ Les mots de passe ne correspondent pas'}
               </p>
             )}
@@ -290,8 +305,8 @@ function ResetPasswordContent() {
         </form>
 
         <div className="text-center mt-6">
-          <Link 
-            href={ROUTES.AUTH.LOGIN} 
+          <Link
+            href={ROUTES.AUTH.LOGIN}
             className="text-sm text-muted-foreground hover:text-accent inline-flex items-center gap-1"
           >
             <ArrowLeft className="w-4 h-4" />

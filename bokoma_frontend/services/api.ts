@@ -291,6 +291,12 @@ export const authApi = {
 
   resetPasswordWithOtp: (payload: { email: string; otp: string; password: string }) =>
     apiClient.post<ApiResponse>('/auth/reset-password-otp', payload),
+
+  verifyResetOtp: (payload: { email: string; otp: string }) =>
+    apiClient.post<ApiResponse<{ resetToken: string; expiresIn: number }>>(
+      '/auth/verify-otp',
+      payload,
+    ),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────
