@@ -40,12 +40,19 @@ async function connectDB() {
     mongoose.connection.on("connecting", () => {
       console.log("📡 Mongoose: connecting...");
     });
-    
+
+    // ✅ Flag pour éviter "No such label 'mongo-connect' for console.timeEnd()"
+    //    lors des reconnexions (l'event "connected" peut se déclencher plusieurs fois
+    //    si Mongoose perd/retrouve la connexion, mais le timer ne tourne qu'une fois).
+    let initialConnectLogged = false;
     console.time("mongo-connect");
-    
+
     mongoose.connection.on("connected", () => {
       console.log("✅ Mongoose: connected");
-      console.timeEnd("mongo-connect");
+      if (!initialConnectLogged) {
+        console.timeEnd("mongo-connect");
+        initialConnectLogged = true;
+      }
     });
 
     mongoose.connection.on("open", () => {

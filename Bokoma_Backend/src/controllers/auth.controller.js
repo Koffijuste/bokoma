@@ -167,6 +167,87 @@ exports.login = async (req, res, next) => {
 };
 
 // ============================================================================
+// POST /auth/verify-otp — Vérifier le code OTP à 6 chiffres (étape 1 du reset)
+// ✅ Renvoie un `resetToken` que la 2e page utilise pour soumettre le
+//    nouveau mot de passe via PATCH /auth/reset-password/:token.
+//    Aucune modification du mot de passe n'est faite ici.
+// ============================================================================
+exports.verifyResetOtp = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return next(new AppError('Email et code OTP requis', 400));
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // On charge le user avec les champs OTP (sécurisés par select: false)
+    const user = await User.findOne({ email: normalizedEmail })
+      .select('+resetOtpCode +resetOtpExpires +resetOtpAttempts +resetPasswordToken +resetPasswordExpires');
+
+    // Pas de user OU pas d'OTP en cours → on retourne le même message
+    // générique pour ne pas leak l'existence du compte.
+    if (!user || !user.resetOtpCode || !user.resetOtpExpires) {
+      return next(new AppError('Code OTP invalide ou expiré', 401));
+    }
+
+    if (user.resetOtpExpires < Date.now()) {
+      return next(new AppError('Code OTP expiré. Demandez un nouveau code.', 401));
+    }
+
+    if ((user.resetOtpAttempts || 0) >= 5) {
+      return next(new AppError('Trop de tentatives. Demandez un nouveau code.', 429));
+    }
+
+    const otpHash = crypto.createHash('sha256').update(String(otp).trim()).digest('hex');
+    if (user.resetOtpCode !== otpHash) {
+      user.resetOtpAttempts = (user.resetOtpAttempts || 0) + 1;
+      await user.save({ validateBeforeSave: false });
+      return next(new AppError('Code OTP invalide', 401));
+    }
+
+    // ✅ OTP valide. On ne touche PAS au mot de passe ici. On retourne
+    //    un resetToken (le même que forgot-password a stocké en DB) pour
+    //    que la 2e page puisse finaliser le reset.
+    //    Si jamais le resetToken a expiré (OTP valide 10min, token 1h
+    //    d'habitude), on en regénère un frais.
+    if (!user.resetPasswordToken || !user.resetPasswordExpires || user.resetPasswordExpires < Date.now()) {
+      const freshToken = crypto.randomBytes(32).toString('hex');
+      user.resetPasswordToken = crypto.createHash('sha256').update(freshToken).digest('hex');
+      user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // 10min
+    }
+
+    // Reset les tentatives d'OTP (l'user l'a validé)
+    user.resetOtpAttempts = 0;
+    await user.save({ validateBeforeSave: false });
+
+    // Le front a besoin du token EN CLAIR (pas le hash) pour l'envoyer
+    // au PATCH /auth/reset-password/:token. On lui rend donc une version
+    // raw. Mais on ne peut pas récupérer la version raw depuis le hash.
+    // → on génère un token jetable côté serveur, stocké en DB, et
+    //   retourné au front. C'est ce qu'on appelle un "reset session token".
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const sessionTokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
+    user.resetPasswordToken = sessionTokenHash;
+    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+    await user.save({ validateBeforeSave: false });
+
+    return res.json({
+      success: true,
+      message: 'Code OTP validé',
+      data: {
+        resetToken: sessionToken, // raw, à envoyer à la 2e page
+        expiresIn: 600,
+      },
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ============================================================================
 // POST /auth/refresh — Rafraîchir le token
 // ============================================================================
 exports.refreshToken = async (req, res, next) => {

@@ -41,6 +41,7 @@ export default function ForgotPasswordPage() {
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [otpError, setOtpError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [lastDevOtp, setLastDevOtp] = useState<string>('');
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Countdown pour "renvoyer le code"
@@ -67,15 +68,22 @@ export default function ForgotPasswordPage() {
       window.clearTimeout(timeoutId);
 
       // En dev uniquement : on montre l'OTP pour faciliter les tests
+      // ET on l'auto-remplit dans les champs (sinon il faut copier/coller
+      // un code à 6 chiffres depuis un toast — pas pratique pour tester).
       const devOtp = response?.devOtp;
-      if (devOtp) {
+      if (devOtp && /^\d{6}$/.test(String(devOtp))) {
+        setOtpDigits(String(devOtp).split(''));
+        setLastDevOtp(String(devOtp));
+        toast.info(`🛠️ Mode dev — OTP : ${devOtp} (auto-rempli)`, { duration: 6000 });
+      } else if (devOtp) {
         toast.info(`🛠️ Mode dev — OTP : ${devOtp}`, { duration: 10000 });
+        setLastDevOtp('');
       }
 
       toast.success('✅ Code de réinitialisation envoyé par email', { duration: 6000 });
       setStep('otp');
       setCountdown(60);
-      window.setTimeout(() => otpRefs.current[0]?.focus(), 200);
+      window.setTimeout(() => otpRefs.current[5]?.focus(), 200);
     } catch (err: any) {
       window.clearTimeout(timeoutId);
       const message = err?.name === 'AbortError'
@@ -121,13 +129,23 @@ export default function ForgotPasswordPage() {
     try {
       const response: any = await authApi.forgotPassword(email.trim().toLowerCase());
       const devOtp = response?.devOtp;
-      if (devOtp) {
+      const isValidOtp = devOtp && /^\d{6}$/.test(String(devOtp));
+      if (isValidOtp) {
+        setOtpDigits(String(devOtp).split(''));
+        setLastDevOtp(String(devOtp));
+        toast.info(`🛠️ Mode dev — OTP : ${devOtp} (auto-rempli)`, { duration: 6000 });
+      } else if (devOtp) {
         toast.info(`🛠️ Mode dev — OTP : ${devOtp}`, { duration: 10000 });
+        setOtpDigits(['', '', '', '', '', '']);
+        setLastDevOtp('');
       }
       toast.success('✅ Nouveau code envoyé');
       setCountdown(60);
-      setOtpDigits(['', '', '', '', '', '']);
-      window.setTimeout(() => otpRefs.current[0]?.focus(), 100);
+      // Focus : dernier champ si OTP auto-rempli, sinon premier champ vide
+      window.setTimeout(
+        () => otpRefs.current[isValidOtp ? 5 : 0]?.focus(),
+        isValidOtp ? 150 : 100,
+      );
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erreur lors du renvoi');
     } finally {
@@ -245,6 +263,24 @@ export default function ForgotPasswordPage() {
           </div>
 
           <form onSubmit={handleSubmitOtp} className="space-y-5" noValidate>
+            {lastDevOtp && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between gap-2">
+                <span>
+                  <strong>🛠️ Mode dev</strong> — OTP&nbsp;:&nbsp;
+                  <code className="font-mono font-bold tracking-wider">{lastDevOtp}</code>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpDigits(lastDevOtp.split(''));
+                    otpRefs.current[5]?.focus();
+                  }}
+                  className="text-amber-900 dark:text-amber-200 hover:underline font-medium"
+                >
+                  Remplir
+                </button>
+              </div>
+            )}
             <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
               {otpDigits.map((digit, idx) => (
                 <input
