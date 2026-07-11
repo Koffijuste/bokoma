@@ -362,7 +362,7 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ item, onOpen }) => {
             src={previewUrl}
             alt={item.title}
             fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgError(true)}
             className={cn(
@@ -549,7 +549,7 @@ export default function GalleryPage() {
             </h1>
             <p className="text-muted-foreground mt-2">Chargement des créations…</p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="aspect-square rounded-2xl bg-muted/50 animate-pulse" />
             ))}
@@ -719,7 +719,7 @@ export default function GalleryPage() {
         ) : (
           <section
             className={cn(
-              'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 transition-opacity duration-200',
+              'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 transition-opacity duration-200',
               refetching && 'opacity-60'
             )}
           >

@@ -1020,7 +1020,7 @@ export default function AdminGalleryPage() {
       {/* ── Liste ── */}
       {loading ? (
         viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="rounded-2xl border border-border bg-card overflow-hidden">
                 <div className="aspect-square bg-muted animate-pulse" />
@@ -1059,7 +1059,7 @@ export default function AdminGalleryPage() {
           </Button>
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 stagger-children">
           {items.map((item) => {
             const cat = CATEGORIES.find((c) => c.id === item.category);
             const isMenuOpen = openMenuId === item._id;
