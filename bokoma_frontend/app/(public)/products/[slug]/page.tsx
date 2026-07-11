@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAddToCart } from '@/hooks/useAddToCart';
 import { Button } from '@/components/ui/button';
 import { ProductReviews } from '@/components/features/ProductReviews';
+import { MediaProtection } from '@/components/MediaProtection';
 import { ROUTES } from '@/constants';
 import { formatPrice, cn } from '@/utils/helpers';
 import { toast } from 'sonner';
@@ -301,6 +302,9 @@ export default function ProductDetailsPage() {
 
   return (
     <div className="min-h-screen px-4 py-8 sm:py-12">
+      {/* 🛡️ Bloque clic-droit + drag sur <img> */}
+      <MediaProtection />
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">

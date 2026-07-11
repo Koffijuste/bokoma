@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { galleryApi } from '@/services';
 import { cn } from '@/utils/helpers';
 import { getItemPreview, getProviderAccent } from '@/lib/gallery-preview';
+import { MediaProtection } from '@/components/MediaProtection';
 import type { GalleryItem } from '@/types';
 
 // ============================================================================
@@ -268,6 +269,8 @@ const Lightbox: React.FC<LightboxProps> = ({ item, onClose, onPrev, onNext }) =>
               src={item.url}
               poster={item.thumbnail || undefined}
               controls
+              controlsList="nodownload nofullscreen noremoteplayback"
+              disablePictureInPicture
               autoPlay
               className="max-h-[80vh] max-w-full rounded-xl"
             />
@@ -399,6 +402,8 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ item, onOpen }) => {
             muted
             playsInline
             preload="metadata"
+            controlsList="nodownload nofullscreen noremoteplayback"
+            disablePictureInPicture
             onLoadedMetadata={(e) => {
               try {
                 const v = e.currentTarget;
@@ -616,6 +621,9 @@ export default function GalleryPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* 🛡️ Bloque clic-droit + drag sur <img>/<video> (cf. globals.css + MediaProtection) */}
+      <MediaProtection />
+
       {/* Barre progression */}
       {refetching && (
         <div

@@ -31,6 +31,7 @@ import { productApi, categoryApi } from '@/services';
 import { useAuth } from '@/hooks/useAuth';
 import { useWishlist } from '@/hooks/useWishlist';
 import { useAddToCart } from '@/hooks/useAddToCart';
+import { MediaProtection } from '@/components/MediaProtection';
 import type { Product, Category } from '@/types';
 import { cn, formatPrice } from '@/utils/helpers';
 
@@ -537,6 +538,9 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* 🛡️ Bloque clic-droit + drag sur <img>/<video> */}
+      <MediaProtection />
+
       {/* ── Barre de progression pendant les refilters ─────────── */}
       {refetching && (
         <div

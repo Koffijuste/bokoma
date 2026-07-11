@@ -347,3 +347,28 @@
     @apply absolute -top-1 -right-1 bg-accent text-accent-foreground text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   🛡️ Protection médias (img / video) — bloque le téléchargement
+   ────────────────────────────────────────────────────────────────────────
+   Empêche :
+   - le drag-and-drop vers le bureau (image → desktop)
+   - la sélection du texte
+   - le menu contextuel "save as" sur mobile (iOS long-press)
+   Le context menu (clic droit) est bloqué côté JS via le composant
+   <MediaProtection /> monté dans les pages gallery / products.
+*/
+img,
+video {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  pointer-events: auto;
+}
