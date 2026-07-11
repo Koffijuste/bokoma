@@ -172,8 +172,12 @@ app.use('/api/v1/push',       require('./routes/push.routes'));
 app.use('/api/v1/consent',    require('./routes/consent.routes'));
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
+// 🔒 On ne RÉVÈLE PAS le path demandé dans la réponse (info disclosure :
+// permet à un attaquant de confirmer l'existence de routes privées).
+//   AVANT : "Route non trouvée: /api/auth/reset-password"
+//   APRÈS : "Not found"
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: `Route non trouvée: ${req.originalUrl}` });
+  res.status(404).json({ success: false, message: 'Not found' });
 });
 
 // ─── Error handler global ─────────────────────────────────────────────────────
