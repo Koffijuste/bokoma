@@ -117,6 +117,28 @@ userSchema.index({ role: 1, isActive: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ email: 1, isActive: 1 });
 
+// 📞 Unicité du numéro de téléphone (11/07/2026)
+//    - `unique: true` au niveau du champ n'est pas possible avec un
+//      partialFilterExpression, donc on déclare l'index ici.
+//    - Le `partialFilterExpression` exclut les documents sans phone
+//      (`$type: 'string'`) ET ceux avec phone vide (`$gt: ''`), pour
+//      éviter de bloquer les users existants qui n'ont pas renseigné
+//      de numéro.
+//    - Si des DOUBLONS de phone existent déjà en base, la création de
+//      l'index échouera au démarrage. Si Railway refuse de booter après
+//      ce commit, c'est probablement ça — nettoyer les doublons via
+//      MongoDB Compass puis redéployer.
+userSchema.index(
+  { phone: 1 },
+  {
+    unique: true,
+    name: 'phone_unique_partial',
+    partialFilterExpression: {
+      phone: { $type: 'string', $gt: '' },
+    },
+  },
+);
+
 // ============================================================================
 // 🔹 MIDDLEWARE: Hash password — VERSION PROMISE-BASED (sans next)
 // ============================================================================

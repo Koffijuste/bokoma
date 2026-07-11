@@ -22,10 +22,22 @@ exports.register = async (req, res, next) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    const normalizedPhone = phone?.trim();
 
-    const existingUser = await User.findOne({ email: normalizedEmail });
+    // 🔒 Pre-check : on évite la race condition du E11000 dans 99% des cas.
+    //    Le E11000 catch plus bas reste le filet de sécurité.
+    const existingUser = await User.findOne({
+      $or: [
+        { email: normalizedEmail },
+        ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
+      ],
+    });
     if (existingUser) {
-      return next(new AppError('Cet email est déjà utilisé', 409));
+      const isEmailConflict = existingUser.email === normalizedEmail;
+      const msg = isEmailConflict
+        ? 'Cet email est déjà utilisé'
+        : 'Ce numéro de téléphone est déjà utilisé';
+      return next(new AppError(msg, 409));
     }
 
     const user = await User.create({
@@ -33,7 +45,7 @@ exports.register = async (req, res, next) => {
       lastName: lastName.trim(),
       email: normalizedEmail,
       password,
-      phone: phone?.trim(),
+      phone: normalizedPhone || undefined,
       role: 'customer',
       isVerified: false,
     });
@@ -74,6 +86,20 @@ exports.register = async (req, res, next) => {
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(e => e.message);
       return next(new AppError(messages.join(', '), 422));
+    }
+
+    // 🛡️ Filet de sécurité : si 2 requêtes passent le pre-check en
+    //    même temps (race condition), MongoDB throw E11000. On le
+    //    transforme en 409 propre avec un message FR clair.
+    if (err.code === 11000) {
+      const isEmail = err.keyPattern?.email;
+      const isPhone = err.keyPattern?.phone;
+      const msg = isEmail
+        ? 'Cet email est déjà utilisé'
+        : isPhone
+          ? 'Ce numéro de téléphone est déjà utilisé'
+          : 'Cette valeur est déjà utilisée';
+      return next(new AppError(msg, 409));
     }
 
     next(err);
@@ -281,6 +307,15 @@ exports.updateProfile = async (req, res, next) => {
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map(e => e.message);
       return next(new AppError(messages.join(', '), 422));
+    }
+
+    // 🛡️ Filet de sécurité (cf. register) : phone unique → E11000 → 409
+    if (err.code === 11000) {
+      const isPhone = err.keyPattern?.phone;
+      const msg = isPhone
+        ? 'Ce numéro de téléphone est déjà utilisé'
+        : 'Cette valeur est déjà utilisée';
+      return next(new AppError(msg, 409));
     }
 
     next(err);
