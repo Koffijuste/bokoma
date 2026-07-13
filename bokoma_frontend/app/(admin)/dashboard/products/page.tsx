@@ -298,17 +298,19 @@ export default function ProductsAdminPage() {
   const loadCategories = useCallback(async () => {
     try {
       setCategoriesError(null);
-      
-      const response = await fetch('http://localhost:5000/api/v1/categories', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+
+      // ✅ Bug fix (13/07/2026) : la requête était hardcodée sur
+      // `http://localhost:5000/api/v1/categories` ce qui ne marchait
+      // qu'en dev local. En prod (Vercel + Railway) l'appel échouait,
+      // le state `categories` restait vide, et le <Select> n'avait
+      // aucune option → impossible d'ajouter un produit.
+      // On utilise maintenant `apiClient` (mêmes credentials + baseURL
+      // + intercepteurs que /products) comme le reste du code.
+      const response = await apiClient.get('/categories', {
+        timeout: API_TIMEOUT,
       });
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data = await response.json();
-      const cats = normalizeCategories(data);
+      const cats = normalizeCategories(response.data);
       setCategories(cats);
 
       if (cats.length > 0 && !formData.category) {
@@ -316,7 +318,7 @@ export default function ProductsAdminPage() {
       }
     } catch (err: any) {
       console.error('❌ [Categories] Failed:', err);
-      setCategoriesError(err.message || 'Impossible de charger les catégories');
+      setCategoriesError(err?.message || 'Impossible de charger les catégories');
       setCategories([]);
     }
   }, [formData.category]);
