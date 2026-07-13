@@ -57,7 +57,8 @@ const developmentOrigins = [
 ];
 
 const allowedOrigins = [
-  'https://bokoma.vercel.app',
+  'https://www.bokomastore.com',
+  'https://bokomastore.com',
   ...parseOriginList(process.env.CLIENT_URL),
   ...parseOriginList(process.env.FRONTEND_URL),
   ...parseOriginList(process.env.CORS_ALLOWED_ORIGINS),

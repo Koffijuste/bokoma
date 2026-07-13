@@ -25,9 +25,8 @@ const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || '')
   .filter(Boolean);
 
 const DEFAULT_ALLOWED = [
-  'https://bokoma.vercel.app',
-  'https://www.bokoma.ci',
-  'https://bokoma.ci',
+  'https://www.bokomastore.com',
+  'https://bokomastore.com',
 ];
 
 if (process.env.NODE_ENV !== 'production') {

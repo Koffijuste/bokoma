@@ -26,7 +26,7 @@ const ensureVapidConfigured = () => {
   if (configured) return true;
   const publicKey  = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject    = process.env.VAPID_SUBJECT || 'mailto:contact@bokoma.ci';
+  const subject    = process.env.VAPID_SUBJECT || 'mailto:contact@bokomastore.com';
 
   if (!publicKey || !privateKey) {
     logger.warn('push', 'vapid_not_configured', {

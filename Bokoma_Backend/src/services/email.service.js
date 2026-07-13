@@ -14,7 +14,7 @@
 //     de Resend, utilisable SANS vérification de domaine).
 //   - Pour envoyer à de vrais destinataires, Resend impose que le `from`
 //     soit un domaine vérifié. En prod, on met `RESEND_FROM=Bokoma
-//     <noreply@bokoma.ci>` après avoir vérifié bokoma.ci sur resend.com.
+//     <noreply@bokomastore.com>` après avoir vérifié bokomastore.com sur resend.com.
 //
 // Tous les templates ci-dessous (welcome, password reset, order confirm,
 // status update) gardent la même signature → aucun changement dans les
@@ -36,7 +36,7 @@ if (!apiKey) {
 const resend = new Resend(apiKey);
 
 // `from` configurable. Default = adresse de test Resend (pas de domaine
-// requis). En prod : RESEND_FROM="Bokoma <noreply@bokoma.ci>"
+// requis). En prod : RESEND_FROM="Bokoma <noreply@bokomastore.com>"
 const DEFAULT_FROM = 'Bokoma <onboarding@resend.dev>';
 
 const baseTemplate = (title, content) => `

@@ -28,4 +28,4 @@ Allow: /
 Disallow: /api/
 
 # Référence au sitemap
-Sitemap: https://bokoma.vercel.app/sitemap.xml
+Sitemap: https://www.bokomastore.com/sitemap.xml

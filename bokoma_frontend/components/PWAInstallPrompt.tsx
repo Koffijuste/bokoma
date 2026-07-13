@@ -16,7 +16,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Download, X, Share, Plus, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/helpers';
@@ -42,6 +42,8 @@ export function PWAInstallPrompt() {
   const [iosState, setIosState] = useState<IosState>('unsupported');
   // Banner replié
   const [collapsed, setCollapsed] = useState(false);
+  // Ref miroir pour accéder à l'event dans le handler pagehide (closure)
+  const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   // ── Détection de l'environnement ─────────────────────────────────────
   useEffect(() => {
@@ -74,25 +76,48 @@ export function PWAInstallPrompt() {
     }
 
     // ── Chrome/Edge/Android : on capture beforeinstallprompt ────────
+    // Bug fix (13/07/2026) : Chrome log `Banner not shown: ...preventDefault()
+    // called. The page must call beforeinstallpromptevent.prompt()` quand on
+    // appelle preventDefault() mais qu'on ne montre pas l'UI dans la fenêtre
+    // de 3s. L'ancien code attendait 3000ms avant d'afficher → si l'user
+    // naviguait avant, l'event était perdu + warning. On réduit le délai
+    // et on appelle prompt() sur pagehide si pas encore montré.
+    let shownTimer: ReturnType<typeof setTimeout> | null = null;
     const onBeforeInstall = (e: Event) => {
       e.preventDefault(); // Empêche le prompt natif auto
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      // Petit délai pour ne pas afficher dès le premier render
-      setTimeout(() => setShowChrome(true), 3000);
+      const ev = e as BeforeInstallPromptEvent;
+      setDeferredPrompt(ev);
+      deferredPromptRef.current = ev; // Sync ref pour accès hors render
+      // Réduit à 100ms pour rester dans la fenêtre "courte" de Chrome
+      shownTimer = setTimeout(() => setShowChrome(true), 100);
     };
 
     const onAppInstalled = () => {
       setInstalled(true);
       setShowChrome(false);
       setDeferredPrompt(null);
+      deferredPromptRef.current = null;
+    };
+
+    // Filet de sécurité : si l'user quitte la page avant que le banner
+    // s'affiche, on déclenche le prompt() quand même pour ne pas perdre
+    // l'opportunité d'install (et éviter le warning Chrome).
+    const onPageHide = () => {
+      if (shownTimer) clearTimeout(shownTimer);
+      if (deferredPromptRef.current) {
+        try { deferredPromptRef.current.prompt(); } catch { /* noop */ }
+      }
     };
 
     window.addEventListener('beforeinstallprompt', onBeforeInstall);
     window.addEventListener('appinstalled', onAppInstalled);
+    window.addEventListener('pagehide', onPageHide);
 
     return () => {
+      if (shownTimer) clearTimeout(shownTimer);
       window.removeEventListener('beforeinstallprompt', onBeforeInstall);
       window.removeEventListener('appinstalled', onAppInstalled);
+      window.removeEventListener('pagehide', onPageHide);
     };
   }, []);
 
