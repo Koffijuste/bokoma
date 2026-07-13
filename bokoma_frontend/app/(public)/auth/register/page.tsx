@@ -7,8 +7,15 @@ import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, User, Phone, MapPin, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ROUTES } from '@/constants';
-import { validEmail, validPassword } from '@/utils/helpers';
+import {
+  validEmail,
+  validPassword,
+  validPhone,
+  normalizePhone,
+  PHONE_RULES,
+} from '@/utils/helpers';
 import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/store';
 import { toast } from 'sonner';
 
 const COUNTRIES = [
@@ -53,16 +60,35 @@ export default function RegisterPage() {
     const newErrors: Record<string, string> = {};
 
     if (!formData.firstName.trim()) newErrors.firstName = 'Prénom requis';
+    if (formData.firstName.trim().length > 50) newErrors.firstName = 'Maximum 50 caractères';
     if (!formData.lastName.trim()) newErrors.lastName = 'Nom requis';
+    if (formData.lastName.trim().length > 50) newErrors.lastName = 'Maximum 50 caractères';
+
     if (!formData.email) newErrors.email = 'Email requis';
-    else if (!validEmail(formData.email)) newErrors.email = 'Format email invalide';
-    
-    if (!formData.phone.trim()) newErrors.phone = 'Téléphone requis';
+    else if (!validEmail(formData.email)) {
+      newErrors.email = 'Format email invalide (ex: vous@exemple.com)';
+    }
+
+    if (!formData.country) {
+      newErrors.country = 'Pays requis';
+    }
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Téléphone requis';
+    } else if (formData.country && !validPhone(formData.phone, formData.country)) {
+      const rule = PHONE_RULES[formData.country];
+      const expected = rule
+        ? `${rule.dial} suivi de ${rule.digits}${rule.digitsAlt ? ` ou ${rule.digitsAlt.join('/')}` : ''} chiffres`
+        : 'Format E.164 invalide';
+      newErrors.phone = `Numéro invalide pour ce pays (attendu : ${expected})`;
+    }
+
     if (!formData.address.trim()) newErrors.address = 'Adresse requise';
-    if (!formData.country) newErrors.country = 'Pays requis';
+    if (formData.address.trim().length > 200) newErrors.address = 'Maximum 200 caractères';
 
     if (!formData.password) newErrors.password = 'Mot de passe requis';
-    else if (!validPassword(formData.password)) newErrors.password = 'Min. 6 car., 1 maj., 1 chiffre';
+    else if (!validPassword(formData.password)) {
+      newErrors.password = 'Min. 8 car. avec maj., min., chiffre et caractère spécial';
+    }
 
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
@@ -83,6 +109,17 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
+      // Normalise le téléphone en E.164 (+CC + digits) avant envoi.
+      // Si le user a tapé "07 07 07 07 07" avec pays=CI, on envoie
+      // "+2250707070707" au backend → cohérent en DB, lookup facile.
+      const normalizedPhone = normalizePhone(formData.phone, formData.country);
+      if (!normalizedPhone) {
+        // Re-validate devrait déjà avoir bloqué, mais filet de sécurité
+        setErrors((p) => ({ ...p, phone: 'Numéro invalide' }));
+        setIsLoading(false);
+        return;
+      }
+
       // ✅ On passe par le store (useAuth().register) plutôt que par
       // authApi.register() directement : ça set Zustand `user` immédiatement,
       // wipe les données locales du user précédent (panier, wishlist), et
@@ -92,18 +129,28 @@ export default function RegisterPage() {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim(),
+        phone: normalizedPhone,
         address: formData.address.trim(),
         country: formData.country,
         password: formData.password,
       });
 
       toast.success('🎉 Compte créé avec succès !');
-      // Le user est déjà authentifié (cookie set + Zustand hydraté) → on
-      // va directement à /profile. Sauter /login évite une double
-      // redirection et un état Zustand stale qui causait le "figé" sur
-      // /login (cf. login page useEffect avec deps [] + isLoading guard).
-      router.replace(ROUTES.USER?.PROFILE || '/profile');
+
+      // ✅ Redirection rôle-based : admin/manager → /dashboard, sinon /profile.
+      //    Le user est déjà authentifié (cookie set + Zustand hydraté) par
+      //    registerUser() ci-dessus, donc on lit directement depuis Zustand.
+      const dashboard = ROUTES.ADMIN?.DASHBOARD?.startsWith('/')
+        ? ROUTES.ADMIN.DASHBOARD
+        : '/dashboard';
+      const profile = ROUTES.USER?.PROFILE?.startsWith('/')
+        ? ROUTES.USER.PROFILE
+        : '/profile';
+      const freshUser = useAuthStore.getState().user;
+      const isStaff = freshUser?.role === 'admin' || freshUser?.role === 'manager';
+      const dest = isStaff ? dashboard : profile;
+
+      router.replace(dest);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || err?.message || "Erreur lors de l'inscription");
     } finally {
@@ -167,14 +214,28 @@ export default function RegisterPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Téléphone</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <input 
-                    type="tel" 
-                    placeholder="+243 000 000 000" 
-                    value={formData.phone} 
-                    onChange={handleChange('phone')} 
-                    className={`w-full bg-background border-2 rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.phone ? 'border-destructive' : 'border-border'}`} 
+                <div className="relative flex">
+                  {formData.country && PHONE_RULES[formData.country] ? (
+                    <span className="inline-flex items-center px-3 rounded-l-lg border-2 border-r-0 border-border bg-muted text-sm font-medium text-muted-foreground select-none">
+                      {PHONE_RULES[formData.country].dial}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-3 rounded-l-lg border-2 border-r-0 border-border bg-muted text-sm font-medium text-muted-foreground select-none">
+                      <Phone className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder={
+                      formData.country && PHONE_RULES[formData.country]
+                        ? `${PHONE_RULES[formData.country].digits} chiffres`
+                        : 'Votre numéro'
+                    }
+                    value={formData.phone}
+                    onChange={handleChange('phone')}
+                    className={`w-full bg-background border-2 rounded-r-lg px-4 py-2.5 focus:outline-none focus:border-accent transition ${errors.phone ? 'border-destructive' : 'border-border'}`}
                   />
                 </div>
                 {errors.phone && <p className="text-xs text-destructive mt-1">{errors.phone}</p>}

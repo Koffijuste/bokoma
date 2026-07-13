@@ -1,22 +1,138 @@
 // @/utils/helpers.ts
 /**
  * Validation Helpers
+ *
+ * Standards :
+ * - Email   : RFC 5322 simplified (TLD ≥ 2 chars, charset autorisé restreint)
+ * - Password: NIST SP 800-63B inspired → min 8, 1 maj, 1 min, 1 chiffre, 1 spécial
+ * - Phone   : E.164 international (+CC + numéro), avec validation par pays
+ *             pour les principaux pays de la zone + internationaux
  */
 
+// ── Email ───────────────────────────────────────────────────────────────────
+// Accepte lettres, chiffres, +._- avant le @ ; lettres/chiffits/.- après ; TLD ≥ 2
+const RE_EMAIL =
+  /^[a-zA-Z0-9](?:[a-zA-Z0-9._%+-]{0,62}[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+
 export function validEmail(email: string): boolean {
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return re.test(email);
+  if (typeof email !== 'string') return false;
+  const v = email.trim();
+  if (v.length < 5 || v.length > 254) return false; // RFC 5321
+  return RE_EMAIL.test(v);
 }
+
+// ── Password ────────────────────────────────────────────────────────────────
+// Min 8 caractères, au moins 1 minuscule, 1 majuscule, 1 chiffre, 1 caractère spécial.
+// On exclut l'espace (souvent injecté par copier-coller et fragile dans les saisies).
+const RE_PASSWORD =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?`~]).{8,128}$/;
 
 export function validPassword(password: string): boolean {
-  // Au minimum 8 caractères, 1 majuscule et 1 chiffre
-  const re = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
-  return re.test(password);
+  if (typeof password !== 'string') return false;
+  return RE_PASSWORD.test(password);
 }
 
-export function validPhone(phone: string): boolean {
-  const re = /^[+]?[0-9\s-()]{7,}$/;
-  return re.test(phone);
+// ── Phone — validation par pays (E.164) ─────────────────────────────────────
+// Chaque pays a un indicatif et un format attendu. On accepte le numéro
+// soit en E.164 (avec +), soit en format local (commençant par 0) — on
+// normalise puis on valide.
+
+export interface PhoneRule {
+  /** Indicatif téléphonique international (avec +) */
+  dial: string;
+  /** Nombre de chiffres attendus APRÈS l'indicatif (sans le 0 initial local) */
+  digits: number;
+  /** Longueurs alternatives acceptées (certains pays ont 8 OU 9 chiffres) */
+  digitsAlt?: number[];
+  /** Indique si le format local commence par un 0 (la plupart des pays africains/européens) */
+  localLeadingZero: boolean;
+}
+
+export const PHONE_RULES: Record<string, PhoneRule> = {
+  // Afrique de l'Ouest / Centrale (marché principal Bokoma)
+  CI: { dial: '+225', digits: 10, localLeadingZero: true }, // Côte d'Ivoire
+  SN: { dial: '+221', digits: 9,  localLeadingZero: true }, // Sénégal
+  CM: { dial: '+237', digits: 9,  localLeadingZero: true }, // Cameroun
+  CD: { dial: '+243', digits: 9,  localLeadingZero: true, digitsAlt: [10] }, // RDC
+  CG: { dial: '+242', digits: 9,  localLeadingZero: true }, // Congo-Brazzaville
+  GA: { dial: '+241', digits: 7,  digitsAlt: [8], localLeadingZero: true }, // Gabon
+  ML: { dial: '+223', digits: 8,  localLeadingZero: true }, // Mali
+  BF: { dial: '+226', digits: 8,  localLeadingZero: true }, // Burkina Faso
+  NE: { dial: '+227', digits: 8,  localLeadingZero: true }, // Niger
+  TD: { dial: '+235', digits: 8,  localLeadingZero: true }, // Tchad
+  // International
+  FR: { dial: '+33',  digits: 9,  localLeadingZero: true }, // France
+  BE: { dial: '+32',  digits: 9,  localLeadingZero: true }, // Belgique
+  CA: { dial: '+1',   digits: 10, localLeadingZero: true }, // Canada
+  US: { dial: '+1',   digits: 10, localLeadingZero: true }, // États-Unis
+  // Pas de validation stricte pour "OTHER"
+  OTHER: { dial: '+', digits: 7, digitsAlt: [8, 9, 10, 11, 12, 13, 14, 15], localLeadingZero: false },
+};
+
+/**
+ * Normalise un numéro de téléphone saisi par l'utilisateur.
+ * Accepte : "+225 07 07 07 07 07", "07 07 07 07 07", "2250707070707", "0707070707"
+ * Retourne l'E.164 (ex: "+2250707070707") ou null si non normalisable.
+ */
+export function normalizePhone(input: string, country?: string): string | null {
+  if (typeof input !== 'string') return null;
+  // Strip tout sauf + et chiffres
+  let raw = input.replace(/[^\d+]/g, '');
+  if (!raw) return null;
+
+  // Détection d'un + initial
+  const hasPlus = raw.startsWith('+');
+  let digits = hasPlus ? raw.slice(1) : raw;
+
+  // Si on a un code pays (3 chiffres après le +) et qu'il matche un pays connu
+  // ou celui passé en param, on le retire pour traiter le reste comme local.
+  const rule = country ? PHONE_RULES[country] : undefined;
+
+  // Cas 1 : commence par un + explicite → on suppose E.164
+  if (hasPlus) {
+    if (digits.length < 7 || digits.length > 15) return null; // E.164 : 7-15 chiffres
+    return `+${digits}`;
+  }
+
+  // Cas 2 : commence par l'indicatif pays (ex: 225...) SANS +
+  if (rule && digits.startsWith(rule.dial.replace('+', ''))) {
+    digits = digits.slice(rule.dial.length - 1); // retire "225"
+  }
+
+  // Cas 3 : format local avec 0 initial (ex: 0707070707)
+  if (rule?.localLeadingZero && digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
+
+  if (!rule) {
+    // Pas de règle pays : E.164 générique
+    if (digits.length < 7 || digits.length > 15) return null;
+    return `+${digits}`;
+  }
+
+  // Validation du nombre de chiffres selon le pays
+  const expected = [rule.digits, ...(rule.digitsAlt ?? [])];
+  if (!expected.includes(digits.length)) return null;
+
+  return `${rule.dial}${digits}`;
+}
+
+/**
+ * Valide un numéro de téléphone pour un pays donné.
+ * Retourne true si le numéro est valide après normalisation.
+ */
+export function validPhone(phone: string, country?: string): boolean {
+  return normalizePhone(phone, country) !== null;
+}
+
+/**
+ * Valide un numéro au format E.164 strict (avec +).
+ * Format : +[1-9][0-9]{6,14} (E.164 ITU-T E.123 : 7 à 15 chiffres max).
+ */
+const RE_PHONE_E164 = /^\+[1-9]\d{6,14}$/;
+export function isE164(phone: string): boolean {
+  if (typeof phone !== 'string') return false;
+  return RE_PHONE_E164.test(phone);
 }
 
 export function validURL(url: string): boolean {

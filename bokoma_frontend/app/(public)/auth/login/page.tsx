@@ -12,16 +12,52 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/store';
 import { ROUTES } from '@/constants';
+
+// ✅ Redirection post-login : admin/manager → /dashboard, client → /profile.
+//   On garde le respect du `?from=` quand présent (ex: user clique un lien
+//   protégé, se fait rediriger vers /auth/login?from=/wishlist, et revient
+//   sur /wishlist après login). Mais on FORCE le dashboard si un user
+//   admin/manager est en train de se logger depuis une page client (anti
+//   fuite : on ne veut pas qu'un admin atterrisse accidentellement sur
+//   /profile au lieu de son tableau de bord).
+const r = (route: string | undefined, fallback: string) =>
+  route?.startsWith('/') ? route : fallback;
+
+const resolveRedirect = (
+  from: string | null,
+  user: { role?: string } | null,
+): string => {
+  const dashboard = r(ROUTES?.ADMIN?.DASHBOARD, '/dashboard');
+  const profile = r(ROUTES?.USER?.PROFILE, '/profile');
+
+  // Admin/manager : toujours /dashboard (sauf si from pointe vers une route
+  // admin différente, ex: /dashboard/orders, qu'on respecte).
+  const isStaff = user?.role === 'admin' || user?.role === 'manager';
+
+  if (from && from.startsWith('/') && !from.includes('://')) {
+    if (isStaff) {
+      // Si le from est explicitement une page admin, on respecte
+      if (from.startsWith('/dashboard') || from.startsWith('/admin')) {
+        return from;
+      }
+      // Sinon on force le dashboard
+      return dashboard;
+    }
+    // Client avec un from valide : on respecte
+    return from;
+  }
+
+  // Pas de from : dispatch par rôle
+  return isStaff ? dashboard : profile;
+};
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
   const fromParam = searchParams.get('from');
-  const redirectPath = fromParam && fromParam.startsWith('/') && !fromParam.includes('://') 
-    ? fromParam 
-    : (ROUTES?.USER?.PROFILE || '/profile');
   
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -29,6 +65,7 @@ export default function LoginPage() {
   const [isRedirecting, setIsRedirecting] = useState(false);
   
   const { login, isLoading, isAuthenticated, fetchUser } = useAuth();
+  const user = useAuthStore((s) => s.user);
   // ✅ Guard pour ne fetchUser qu'une seule fois par mount (évite les
   // doubles appels quand isLoading oscille entre true/false pendant
   // l'hydratation Zustand).
@@ -63,11 +100,12 @@ export default function LoginPage() {
   // mettre à jour Zustand, donc cette branche ne se déclenche plus sur
   // un état stale)
   useEffect(() => {
-    if (isAuthenticated && !isLoading && !isRedirecting) {
+    if (isAuthenticated && !isLoading && !isRedirecting && user) {
       setIsRedirecting(true);
-      router.replace(redirectPath);
+      const dest = resolveRedirect(fromParam, user);
+      router.replace(dest);
     }
-  }, [isAuthenticated, isLoading, redirectPath, router, isRedirecting]);
+  }, [isAuthenticated, isLoading, fromParam, user, router, isRedirecting]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -99,8 +137,12 @@ export default function LoginPage() {
       toast.success('Connexion réussie !');
       setIsRedirecting(true);
       
+      // Récupère le user (Zustand est mis à jour synchrone par login())
+      const freshUser = useAuthStore.getState().user;
+      const dest = resolveRedirect(fromParam, freshUser);
+      
       setTimeout(() => {
-        router.push(redirectPath);
+        router.push(dest);
       }, 300);
       
     } catch (err: any) {
