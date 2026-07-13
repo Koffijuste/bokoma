@@ -1,0 +1,172 @@
+◇ injected env (26) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+✅ [Cloudinary] Configured via CLOUDINARY_URL: { cloud_name: 'dfinmurky', secure: true }
+✅ [user.routes] All handlers found
+[bokoma] {"ts":"2026-07-10T15:35:33.257Z","level":"info","app":"bokoma","tag":"boot","event":"env_snapshot","nodeEnv":"development","port":"5000","cinetpay":{"apiKeyPresent":"***REDACTED***","apiPasswordPresent":"***REDACTED***","baseUrl":"https://api.cinetpay.net","mode":"sandbox","fullyConfigured":true},"clientUrl":"http://localhost:3000","apiUrl":"http://localhost:5000"}
+
+================ MongoDB Debug ================
+🕒 Time: 2026-07-10T15:35:33.262Z
+🌍 NODE_ENV: development
+📦 Mongoose Version: 9.7.4
+🟢 Node Version: v25.9.0
+🔍 Tentative de connexion MongoDB...
+🔗 URI: mongodb+srv://primeHunter:********@app-js-fullstack.digqdpt.mongodb.net/bokoma?retryWrites=true&w=majority&serverSelectionTimeoutMS=10000&socketTimeoutMS=45000&family=4
+🔁 MongoDB connect attempt 1/4
+📡 Mongoose: connecting...
+✅ Mongoose: connected
+mongo-connect: 4.178s
+📂 Mongoose: connection open
+===============================================
+🎉 MongoDB connecté avec succès
+📚 Database: bokoma
+🏠 Host: ac-jwlxvyt-shard-00-00.digqdpt.mongodb.net
+===============================================
+
+[bokoma] {"ts":"2026-07-10T15:35:37.449Z","level":"info","app":"bokoma","tag":"boot","event":"mongo_connected","ok":true}
+[bokoma] {"ts":"2026-07-10T15:35:37.459Z","level":"info","app":"bokoma","tag":"boot","event":"server_listening","url":"http://localhost:5000","health":"http://localhost:5000/api/v1/health"}
+🚀 Serveur : http://localhost:5000
+🏥 Health  : http://localhost:5000/api/v1/health
+[0mGET /api/v1/health [32m200[0m 18.577 ms - 158[0m
+[0mPOST /api/v1/auth/login [32m200[0m 4176.014 ms - 985[0m
+[0mPOST /api/v1/auth/login [32m200[0m 2851.264 ms - 985[0m
+[0mGET /api/v1/auth/me [32m200[0m 1115.419 ms - 531[0m
+[0mPOST /api/v1/auth/login [32m200[0m 3194.357 ms - 985[0m
+[0mGET /api/v1/users [32m200[0m 4029.086 ms - 8280[0m
+[0mGET /api/v1/orders?limit=2 [32m200[0m 1388.355 ms - 6004[0m
+[0mGET /api/v1/coupons [32m200[0m 1581.842 ms - 352[0m
+[0mPOST /api/v1/auth/login [32m200[0m 2459.832 ms - 985[0m
+[0mGET /api/v1/auth/me [33m401[0m 3.059 ms - 1346[0m
+[0mGET /api/v1/auth/me [33m401[0m 1.502 ms - 1418[0m
+[0mGET /api/v1/products?limit=1 [32m200[0m 2606.195 ms - 516[0m
+[0mPOST /api/v1/auth/login [32m200[0m 1023.379 ms - 985[0m
+[0mPOST /api/v1/auth/refresh [32m200[0m 132.705 ms - 311[0m
+[0mGET /api/v1/health [32m200[0m 0.461 ms - 160[0m
+[0mPOST /api/v1/auth/login [32m200[0m 729.001 ms - 985[0m
+[0mGET /api/v1/auth/me [32m200[0m 367.426 ms - 531[0m
+[0mGET /api/v1/users?limit=1 [32m200[0m 427.950 ms - 489[0m
+[0mGET /api/v1/auth/me [33m401[0m 1.565 ms - 1346[0m
+[0mGET /api/v1/health [32m200[0m 585.400 ms - 160[0m
+[0mGET /api/v1/health [32m200[0m 0.376 ms - 160[0m
+[0mPOST /api/v1/auth/login [32m200[0m 2667.396 ms - 985[0m
+[bokoma] {"ts":"2026-07-10T17:46:08.297Z","level":"info","app":"bokoma","tag":"debug","event":"ip_lookup","userId":"6a4543fccc9048477ea17fa1","email":"admin@bokoma.ci","role":"admin","requestIp":"::1","userAgent":"node","timestamp":"2026-07-10T17:46:08.297Z"}
+[0mGET /api/v1/debug/ip [32m200[0m 2619.111 ms - 336[0m
+[bokoma] {"ts":"2026-07-10T18:18:13.925Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"CinetPayClient initialized","countries":["CI"],"baseUrl":"https://api.cinetpay.net","tokenTtl":"***REDACTED***","timeout":30000}
+[bokoma] {"ts":"2026-07-10T18:18:13.946Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache miss for CI, authenticating..."}
+[bokoma] {"ts":"2026-07-10T18:18:14.026Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"POST /v1/oauth/login","body":{"api_key":"***REDACTED***","api_password":"***REDACTED***"}}
+[bokoma] {"ts":"2026-07-10T18:18:18.301Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"POST /v1/oauth/login → 200","code":200,"status":"OK"}
+[bokoma] {"ts":"2026-07-10T18:18:18.302Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cached for CI (TTL: 82800s)"}
+[bokoma] {"ts":"2026-07-10T18:18:18.302Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1"}
+[bokoma] {"ts":"2026-07-10T18:18:18.557Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T18:18:18.557Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-70bb39bc55a4","transactionId":"CMD-1783707478043-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T18:18:41.202Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T18:18:41.202Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1"}
+[bokoma] {"ts":"2026-07-10T18:18:42.150Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T18:18:42.150Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-2a923cdb1ef5","transactionId":"CMD-1783707478043-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T18:19:11.102Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T18:19:11.103Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1"}
+[bokoma] {"ts":"2026-07-10T18:19:11.788Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T18:19:11.788Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-8da77f06a323","transactionId":"CMD-1783707478043-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T18:21:41.207Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T18:21:41.207Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1"}
+[bokoma] {"ts":"2026-07-10T18:21:42.255Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1 → 200","code":2002,"status":"PENDING"}
+[bokoma] {"ts":"2026-07-10T18:21:42.255Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-3375de4c761c","transactionId":"CMD-1783707478043-7fa1","apiCode":2002,"apiStatus":"PENDING"}
+[bokoma] {"ts":"2026-07-10T18:23:41.157Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T18:23:41.157Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1"}
+[bokoma] {"ts":"2026-07-10T18:23:42.064Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1 → 200","code":2002,"status":"PENDING"}
+[bokoma] {"ts":"2026-07-10T18:23:42.064Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-49768393dac2","transactionId":"CMD-1783707478043-7fa1","apiCode":2002,"apiStatus":"PENDING"}
+[bokoma] {"ts":"2026-07-10T18:25:38.230Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T18:25:38.230Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1"}
+[bokoma] {"ts":"2026-07-10T18:25:38.947Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783707478043-7fa1 → 200","code":2002,"status":"PENDING"}
+[bokoma] {"ts":"2026-07-10T18:25:38.948Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-b1f203e10cbb","transactionId":"CMD-1783707478043-7fa1","apiCode":2002,"apiStatus":"PENDING"}
+✅ [NotificationService] 1 notification(s) créée(s) - Type: payment_expired
+✅ [NotificationService] 1 notification(s) créée(s) - Type: payment_expired
+[bokoma] {"ts":"2026-07-10T19:40:46.919Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T19:40:47.238Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783712422462-7fa1"}
+[bokoma] {"ts":"2026-07-10T19:40:53.188Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783712422462-7fa1 → 200","code":100,"status":"SUCCESS"}
+[bokoma] {"ts":"2026-07-10T19:40:53.258Z","level":"info","app":"bokoma","tag":"payment","event":"verify_ok","correlationId":"cp-4a65d2d0d014","transactionId":"CMD-1783712422462-7fa1","apiCode":100,"apiStatus":"SUCCESS"}
+✅ [NotificationService] 1 notification(s) créée(s) - Type: payment_success
+✅ [NotificationService] 1 notification(s) créée(s) - Type: payment_success
+[bokoma] {"ts":"2026-07-10T19:43:42.612Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T19:43:42.612Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783712606040-7fa1"}
+[bokoma] {"ts":"2026-07-10T19:43:43.467Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783712606040-7fa1 → 200","code":2002,"status":"PENDING"}
+[bokoma] {"ts":"2026-07-10T19:43:43.467Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-4b746859b383","transactionId":"CMD-1783712606040-7fa1","apiCode":2002,"apiStatus":"PENDING"}
+[bokoma] {"ts":"2026-07-10T19:59:43.227Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T19:59:43.227Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1"}
+[bokoma] {"ts":"2026-07-10T19:59:44.601Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T19:59:44.601Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-d36573d6309b","transactionId":"CMD-1783713579209-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:00:13.817Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T20:00:13.817Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1"}
+[bokoma] {"ts":"2026-07-10T20:00:17.889Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:00:17.889Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-db41bc7be8b6","transactionId":"CMD-1783713579209-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:00:42.878Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T20:00:42.879Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1"}
+[bokoma] {"ts":"2026-07-10T20:00:43.801Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:00:43.801Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-13435874d6f0","transactionId":"CMD-1783713579209-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:02:43.036Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T20:02:43.036Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1"}
+[bokoma] {"ts":"2026-07-10T20:02:43.776Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:02:43.776Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-4004777ac4a1","transactionId":"CMD-1783713579209-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:04:43.021Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T20:04:43.021Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1"}
+[bokoma] {"ts":"2026-07-10T20:04:43.712Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:04:43.712Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-847e88e67237","transactionId":"CMD-1783713579209-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:05:38.149Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T20:05:38.149Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1"}
+[bokoma] {"ts":"2026-07-10T20:05:39.230Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783713579209-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:05:39.230Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-0dcc22dc4d97","transactionId":"CMD-1783713579209-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+✅ [NotificationService] 1 notification(s) créée(s) - Type: payment_expired
+✅ [NotificationService] 1 notification(s) créée(s) - Type: payment_expired
+[bokoma] {"ts":"2026-07-10T20:38:13.627Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T20:38:13.627Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783715869752-7fa1"}
+[bokoma] {"ts":"2026-07-10T20:38:15.195Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783715869752-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:38:15.196Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-1d9c71d3de82","transactionId":"CMD-1783715869752-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:38:43.639Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T20:38:43.639Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783715869752-7fa1"}
+[bokoma] {"ts":"2026-07-10T20:38:44.635Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783715869752-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:38:44.635Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-8d08b2634c2c","transactionId":"CMD-1783715869752-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:41:13.930Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T20:41:13.930Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783716048663-7fa1"}
+[bokoma] {"ts":"2026-07-10T20:41:15.082Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783716048663-7fa1 → 200","code":2002,"status":"PENDING"}
+[bokoma] {"ts":"2026-07-10T20:41:15.083Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-cdaa822d337f","transactionId":"CMD-1783716048663-7fa1","apiCode":2002,"apiStatus":"PENDING"}
+[bokoma] {"ts":"2026-07-10T20:43:13.703Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T20:43:13.703Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783715869752-7fa1"}
+[bokoma] {"ts":"2026-07-10T20:43:14.720Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783715869752-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T20:43:14.721Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-acb9e8b734b3","transactionId":"CMD-1783715869752-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:27:16.588Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T21:27:16.691Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1"}
+[bokoma] {"ts":"2026-07-10T21:27:19.237Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:27:19.238Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-f84411a4bced","transactionId":"CMD-1783718829084-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:27:44.580Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T21:27:44.580Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1"}
+[bokoma] {"ts":"2026-07-10T21:27:46.610Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:27:46.610Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-e15fbadfeb69","transactionId":"CMD-1783718829084-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:28:14.478Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T21:28:14.478Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1"}
+[bokoma] {"ts":"2026-07-10T21:28:16.052Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:28:16.052Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-2d26056fbbd6","transactionId":"CMD-1783718829084-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:30:14.752Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T21:30:14.753Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1"}
+[bokoma] {"ts":"2026-07-10T21:30:19.657Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:30:19.657Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-bb77947d4d48","transactionId":"CMD-1783718829084-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+✅ [NotificationService] 1 notification(s) créée(s) - Type: payment_reminder
+[bokoma] {"ts":"2026-07-10T21:32:14.459Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T21:32:14.459Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1"}
+[bokoma] {"ts":"2026-07-10T21:32:15.305Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:32:15.305Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-678d911eb60a","transactionId":"CMD-1783718829084-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:34:14.672Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T21:34:14.672Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1"}
+[bokoma] {"ts":"2026-07-10T21:34:15.646Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:34:15.646Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-04a0f75dc750","transactionId":"CMD-1783718829084-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:35:40.395Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"Token cache hit for CI"}
+[bokoma] {"ts":"2026-07-10T21:35:40.395Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1"}
+[bokoma] {"ts":"2026-07-10T21:35:41.245Z","level":"debug","app":"bokoma","tag":"cinetpay-sdk","event":"GET /v1/payment/CMD-1783718829084-7fa1 → 200","code":2001,"status":"INITIATED"}
+[bokoma] {"ts":"2026-07-10T21:35:41.245Z","level":"info","app":"bokoma","tag":"payment","event":"verify_pending","correlationId":"cp-42663697ded5","transactionId":"CMD-1783718829084-7fa1","apiCode":2001,"apiStatus":"INITIATED"}
+✅ [NotificationService] 1 notification(s) créée(s) - Type: payment_expired
+✅ [NotificationService] 1 notification(s) créée(s) - Type: payment_expired
+🔄 Mongoose: reconnected
+📂 Mongoose: connection open
+🔄 Mongoose: reconnected
+📂 Mongoose: connection open
+🔄 Mongoose: reconnected
+📂 Mongoose: connection open
+🔄 Mongoose: reconnected
+📂 Mongoose: connection open

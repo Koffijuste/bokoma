@@ -1,0 +1,27 @@
+◇ injected env (26) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+✅ [Cloudinary] Configured via CLOUDINARY_URL: { cloud_name: 'dfinmurky', secure: true }
+✅ [user.routes] All handlers found
+[bokoma] {"ts":"2026-07-10T14:12:22.217Z","level":"info","app":"bokoma","tag":"boot","event":"env_snapshot","nodeEnv":"development","port":"5000","cinetpay":{"apiKeyPresent":"***REDACTED***","apiPasswordPresent":"***REDACTED***","baseUrl":"https://api.cinetpay.net","mode":"sandbox","fullyConfigured":true},"clientUrl":"http://localhost:3000","apiUrl":"http://localhost:5000"}
+
+================ MongoDB Debug ================
+🕒 Time: 2026-07-10T14:12:22.225Z
+🌍 NODE_ENV: development
+📦 Mongoose Version: 9.7.4
+🟢 Node Version: v25.9.0
+🔍 Tentative de connexion MongoDB...
+🔗 URI: mongodb+srv://primeHunter:********@app-js-fullstack.digqdpt.mongodb.net/bokoma?retryWrites=true&w=majority&serverSelectionTimeoutMS=10000&socketTimeoutMS=45000&family=4
+🔁 MongoDB connect attempt 1/4
+📡 Mongoose: connecting...
+✅ Mongoose: connected
+mongo-connect: 15.788s
+📂 Mongoose: connection open
+===============================================
+🎉 MongoDB connecté avec succès
+📚 Database: bokoma
+🏠 Host: ac-jwlxvyt-shard-00-00.digqdpt.mongodb.net
+===============================================
+
+[bokoma] {"ts":"2026-07-10T14:12:38.042Z","level":"info","app":"bokoma","tag":"boot","event":"mongo_connected","ok":true}
+[bokoma] {"ts":"2026-07-10T14:12:38.140Z","level":"info","app":"bokoma","tag":"boot","event":"server_listening","url":"http://localhost:5000","health":"http://localhost:5000/api/v1/health"}
+🚀 Serveur : http://localhost:5000
+🏥 Health  : http://localhost:5000/api/v1/health
