@@ -300,9 +300,10 @@ export default function ProductsAdminPage() {
       setCategoriesError(null);
 
       // 🔍 DEBUG (27/07/2026) — à retirer une fois le bug résolu
-      const debugBaseURL = (await import('@/services/api')).apiClient.defaults.baseURL;
-      console.log('[DEBUG] apiClient.baseURL =', debugBaseURL);
-      console.log('[DEBUG] window.location.hostname =', typeof window !== 'undefined' ? window.location.hostname : 'SSR');
+      console.log('[DEBUG] window.location.hostname =',
+        typeof window !== 'undefined' ? window.location.hostname : 'SSR');
+      console.log('[DEBUG] window.location.href =',
+        typeof window !== 'undefined' ? window.location.href : 'SSR');
 
       // ✅ Bug fix (13/07/2026) : la requête était hardcodée sur
       // `http://localhost:5000/api/v1/categories` ce qui ne marchait
@@ -326,10 +327,10 @@ export default function ProductsAdminPage() {
 
       // 🔍 DEBUG — à retirer une fois le bug résolu
       console.log('[DEBUG] /categories response.status =', response.status);
-      console.log('[DEBUG] /categories response.data =', response.data);
+      console.log('[DEBUG] /categories response.data =', JSON.stringify(response.data).slice(0, 500));
 
       const cats = normalizeCategories(response.data);
-      console.log('[DEBUG] normalizeCategories() =', cats.length, 'cats');
+      console.log('[DEBUG] normalizeCategories() returned', cats.length, 'cats');
 
       setCategories(cats);
 
