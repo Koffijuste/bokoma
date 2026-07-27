@@ -372,3 +372,126 @@ video {
   user-select: none;
   pointer-events: auto;
 }
+
+/* ============================================================================
+   📱 CAPACITOR / MOBILE — Safe areas, viewport, touch optimisations
+   ============================================================================
+   Toutes ces classes sont inactives sur le web (zero impact sur la version
+   navigateur). Elles ne s'appliquent QUE sur l'app native grâce à
+   `html.is-capacitor` injecté par le script inline dans layout.tsx.
+   ============================================================================*/
+
+/* ── Safe areas (encoche iPhone, Dynamic Island, barres Android) ───────────
+   Tailwind ne fournit pas ces utilitaires nativement → on les définit ici.
+   Usage : <div class="pt-safe"> = padding-top qui inclut la safe-area.
+   Ces classes utilisent env() qui est zéro sur le web (donc no-op). */
+@layer utilities {
+  .pt-safe  { padding-top:    env(safe-area-inset-top, 0); }
+  .pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0); }
+  .pl-safe  { padding-left:   env(safe-area-inset-left, 0); }
+  .pr-safe  { padding-right:  env(safe-area-inset-right, 0); }
+
+  .mt-safe  { margin-top:    env(safe-area-inset-top, 0); }
+  .mb-safe  { margin-bottom: env(safe-area-inset-bottom, 0); }
+
+  /* Toutes les safe areas combinées (utiles pour le body) */
+  .safe-area-top    { padding-top:    env(safe-area-inset-top, 0); }
+  .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
+}
+
+/* ── Quand on est dans Capacitor, on force un layout edge-to-edge ────────
+   Le header et le footer doivent s'étendre SOUS la status bar / nav bar,
+   mais le contenu textuel doit être décalé via les classes `*-safe` ci-dessus. */
+html.is-capacitor body {
+  /* Permet au scroll de passer sous la status bar sans padding manuel */
+  overscroll-behavior-y: contain;
+  /* Désactive le pull-to-refresh natif du navigateur (pas pertinent en app) */
+  overscroll-behavior: contain;
+  /* Désactive le tap-highlight bleu par défaut sur iOS / Android */
+  -webkit-tap-highlight-color: transparent;
+  /* Désactive la sélection de texte sur les éléments non-input (sauf img) */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Réactive la sélection uniquement sur les inputs / textarea (sinon on ne
+   peut plus copier/coller dans un champ) */
+html.is-capacitor input,
+html.is-capacitor textarea,
+html.is-capacitor [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Smooth scrolling natif iOS (inactif par défaut sur Capacitor iOS) */
+html.is-capacitor {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Header / footer en mode Capacitor : on retire le padding du body puisque
+   chaque composant gère sa propre safe-area via pt-safe / pb-safe. */
+html.is-capacitor body {
+  padding: 0;
+}
+
+/* Quand Capacitor est actif, on désactive le scroll horizontal accidentel
+   causé par des éléments en overflow (très fréquent en responsive) */
+html.is-capacitor {
+  overflow-x: hidden;
+}
+
+/* Inputs sur mobile : on force font-size >= 16px sinon iOS zoome auto sur
+   focus (très mauvaise UX) */
+html.is-capacitor input,
+html.is-capacitor textarea,
+html.is-capacitor select {
+  font-size: 16px;
+}
+
+/* ── Désactivation de l'overscroll bounce sur iOS Capacitor ────────────────
+   Le navigateur Safari iOS bounce par défaut sur scroll-top. En app native
+   c'est un comportement non natif qui choque les utilisateurs. */
+@supports (-webkit-touch-callout: none) {
+  html.is-capacitor body {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* ── Désactivation du text-size-adjust iOS (qui casse le layout sur
+   rotation) ────────────────────────────────────────────────────────────── */
+html.is-capacitor {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ── Touch action pour les zones scrollables (perf GPU) ────────────────────
+   Empêche le navigateur d'envoyer des events "click" après un scroll,
+   source classique de bugs "double tap" sur iOS WebView. */
+html.is-capacitor .touch-pan-y {
+  touch-action: pan-y;
+}
+html.is-capacitor .touch-pan-x {
+  touch-action: pan-x;
+}
+html.is-capacitor .touch-none {
+  touch-action: none;
+}
+
+/* ── Désactive les callouts iOS (long-press = menu contextuel) sur les
+   images et boutons en mode app (UX plus "native") ────────────────────── */
+html.is-capacitor img,
+html.is-capacitor button:not(input):not(textarea) {
+  -webkit-touch-callout: none;
+}
+
+/* ── Fixed elements (modales, drawers) : tenir compte de la safe-area ─── */
+html.is-capacitor .fixed,
+html.is-capacitor [data-fixed-bottom] {
+  bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* ── Bottom navigation / tab bar (si tu en ajoutes une plus tard) ─────── */
+html.is-capacitor .tab-bar-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  height: calc(3rem + env(safe-area-inset-bottom, 0));
+}

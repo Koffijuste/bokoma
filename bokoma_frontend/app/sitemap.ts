@@ -11,6 +11,9 @@
 // la fonction `generate()` appelée ci-dessous.
 // ============================================================================
 
+// ✅ Force le static rendering pour Capacitor (output: 'export').
+export const dynamic = 'force-static';
+
 import type { MetadataRoute } from 'next';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.bokomastore.com';

@@ -65,6 +65,51 @@ type ExtendedConfig = InternalAxiosRequestConfig & {
  */
 const resolveBaseURL = (): string => {
   const env = process.env.NEXT_PUBLIC_API_URL;
+
+  // ── CAPACITOR (mobile natif) ───────────────────────────────────────────
+  // Le build mobile est un static export servi par la WebView. Pas de
+  // rewrite Next.js disponible → il faut pointer directement sur le
+  // backend Railway. On utilise une variable d'env séparée
+  // `NEXT_PUBLIC_API_URL_MOBILE` pour pouvoir garder `localhost:5000`
+  // sur le web dev (où on a un rewrite Vercel) tout en forçant
+  // l'URL prod sur l'app mobile. Si non définie, on retombe sur
+  // `NEXT_PUBLIC_API_URL` (qui doit pointer sur Railway en build mobile).
+  //
+  // Détection Capacitor : on regarde `window.Capacitor` injecté par
+  // @capacitor/core au runtime, ou `NEXT_PUBLIC_BUILD_TARGET=mobile` au
+  // build (set par `npm run build:mobile`).
+  const isMobileBuild =
+    process.env.NEXT_PUBLIC_BUILD_TARGET === 'mobile' ||
+    (typeof window !== 'undefined' &&
+      // @ts-ignore — window.Capacitor est injecté par le bridge natif
+      (window as any).Capacitor?.isNativePlatform?.() === true);
+
+  if (isMobileBuild) {
+    const mobileUrl =
+      process.env.NEXT_PUBLIC_API_URL_MOBILE ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      'https://bokoma-production.up.railway.app/api/v1';
+    return mobileUrl;
+  }
+
+  // ── WEB — garde-fou runtime ───────────────────────────────────────────
+  // ✅ Bug fix (27/07/2026) : si on est dans un navigateur ET que la page
+  //    n'est PAS servie depuis localhost, on n'a AUCUNE raison de tenter
+  //    d'appeler localhost:5000 (la CSP de prod le bloque, et même sans
+  //    CSP ça toucherait le poste du visiteur, pas notre backend).
+  //    → On force le rewrite Vercel '/api/v1' dans tous ces cas.
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '';
+    if (!isLocalhost) {
+      // On est en prod (Vercel, Railway preview, custom domain…)
+      // → on passe TOUJOURS par le rewrite, peu importe ce que dit l'env.
+      return '/api/v1';
+    }
+    // En local, l'env fait foi (par défaut localhost:5000).
+  }
+
+  // ── WEB — résolution standard ─────────────────────────────────────────
   // Si l'env pointe explicitement sur Railway en prod, c'est probablement
   // un oubli de config → on retombe sur le rewrite pour éviter le bug
   // cross-origin cookie. En dev, l'env est sur localhost:5000 donc OK.
@@ -140,7 +185,14 @@ class ApiClient {
           .some(r => config?.url?.includes(r));
 
         // ── Auto-refresh sur 401 ────────────────────────────────────────────
-        if (status === 401 && !config?._retry && !config?._isRefresh && !isAuthRoute) {
+        // ✅ Bug fix (27/07/2026) : si l'appel a explicitement demandé
+        //    `__skipAuth: true`, on ne tente PAS le refresh et on ne
+        //    déclenche PAS `onSessionExpired()`. Utile pour les endpoints
+        //    publics optionnels (ex: /categories) qui marchent même sans
+        //    session — l'utilisateur garde son UI intacte même si son
+        //    access token a expiré en parallèle.
+        const skipAuth = (config as any)?.__skipAuth === true;
+        if (status === 401 && !config?._retry && !config?._isRefresh && !isAuthRoute && !skipAuth) {
           config._retry = true;
 
           // Déjà en train de refresh → mettre en file d'attente
