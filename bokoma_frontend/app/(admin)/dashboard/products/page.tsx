@@ -299,6 +299,11 @@ export default function ProductsAdminPage() {
     try {
       setCategoriesError(null);
 
+      // 🔍 DEBUG (27/07/2026) — à retirer une fois le bug résolu
+      const debugBaseURL = (await import('@/services/api')).apiClient.defaults.baseURL;
+      console.log('[DEBUG] apiClient.baseURL =', debugBaseURL);
+      console.log('[DEBUG] window.location.hostname =', typeof window !== 'undefined' ? window.location.hostname : 'SSR');
+
       // ✅ Bug fix (13/07/2026) : la requête était hardcodée sur
       // `http://localhost:5000/api/v1/categories` ce qui ne marchait
       // qu'en dev local. En prod (Vercel + Railway) l'appel échouait,
@@ -319,7 +324,13 @@ export default function ProductsAdminPage() {
         __skipAuth: true, // cf. services/api.ts → interceptor request
       } as any);
 
+      // 🔍 DEBUG — à retirer une fois le bug résolu
+      console.log('[DEBUG] /categories response.status =', response.status);
+      console.log('[DEBUG] /categories response.data =', response.data);
+
       const cats = normalizeCategories(response.data);
+      console.log('[DEBUG] normalizeCategories() =', cats.length, 'cats');
+
       setCategories(cats);
 
       if (cats.length > 0 && !formData.category) {
