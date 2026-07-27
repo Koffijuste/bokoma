@@ -92,14 +92,31 @@ const resolveBaseURL = (): string => {
     return mobileUrl;
   }
 
-  // ── WEB ────────────────────────────────────────────────────────────────
+  // ── WEB — garde-fou runtime ───────────────────────────────────────────
+  // ✅ Bug fix (27/07/2026) : si on est dans un navigateur ET que la page
+  //    n'est PAS servie depuis localhost, on n'a AUCUNE raison de tenter
+  //    d'appeler localhost:5000 (la CSP de prod le bloque, et même sans
+  //    CSP ça toucherait le poste du visiteur, pas notre backend).
+  //    → On force le rewrite Vercel '/api/v1' dans tous ces cas.
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '';
+    if (!isLocalhost) {
+      // On est en prod (Vercel, Railway preview, custom domain…)
+      // → on passe TOUJOURS par le rewrite, peu importe ce que dit l'env.
+      return '/api/v1';
+    }
+    // En local, l'env fait foi (par défaut localhost:5000).
+  }
+
+  // ── WEB — résolution standard ─────────────────────────────────────────
   // Si l'env pointe explicitement sur Railway en prod, c'est probablement
   // un oubli de config → on retombe sur le rewrite pour éviter le bug
   // cross-origin cookie. En dev, l'env est sur localhost:5000 donc OK.
   if (env && /^https?:\/\//.test(env)) {
     const isLocalDev = env.includes('localhost') || env.includes('127.0.0.1');
     if (!isLocalDev) {
-      // Override défensif : en prod web on force le rewrite Vercel
+      // Override défensif : en prod on force le rewrite Vercel
       return '/api/v1';
     }
     return env;
