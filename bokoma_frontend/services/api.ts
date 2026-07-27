@@ -185,7 +185,14 @@ class ApiClient {
           .some(r => config?.url?.includes(r));
 
         // ── Auto-refresh sur 401 ────────────────────────────────────────────
-        if (status === 401 && !config?._retry && !config?._isRefresh && !isAuthRoute) {
+        // ✅ Bug fix (27/07/2026) : si l'appel a explicitement demandé
+        //    `__skipAuth: true`, on ne tente PAS le refresh et on ne
+        //    déclenche PAS `onSessionExpired()`. Utile pour les endpoints
+        //    publics optionnels (ex: /categories) qui marchent même sans
+        //    session — l'utilisateur garde son UI intacte même si son
+        //    access token a expiré en parallèle.
+        const skipAuth = (config as any)?.__skipAuth === true;
+        if (status === 401 && !config?._retry && !config?._isRefresh && !isAuthRoute && !skipAuth) {
           config._retry = true;
 
           // Déjà en train de refresh → mettre en file d'attente

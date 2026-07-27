@@ -306,9 +306,18 @@ export default function ProductsAdminPage() {
       // aucune option → impossible d'ajouter un produit.
       // On utilise maintenant `apiClient` (mêmes credentials + baseURL
       // + intercepteurs que /products) comme le reste du code.
+      //
+      // ✅ Bug fix (27/07/2026) : on désactive explicitement l'interceptor
+      //    axios pour cet appel — `/categories` est un endpoint public
+      //    (confirmé via curl direct sur l'API prod : renvoie 200 sans
+      //    cookie d'auth). Si l'admin a une session expirée (401 sur
+      //    /auth/me), l'interceptor throw et empêche de charger les
+      //    catégories. Avec `__skipAuth: true`, on bypass le refresh
+      //    et on récupère les catégories même si l'admin est déconnecté.
       const response = await apiClient.get('/categories', {
         timeout: API_TIMEOUT,
-      });
+        __skipAuth: true, // cf. services/api.ts → interceptor request
+      } as any);
 
       const cats = normalizeCategories(response.data);
       setCategories(cats);
