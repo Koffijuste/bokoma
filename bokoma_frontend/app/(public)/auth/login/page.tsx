@@ -34,7 +34,7 @@ const resolveRedirect = (
 
   // Admin/manager : toujours /dashboard (sauf si from pointe vers une route
   // admin différente, ex: /dashboard/orders, qu'on respecte).
-  const isStaff = user?.role === 'admin' || user?.role === 'manager';
+  const isStaff = user?.role && user.role !== 'customer';
 
   if (from && from.startsWith('/') && !from.includes('://')) {
     if (isStaff) {

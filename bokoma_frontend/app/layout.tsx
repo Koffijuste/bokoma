@@ -39,9 +39,21 @@ const playfair = Playfair_Display({
   preload: true,
 });
 
+// ── Détection du mode build (web vs Capacitor) ────────────────────────────
+// On injecte un attribut `data-platform` sur <html> côté client via un
+// script inline. C'est ce qui permet ensuite à globals.css de cibler
+// `.is-capacitor` sans casser la version web (qui n'a pas la classe).
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // ✅ Empêche le pinch-to-zoom sur iOS Safari (UX native mobile)
+  //    Tout en gardant l'accessibilité (user-scalable désactivé).
+  maximumScale: 1,
+  userScalable: false,
+  // ✅ viewport-fit=cover permet à la WebView de s'étendre sous l'encoche
+  //    / Dynamic Island. Combiné avec env(safe-area-inset-*) dans le CSS,
+  //    on obtient un layout "edge-to-edge" propre sans contenu caché.
+  viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
     { media: '(prefers-color-scheme: dark)',  color: '#0a0a0a' },
@@ -97,6 +109,31 @@ export default function RootLayout({
         <meta name="msapplication-square150x150logo" content="/icon.png" />
         <link rel="apple-touch-icon" href="/apple-icon.png" />
         <link rel="apple-touch-startup-image" href="/icon.png" />
+        {/*
+          📱 Script de détection de plateforme (Capacitor vs Web).
+          Injecté AVANT le 1er render React pour éviter tout flash de style.
+          Idempotent : si window.Capacitor n'existe pas (cas web), on
+          ne set rien → globals.css reste sur le style web normal.
+        */}
+        <script
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) {
+                    document.documentElement.classList.add('is-capacitor');
+                    document.documentElement.setAttribute('data-platform', 'capacitor');
+                  } else {
+                    document.documentElement.setAttribute('data-platform', 'web');
+                  }
+                } catch (e) {
+                  document.documentElement.setAttribute('data-platform', 'web');
+                }
+              })();
+            `,
+          }}
+        />
       </head>
       <body
         className={`
@@ -104,6 +141,7 @@ export default function RootLayout({
           font-sans antialiased
           flex flex-col min-h-screen
           bg-background text-foreground
+          safe-area-top safe-area-bottom
         `}
       >
         <Providers>
@@ -112,7 +150,7 @@ export default function RootLayout({
 
           <Header />
 
-          <main className="flex-1 pt-16 lg:pt-20">
+          <main className="flex-1 pt-16 lg:pt-20 pt-safe">
             {children}
           </main>
 

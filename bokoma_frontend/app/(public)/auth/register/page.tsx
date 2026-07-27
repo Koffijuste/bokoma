@@ -147,7 +147,7 @@ export default function RegisterPage() {
         ? ROUTES.USER.PROFILE
         : '/profile';
       const freshUser = useAuthStore.getState().user;
-      const isStaff = freshUser?.role === 'admin' || freshUser?.role === 'manager';
+      const isStaff = freshUser?.role && freshUser.role !== 'customer';
       const dest = isStaff ? dashboard : profile;
 
       router.replace(dest);

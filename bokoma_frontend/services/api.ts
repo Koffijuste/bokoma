@@ -65,13 +65,41 @@ type ExtendedConfig = InternalAxiosRequestConfig & {
  */
 const resolveBaseURL = (): string => {
   const env = process.env.NEXT_PUBLIC_API_URL;
+
+  // ── CAPACITOR (mobile natif) ───────────────────────────────────────────
+  // Le build mobile est un static export servi par la WebView. Pas de
+  // rewrite Next.js disponible → il faut pointer directement sur le
+  // backend Railway. On utilise une variable d'env séparée
+  // `NEXT_PUBLIC_API_URL_MOBILE` pour pouvoir garder `localhost:5000`
+  // sur le web dev (où on a un rewrite Vercel) tout en forçant
+  // l'URL prod sur l'app mobile. Si non définie, on retombe sur
+  // `NEXT_PUBLIC_API_URL` (qui doit pointer sur Railway en build mobile).
+  //
+  // Détection Capacitor : on regarde `window.Capacitor` injecté par
+  // @capacitor/core au runtime, ou `NEXT_PUBLIC_BUILD_TARGET=mobile` au
+  // build (set par `npm run build:mobile`).
+  const isMobileBuild =
+    process.env.NEXT_PUBLIC_BUILD_TARGET === 'mobile' ||
+    (typeof window !== 'undefined' &&
+      // @ts-ignore — window.Capacitor est injecté par le bridge natif
+      (window as any).Capacitor?.isNativePlatform?.() === true);
+
+  if (isMobileBuild) {
+    const mobileUrl =
+      process.env.NEXT_PUBLIC_API_URL_MOBILE ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      'https://bokoma-production.up.railway.app/api/v1';
+    return mobileUrl;
+  }
+
+  // ── WEB ────────────────────────────────────────────────────────────────
   // Si l'env pointe explicitement sur Railway en prod, c'est probablement
   // un oubli de config → on retombe sur le rewrite pour éviter le bug
   // cross-origin cookie. En dev, l'env est sur localhost:5000 donc OK.
   if (env && /^https?:\/\//.test(env)) {
     const isLocalDev = env.includes('localhost') || env.includes('127.0.0.1');
     if (!isLocalDev) {
-      // Override défensif : en prod on force le rewrite Vercel
+      // Override défensif : en prod web on force le rewrite Vercel
       return '/api/v1';
     }
     return env;
