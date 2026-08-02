@@ -138,14 +138,29 @@ export default function DashboardPage() {
     setChartsLoading(true);
 
     try {
+      // ✅ Bug fix (02/08/2026) : 3 corrections pour que les graphes s'affichent
+      // comme sur /dashboard/analytics :
+      //   1. `days: 30` sur /orders/stats → la fenêtre par défaut (7j) ne couvre
+      //      pas les premières commandes du projet (datent de juin/juillet 2026).
+      //      Sans ce param, le dashboard renvoyait des graphes vides alors que
+      //      /dashboard/analytics, qui passait déjà `days: 30`, montrait des
+      //      données. Cohérence forcée entre les deux pages.
+      //   2. Timeout à 30s (au lieu de 10s) → l'apiClient a un default de 30s
+      //      et l'aggreg MongoDB peut être lent. Forcer 10s faisait timeout
+      //      aléatoirement et laissait les graphes vides.
+      //   3. Extraction alignée sur le pattern analytics (3 lignes) au lieu
+      //      des fallbacks `responseData.data?.x || responseData.x` à 4 niveaux
+      //      qui masquaient le vrai format de réponse et rendaient le code
+      //      illisible.
       const [statsRes, ordersRes, productsRes, usersRes] = await Promise.allSettled([
-        apiClient.get('/orders/stats', { signal: AbortSignal.timeout(10000) }),
-        apiClient.get('/orders', { params: { limit: 5, page: 1 }, signal: AbortSignal.timeout(10000) }),
-        apiClient.get('/products', { params: { limit: 1, page: 1 }, signal: AbortSignal.timeout(10000) }),
-        apiClient.get('/users', { params: { limit: 1, page: 1, role: 'customer' }, signal: AbortSignal.timeout(10000) }),
+        apiClient.get('/orders/stats', { params: { days: 30 } }),
+        apiClient.get('/orders', { params: { limit: 5, page: 1 } }),
+        apiClient.get('/products', { params: { limit: 1, page: 1 } }),
+        apiClient.get('/users', { params: { limit: 1, page: 1, role: 'customer' } }),
       ]);
 
       if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
+        // apiClient.get() renvoie déjà le body : { success, data: { stats, period } }
         const responseData = (statsRes.value as any).data;
         const s = responseData.data?.stats || responseData.stats || {};
         
@@ -155,8 +170,8 @@ export default function DashboardPage() {
           revenue: s.totalRevenue ?? s.revenue ?? 0,
         }));
         
-        const byStatus = responseData.data?.byStatus || s.byStatus;
-        if (byStatus && Array.isArray(byStatus)) {
+        const byStatus = s.byStatus;
+        if (Array.isArray(byStatus) && byStatus.length > 0) {
           const formatted = byStatus
             .filter((item: any) => STATUS_COLORS[item.status])
             .map((item: any) => ({
@@ -169,8 +184,8 @@ export default function DashboardPage() {
           setStatusData(generateMockStatusData({ stats: s }));
         }
         
-        const revenueTrend = responseData.data?.revenueTrend || s.revenueTrend;
-        if (revenueTrend && Array.isArray(revenueTrend)) {
+        const revenueTrend = s.revenueTrend;
+        if (Array.isArray(revenueTrend) && revenueTrend.length > 0) {
           const formatted = revenueTrend.map((item: any) => ({
             date: formatDate(item.date),
             revenue: item.revenue,
@@ -183,33 +198,28 @@ export default function DashboardPage() {
       }
 
       if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
+        // Body orders : { success, data: { orders, pagination, filters } }
         const responseData = (ordersRes.value as any).data;
-        const ordersData = responseData.data || responseData;
-        const ordersList = ordersData.orders || ordersData.products || [];
+        const ordersList = responseData.orders || [];
         setRecentOrders(Array.isArray(ordersList) ? ordersList.slice(0, 5) : []);
       }
 
       if (productsRes.status === 'fulfilled') {
+        // Body products : { success, total, results, products } (PAS de wrapper data)
         const responseData = (productsRes.value as any);
-        let totalProducts = 0;
-        
-        if (responseData.total !== undefined) {
-          totalProducts = responseData.total;
-        } else if (responseData.data?.total !== undefined) {
-          totalProducts = responseData.data.total;
-        } else if (Array.isArray(responseData.products)) {
-          totalProducts = responseData.products.length;
-        } else if (Array.isArray(responseData)) {
-          totalProducts = responseData.length;
-        }
-        
+        const totalProducts =
+          responseData.total ??
+          responseData.data?.total ??
+          (Array.isArray(responseData.products) ? responseData.products.length : 0);
         setStats(prev => ({ ...prev, products: totalProducts }));
       }
 
       if (usersRes.status === 'fulfilled' && usersRes.value?.data) {
+        // Body users : { success, data: { users, pagination: { total } } }
         const responseData = (usersRes.value as any).data;
-        const usersData = responseData.data || responseData;
-        const totalCustomers = usersData.pagination?.total || usersData.total || 0;
+        const totalCustomers =
+          responseData.pagination?.total ??
+          responseData.total ?? 0;
         setStats(prev => ({ ...prev, customers: totalCustomers }));
       }
 

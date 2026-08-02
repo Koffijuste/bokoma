@@ -49,7 +49,12 @@ const PaymentPieChart = dynamic(
 // 🔹 TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-type StatusStat = { _id: string; count: number };
+// ✅ Bug fix (02/08/2026) : backend renvoie `{ status, count }` (cf. order.controller.js
+// → getOrderStats : byStatus.map((s) => ({ status: s._id, count: s.count }))).
+// L'ancien type `{ _id, count }` venait de l'aggreg Mongo brute, mais le controller
+// transforme en `status` avant de renvoyer → l'alignement du type évite les `as any`
+// et les `s._id` qui tombent en `undefined` côté UI.
+type StatusStat = { status: string; count: number };
 
 type AnalyticsData = {
   stats: {
@@ -231,10 +236,17 @@ export default function AnalyticsAdminPage() {
       (analytics.stats.byStatus || [])
         .filter((s) => s.count > 0)
         .map((s) => ({
-          key: s._id,
-          name: STATUS_LABELS[s._id] || s._id,
+          // ✅ Bug fix (02/08/2026) : le backend renvoie `{ status, count }` après
+          // la transformation `byStatus.map((s) => ({ status: s._id, count: s.count }))`
+          // dans le controller. AVANT ce fix, on lisait `s._id` (laissé par l'aggreg
+          // Mongo avant transformation) → `STATUS_COLORS[undefined]` = fallback
+          // gris `#6B7280` pour TOUTES les parts + labels "undefined" dans la
+          // légende. Le chart s'affichait techniquement mais visuellement cassé
+          // (slices grises uniformes, pas de noms de statuts).
+          key: s.status,
+          name: STATUS_LABELS[s.status] || s.status,
           value: s.count,
-          color: STATUS_COLORS[s._id] || '#6B7280',
+          color: STATUS_COLORS[s.status] || '#6B7280',
         })),
     [analytics.stats.byStatus],
   );
