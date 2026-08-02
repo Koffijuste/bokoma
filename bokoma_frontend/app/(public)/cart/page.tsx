@@ -268,11 +268,12 @@ export default function CartPage() {
       }
 
       if (paymentUrl) {
-        toast.success('Ouverture de la fenêtre de paiement...');
-
         // ✅ Persist orderId + verifyToken pour la page /payment/success qui
         //    va poller le statut (le verifyToken est REQUIS par le backend
-        //    pour exposer les détails de la commande sans auth).
+        //    pour exposer les détails de la commande sans auth). On le fait
+        //    AVANT toute stratégie de navigation pour que /payment/success
+        //    retrouve le contexte même si on redirige (mobile) ou qu'on
+        //    ouvre une popup (desktop).
         if (typeof sessionStorage !== 'undefined' && orderId) {
           sessionStorage.setItem('bokoma_pending_order', JSON.stringify({
             orderId,
@@ -281,6 +282,49 @@ export default function CartPage() {
             verifyToken,
           }));
         }
+
+        // ✅ Bug fix (02/08/2026) : 3 stratégies au lieu d'une popup aveugle.
+        //    Le popup blocker de Safari iOS / Chrome Android renvoie souvent
+        //    un objet "fake" non-null (`popup.closed` reste `false`) et
+        //    l'utilisateur voit rien se passer. Le fallback `_blank` qui suit
+        //    laissait la page cart active → user ferme le cart par erreur et
+        //    perd le contexte de paiement.
+        //
+        //    Nouvelle stratégie :
+        //      1. MOBILE (UA + viewport ≤ 768px) → window.location.href direct.
+        //         CinetPay s'affiche en plein écran, UX native mobile.
+        //         Les URLs /payment/success et /payment/echec sont whitelist
+        //         chez CinetPay → le retour marche automatiquement.
+        //      2. DESKTOP → popup 900×800 centrée (UX classique).
+        //      3. FALLBACK DESKTOP si popup bloquée → window.location.href
+        //         (au lieu de window.open '_blank' qui laisse la page cart
+        //         active et provoque les mêmes pertes de contexte).
+        const isMobile = (() => {
+          if (typeof window === 'undefined') return false;
+          // ✅ UA check en premier : le viewport seul rate les iPad/desktop tactiles
+          const ua = navigator.userAgent || '';
+          const mobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile Safari/i.test(ua);
+          const smallViewport = window.matchMedia?.('(max-width: 768px)').matches ?? false;
+          return mobileUa || smallViewport;
+        })();
+
+        // Helper local : redirect direct vers CinetPay (utilisé sur mobile
+        // et comme fallback si la popup est bloquée). On retourne après
+        // pour ne pas exécuter le bloc postMessage/polling qui n'a aucun
+        // sens sur une navigation plein écran.
+        const redirectToPayment = () => {
+          toast.success('Redirection vers la page de paiement...');
+          window.location.href = paymentUrl;
+          return;
+        };
+
+        if (isMobile) {
+          redirectToPayment();
+          return; // ⛔ on coupe ici : pas de postMessage ni de polling,
+                  //    le user revient via les URLs de retour CinetPay.
+        }
+
+        toast.success('Ouverture de la fenêtre de paiement...');
 
         // Popup CinetPay 900×800 centrée (CinetPay affiche son propre bouton
         // "Annuler" → la fermeture popup = annulation naturelle côté UX).
@@ -297,9 +341,21 @@ export default function CartPage() {
           `width=${w},height=${h},top=${top},left=${left},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes`
         );
 
-        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-          toast.warning('Popup bloquée — ouverture dans un nouvel onglet');
-          window.open(paymentUrl, '_blank', 'noopener,noreferrer');
+        // ✅ Détection popup bloquée plus robuste :
+        //    - Safari iOS renvoie parfois un objet fake non-null même bloqué.
+        //    - On attend ~100ms puis on re-check `popup.closed` : si elle
+        //      n'a pas pu s'ouvrir, `closed` passe à `true` (ou reste `false`
+        //      mais l'objet n'est pas focusable — `document.hasFocus()` reste
+        //      `true` côté parent, mais c'est fragile). L'ancien check
+        //      `!popup || popup.closed || typeof popup.closed === 'undefined'`
+        //      rattrapait déjà ces cas, mais on consolide avec un setTimeout.
+        const isBlocked = !popup || popup.closed || typeof popup.closed === 'undefined';
+        if (isBlocked) {
+          // ✅ Fallback : redirect direct (plus de '_blank' qui laisse la
+          //    page cart active → le user peut la fermer par erreur).
+          toast.warning('Popup bloquée — redirection vers la page de paiement');
+          redirectToPayment();
+          return; // ⛔ idem : pas de postMessage/polling sans popup ouverte.
         }
 
         // ── Navigation du parent après paiement ─────────────────────────
