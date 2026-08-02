@@ -12,6 +12,7 @@
     "mobile:env": "node scripts/use-mobile-env.cjs",
     "prebuild:mobile": "npm run mobile:env",
     "build:mobile": "node scripts/build-mobile.cjs",
+    "reset-dev-env": "node scripts/reset-dev-env.cjs",
     "mobile:sync": "npx cap sync",
     "mobile:open:android": "npx cap open android",
     "mobile:open:ios": "npx cap open ios",

@@ -327,9 +327,17 @@ export default function ProductsAdminPage() {
 
       // 🔍 DEBUG — à retirer une fois le bug résolu
       console.log('[DEBUG] /categories response.status =', response.status);
-      console.log('[DEBUG] /categories response.data =', JSON.stringify(response.data).slice(0, 500));
+      console.log('[DEBUG] /categories response.data =', JSON.stringify(response).slice(0, 500));
 
-      const cats = normalizeCategories(response.data);
+      // ✅ Bug fix (02/08/2026) : `apiClient.get()` retourne DÉJÀ le body
+      // parsé de la réponse axios. Donc `response` = `{ success, categories, count }`
+      // et `response.data` = undefined. L'ancien code passait `response.data` à
+      // `normalizeCategories()` → la fonction recevait undefined → cats = [].
+      // Conséquence : le <select> Catégorie du formulaire "Nouveau produit" était
+      // vide, l'utilisateur pensait qu'il n'y avait aucune catégorie.
+      // On passe maintenant `response` directement (cf. `normalizeProducts` à
+      // la ligne suivante qui faisait déjà ça correctement).
+      const cats = normalizeCategories(response);
       console.log('[DEBUG] normalizeCategories() returned', cats.length, 'cats');
 
       setCategories(cats);

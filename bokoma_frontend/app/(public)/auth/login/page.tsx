@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BrandLogo } from '@/components/brand/BrandLogo';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, useRedirectIfAuthenticated } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store';
 import { ROUTES } from '@/constants';
 
@@ -56,9 +56,16 @@ const resolveRedirect = (
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
+  // ✅ Bug fix (27/07/2026) : si l'user est déjà connecté, on le redirige
+  //    automatiquement (admin → /dashboard, client → /profile, ou `?from=`
+  //    s'il y en a un). Sinon le formulaire s'affiche inutilement.
+  //    On l'appelle AVANT tout useState pour que la redirection se fasse
+  //    dès le mount, avant même le rendu du formulaire.
+  useRedirectIfAuthenticated();
+
   const fromParam = searchParams.get('from');
-  
+
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
@@ -95,17 +102,9 @@ export default function LoginPage() {
     fetchUser();
   }, [isLoading, fetchUser]);
 
-  // ✅ Redirection automatique si vraiment authentifié
-  // (le fetchUser ci-dessus a attendu que isLoading retombe avant de
-  // mettre à jour Zustand, donc cette branche ne se déclenche plus sur
-  // un état stale)
-  useEffect(() => {
-    if (isAuthenticated && !isLoading && !isRedirecting && user) {
-      setIsRedirecting(true);
-      const dest = resolveRedirect(fromParam, user);
-      router.replace(dest);
-    }
-  }, [isAuthenticated, isLoading, fromParam, user, router, isRedirecting]);
+  // ✅ Bug fix (27/07/2026) : la redirection "déjà authentifié" est gérée
+  //    par useRedirectIfAuthenticated() appelé plus haut. Pas besoin de
+  //    dupliquer le useEffect ici.
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

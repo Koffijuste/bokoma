@@ -211,10 +211,52 @@ export function useRequireAdmin() {
 export function useHasRole(requiredRole: string | string[]) {
   const { user, isAuthenticated } = useAuth();
   const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-  
+
   return {
     hasRole: isAuthenticated && !!user?.role && roles.includes(user.role),
     user,
     isAuthenticated,
   };
+}
+
+// ============================================================================
+// 🔹 useRedirectIfAuthenticated — Pour les pages /auth/*
+// ============================================================================
+// ✅ Bug fix (27/07/2026) : avant, les pages /auth/login, /auth/register,
+//    /auth/forgot-password, /auth/reset-password n'utilisaient pas ce hook
+//    → un user DÉJÀ connecté pouvait recharger /auth/forgot-password et
+//    voir le formulaire. C'est une fuite (l'email est pré-rempli, l'user
+//    peut reset son propre mdp par erreur, etc.).
+//
+//    useRedirectIfAuthenticated() à appeler EN HAUT de chaque page auth.
+//    Il fait 2 choses :
+//      1. fetchUser() si pas encore fait (pour avoir un état fiable)
+//      2. Si l'user est authentifié → router.replace() vers sa home
+//         (admin/manager → /dashboard, sinon → /profile)
+//
+//    Compatible avec le paramètre `?from=...` : si l'user arrive via un
+//    lien de redirection ("Vous devez être connecté pour accéder à X"),
+//    on le renvoie vers X une fois connecté → cohérent avec useRequireAuth.
+// ============================================================================
+
+export function useRedirectIfAuthenticated() {
+  const auth = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (auth.isLoading) return;
+
+    if (auth.isAuthenticated && auth.user) {
+      const from = new URLSearchParams(window.location.search).get('from');
+      const dest = from?.startsWith('/')
+        ? from
+        : auth.user.role === 'admin' || auth.user.role === 'manager'
+          ? r(ROUTES?.ADMIN?.DASHBOARD, '/dashboard')
+          : r(ROUTES?.USER?.PROFILE, '/profile');
+      router.replace(dest);
+    }
+  }, [auth.isLoading, auth.isAuthenticated, auth.user, router, pathname]);
+
+  return auth;
 }

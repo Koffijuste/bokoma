@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authApi } from '@/services';
 import { ROUTES } from '@/constants';
+import { useRedirectIfAuthenticated } from '@/hooks/useAuth';
 
 // Clé partagée avec /forgot-password (et d'autres pages au besoin)
 const RESET_TOKEN_KEY = 'bokoma:reset-token';
@@ -30,6 +31,12 @@ function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get('token');
+
+  // ✅ Bug fix (27/07/2026) : si l'user est déjà connecté, on le redirige
+  //    automatiquement. Sinon il pourrait reset son propre mdp (qui
+  //    n'est de toute façon pas ce flow prévu — ce flow est pour les
+  //    users qui ont perdu leur mdp).
+  useRedirectIfAuthenticated();
 
   const [token, setToken] = useState<string | null>(tokenFromUrl);
   const [tokenReady, setTokenReady] = useState(!!tokenFromUrl);
@@ -121,7 +128,10 @@ function ResetPasswordContent() {
       // Clean le token de sessionStorage
       try { sessionStorage.removeItem(RESET_TOKEN_KEY); } catch {}
       setSuccess(true);
-      setTimeout(() => router.push(ROUTES.AUTH.LOGIN), 3000);
+      // ✅ Bug fix (27/07/2026) : redirect rapide vers login (1.2s au lieu
+      //    de 3s). Laisse juste le temps au toast de confirmation d'être
+      //    visible avant la navigation.
+      setTimeout(() => router.push(ROUTES.AUTH.LOGIN), 1200);
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||

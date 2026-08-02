@@ -14,7 +14,7 @@ import {
   normalizePhone,
   PHONE_RULES,
 } from '@/utils/helpers';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, useRedirectIfAuthenticated } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store';
 import { toast } from 'sonner';
 
@@ -55,6 +55,11 @@ export default function RegisterPage() {
 
   const router = useRouter();
   const { register: registerUser, isLoading: isAuthLoading } = useAuth();
+
+  // ✅ Bug fix (27/07/2026) : si l'user est déjà connecté, on le redirige
+  //    automatiquement (admin → /dashboard, client → /profile). Sinon
+  //    il pourrait re-créer un compte par-dessus sa session active.
+  useRedirectIfAuthenticated();
 
   const validate = () => {
     const newErrors: Record<string, string> = {};

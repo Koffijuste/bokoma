@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { authApi } from '@/services';
 import { ROUTES } from '@/constants';
 import { validEmail } from '@/utils/helpers';
+import { useRedirectIfAuthenticated } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
 type Step = 'email' | 'otp';
@@ -29,6 +30,13 @@ const RESET_TOKEN_KEY = 'bokoma:reset-token';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
+
+  // ✅ Bug fix (27/07/2026) : si l'user est déjà connecté, on le redirige
+  //    automatiquement. Sinon il pourrait reset son propre mdp par erreur
+  //    (email pré-rempli, etc.) ou pire, initier un reset sur le compte
+  //    d'un autre user.
+  useRedirectIfAuthenticated();
+
   const [step, setStep] = useState<Step>('email');
 
   // ── Étape email ────────────────────────────────────────────

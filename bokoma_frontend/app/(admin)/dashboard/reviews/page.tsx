@@ -215,7 +215,13 @@ const ReviewCard = React.memo(function ReviewCard({
       <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
           <div className="flex items-center gap-1.5">
-            {review.user.avatar && isHttpUrl(review.user.avatar) ? (
+            {/* ✅ Bug fix (02/08/2026) : `review.user` peut être `null` quand
+                le user a été supprimé (deleted user) — l'API renvoie alors
+                un review orphelin avec `user: null`. AVANT le fix, on lisait
+                `review.user.avatar` sans optional chaining → crash de la
+                page avec `TypeError: Cannot read properties of null (reading 'avatar')`
+                dans la console (cf. logs prod). On protège tous les accès. */}
+            {review.user?.avatar && isHttpUrl(review.user.avatar) ? (
               <div className="relative w-6 h-6 rounded-full overflow-hidden ring-1 ring-border">
                 <Image
                   src={review.user.avatar}
@@ -231,7 +237,7 @@ const ReviewCard = React.memo(function ReviewCard({
               <IconBadge icon={UserIcon} color="accent" size="sm" className="!w-6 !h-6 [&_svg]:!w-3 [&_svg]:!h-3" />
             )}
             <span className="font-medium text-foreground">
-              {review.user.firstName} {review.user.lastName}
+              {review.user ? `${review.user.firstName} ${review.user.lastName}` : 'Utilisateur supprimé'}
             </span>
           </div>
           <span className="hidden sm:inline text-border">•</span>
