@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { orderApi } from '@/services';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { cn, formatPrice } from '@/utils/helpers';
+import { STATS_DEFAULT_DAYS } from '@/constants';
 
 // ── Charts en lazy-load (pas dans le bundle initial)
 const StatusPieChart = dynamic(
@@ -191,7 +192,12 @@ export default function AnalyticsAdminPage() {
       setLoading(true);
       setError(null);
 
-      const response = await orderApi.getOrderStats({ days: 30 });
+      // ✅ Bug fix (02/08/2026) : on utilise la constante partagée
+      // STATS_DEFAULT_DAYS (cf. constants/index.ts) au lieu d'un `30` en dur.
+      // Synchronisée avec le default backend (Bokoma_Backend/src/controllers/
+      // order.controller.js → STATS_DEFAULT_DAYS). Si tu changes la valeur,
+      // change-la aux deux endroits.
+      const response = await orderApi.getOrderStats({ days: STATS_DEFAULT_DAYS });
 
       // ✅ Lecture défensive compatible ApiResponse<…> OU payload nu.
       const responseData = (response as any)?.data || response;

@@ -269,6 +269,20 @@ export const PAGINATION = {
   MAX_LIMIT: 100,
 } as const;
 
+// ============================================================================
+// 📊 STATS — Fenêtre temporelle par défaut pour /orders/stats
+// ============================================================================
+// ✅ Bug fix (02/08/2026) : ancien default 7j côté backend faisait que
+//    /dashboard était vide pour un e-commerce récent (premières commandes
+//    datent de >7j). On force 30j par défaut. Côté backend (Bokoma_Backend/
+//    src/controllers/order.controller.js → STATS_DEFAULT_DAYS) et côté
+//    frontend : doivent rester synchronisés. Si tu changes la valeur ici,
+//    pense à mettre à jour le backend aussi (ou inversement).
+// ============================================================================
+export const STATS_DEFAULT_DAYS = 30;
+export const STATS_MAX_DAYS = 365;
+export const STATS_MIN_DAYS = 1;
+
 export const PRODUCT_TYPES = ['shoes', 'perfume', 'clothing', 'accessory'] as const;
 export type ProductType = typeof PRODUCT_TYPES[number];
 

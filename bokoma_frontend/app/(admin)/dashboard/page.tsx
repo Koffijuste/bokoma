@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 import { apiClient } from '@/services/api';
 import { useRequireAdmin } from '@/hooks/useAuth';
 import { formatPrice, formatDate } from '@/utils/helpers';
-import { ROUTES } from '@/constants';
+import { ROUTES, STATS_DEFAULT_DAYS } from '@/constants';
 import { PaymentAlerts } from '@/components/admin/PaymentAlerts';
 import { usePaymentNotifications } from '@/hooks/usePaymentNotifications';
 import dynamic from 'next/dynamic';
@@ -140,11 +140,10 @@ export default function DashboardPage() {
     try {
       // ✅ Bug fix (02/08/2026) : 3 corrections pour que les graphes s'affichent
       // comme sur /dashboard/analytics :
-      //   1. `days: 30` sur /orders/stats → la fenêtre par défaut (7j) ne couvre
-      //      pas les premières commandes du projet (datent de juin/juillet 2026).
-      //      Sans ce param, le dashboard renvoyait des graphes vides alors que
-      //      /dashboard/analytics, qui passait déjà `days: 30`, montrait des
-      //      données. Cohérence forcée entre les deux pages.
+      //   1. `days: STATS_DEFAULT_DAYS` (= 30) sur /orders/stats → la fenêtre
+      //      par défaut (7j) ne couvre pas les premières commandes du projet
+      //      (datent de juin/juillet 2026). Cohérence forcée entre dashboard
+      //      et analytics via la constante unique `constants/index.ts`.
       //   2. Timeout à 30s (au lieu de 10s) → l'apiClient a un default de 30s
       //      et l'aggreg MongoDB peut être lent. Forcer 10s faisait timeout
       //      aléatoirement et laissait les graphes vides.
@@ -153,7 +152,7 @@ export default function DashboardPage() {
       //      qui masquaient le vrai format de réponse et rendaient le code
       //      illisible.
       const [statsRes, ordersRes, productsRes, usersRes] = await Promise.allSettled([
-        apiClient.get('/orders/stats', { params: { days: 30 } }),
+        apiClient.get('/orders/stats', { params: { days: STATS_DEFAULT_DAYS } }),
         apiClient.get('/orders', { params: { limit: 5, page: 1 } }),
         apiClient.get('/products', { params: { limit: 1, page: 1 } }),
         apiClient.get('/users', { params: { limit: 1, page: 1, role: 'customer' } }),

@@ -9,6 +9,42 @@
 // Le contrôleur ne fait plus que : validation auth + délégation + formatage.
 // ============================================================================
 
+// ============================================================================
+// 🔹 CONSTANTES MÉTIER — fenêtre temporelle des stats
+// ============================================================================
+// ✅ Bug fix (02/08/2026) : l'ancien default `days: 7` était trop court pour
+//    un e-commerce qui démarre (premières commandes datent de fin juin 2026).
+//    Conséquence : /dashboard était vide alors que /dashboard/analytics (qui
+//    passait explicitement days=30) avait des données. On force 30j par
+//    défaut pour qu'un nouvel admin qui oublie le param voie quand même
+//    quelque chose. Le cap max à 365 évite qu'un client passe ?days=999999
+//    et fasse écrouler l'aggreg MongoDB.
+// ============================================================================
+const STATS_DEFAULT_DAYS = 30;
+const STATS_MIN_DAYS = 1;
+const STATS_MAX_DAYS = 365;
+
+/**
+ * Parse + valide le paramètre `days` reçu en query string.
+ * - Rejette les non-numériques (NaN) → fallback default
+ * - Rejette les valeurs hors bornes [1, 365] → fallback default
+ * - Log un warning en dev si on est hors bornes, pour aider à débugger
+ *   les intégrations tierces qui passeraient des valeurs aberrantes.
+ */
+const parseDaysParam = (raw) => {
+  const parsed = parseInt(raw, 10);
+  if (Number.isNaN(parsed)) return STATS_DEFAULT_DAYS;
+  if (parsed < STATS_MIN_DAYS || parsed > STATS_MAX_DAYS) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        `[getOrderStats] days=${parsed} hors bornes [${STATS_MIN_DAYS}, ${STATS_MAX_DAYS}] → fallback ${STATS_DEFAULT_DAYS}`,
+      );
+    }
+    return STATS_DEFAULT_DAYS;
+  }
+  return parsed;
+};
+
 const Order = require('../models/Order');
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
@@ -209,7 +245,12 @@ exports.getAllOrders = async (req, res, next) => {
 
 exports.getOrderStats = async (req, res, next) => {
   try {
-    const days = parseInt(req.query.days) || 7;
+    // ✅ Bug fix (02/08/2026) : parsing + validation via parseDaysParam()
+    // au lieu de `parseInt(req.query.days) || 7` qui :
+    //   1. Acceptait les valeurs négatives (`-5 || 7` = -5, cassait startDate)
+    //   2. Acceptait les valeurs énormes (`999999` → aggreg Mongo 30s+)
+    //   3. Avait un default de 7j trop court pour les jeunes e-commerces
+    const days = parseDaysParam(req.query.days);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
