@@ -135,7 +135,7 @@ const ReviewCard = React.memo(function ReviewCard({
             {hasProductImage ? (
               <Image
                 src={productImage}
-                alt={review.product.name}
+                alt={review.product?.name ?? 'Produit supprimé'}
                 fill
                 sizes="56px"
                 className="object-cover"
@@ -151,8 +151,19 @@ const ReviewCard = React.memo(function ReviewCard({
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold truncate">{review.product.name}</h3>
-              {review.product.slug && (
+              {/* ✅ Bug fix (02/08/2026) : même pattern que le fix avatar/user —
+                  `review.product` peut être `null` quand le produit lié a été
+                  supprimé (produit orphelin). L'API renvoie alors un review
+                  avec `product: null`. AVANT ce fix, on lisait
+                  `review.product.name` sans `?.` → crash de la page au render
+                  de la liste avec `TypeError: Cannot read properties of null
+                  (reading 'name')` (cf. logs prod, error JS chunk 1255). */}
+              <h3 className="font-semibold truncate">
+                {review.product?.name ?? (
+                  <span className="italic text-muted-foreground">Produit supprimé</span>
+                )}
+              </h3>
+              {review.product?.slug && (
                 <a
                   href={`/products/${review.product.slug}`}
                   target="_blank"
@@ -575,10 +586,18 @@ export default function ReviewsAdminPage() {
               <p className="text-muted-foreground">
                 L'avis de{' '}
                 <strong className="text-foreground">
-                  {deleteTarget.user.firstName} {deleteTarget.user.lastName}
+                  {/* ✅ Bug fix (02/08/2026) : `deleteTarget.user` peut être null
+                      (avis orphelin) et `deleteTarget.product` aussi (produit
+                      supprimé). On affiche des fallbacks explicites. */}
+                  {deleteTarget.user
+                    ? `${deleteTarget.user.firstName} ${deleteTarget.user.lastName}`
+                    : 'Utilisateur supprimé'}
                 </strong>{' '}
-                sur <strong className="text-foreground">{deleteTarget.product.name}</strong> sera
-                définitivement supprimé.
+                sur{' '}
+                <strong className="text-foreground">
+                  {deleteTarget.product?.name ?? 'Produit supprimé'}
+                </strong>{' '}
+                sera définitivement supprimé.
               </p>
             </div>
           </div>
