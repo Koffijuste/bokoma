@@ -42,6 +42,25 @@ const {
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 
+// ============================================================================
+// 🔹 LIMITES CINETPAY — par transaction, par opérateur / pays
+// ============================================================================
+// ✅ Bug fix (03/08/2026) : on capturait l'erreur "amount doit être entre
+//    100 et 2 500 000" uniquement APRÈS l'appel API CinetPay (cf. logs prod
+//    du 03/08/2026 10:31:12 → `got 25020200`). Conséquence : erreur 500
+//    générique côté user ("Erreur de paiement, veuillez réessayer") alors
+//    qu'on aurait pu détecter le problème en amont avec un message clair.
+//    On valide le montant AVANT l'appel API et on remonte un 400 user-friendly.
+//
+//    Limites constatées (CinetPay sandbox + prod OM_CI/MTN_CI/WAVE_CI) :
+//    - min : 100 XOF
+//    - max : 2 500 000 XOF (varie selon opérateur, 2 000 000 pour OM_CI en prod)
+//    - multiple de 5 XOF obligatoire
+//    Source : erreurs API CinetPay observées en production Bokoma 08/2026.
+// ============================================================================
+const CINETPAY_MIN_AMOUNT = 100;
+const CINETPAY_MAX_AMOUNT = 2_500_000;
+
 class PaymentService {
   constructor() {
     this.apiKey      = process.env.CINETPAY_API_KEY;
@@ -242,8 +261,36 @@ class PaymentService {
       throw new AppError('CinetPay non configuré (variables d\'env manquantes)', 500);
     }
 
+    // ✅ Bug fix (03/08/2026) : validation pré-appel pour éviter de payer un
+    //    round-trip CinetPay et de finir en 500 générique quand le problème
+    //    est en fait côté panier (montant > limite opérateur). On remonte
+    //    un 400 user-friendly immédiatement, le frontend affiche un toast
+    //    actionnable (réduire le panier / contacter le support).
+    const rawAmount = Number(amount);
+    if (!Number.isFinite(rawAmount) || rawAmount < CINETPAY_MIN_AMOUNT) {
+      throw new AppError(
+        `Montant invalide : ${rawAmount} XOF. Le minimum CinetPay est de ${CINETPAY_MIN_AMOUNT} XOF.`,
+        400,
+      );
+    }
+    if (rawAmount > CINETPAY_MAX_AMOUNT) {
+      logger.error('payment', 'amount_exceeds_cinetpay_max', {
+        correlationId,
+        orderId,
+        transactionId,
+        amount: rawAmount,
+        max: CINETPAY_MAX_AMOUNT,
+        hint: 'Le client doit découper sa commande OU contacter CinetPay pour augmenter la limite opérateur.',
+      });
+      throw new AppError(
+        `Le montant ${rawAmount.toLocaleString('fr-FR')} XOF dépasse la limite CinetPay par transaction (${CINETPAY_MAX_AMOUNT.toLocaleString('fr-FR')} XOF). ` +
+        `Pour une commande supérieure, découpez-la en plusieurs paiements ou contactez le support Bokoma.`,
+        400,
+      );
+    }
+
     // CinetPay attend des montants >= 100 XOF et multiples de 5
-    const safeAmount = Math.max(100, Math.round(Number(amount) / 5) * 5);
+    const safeAmount = Math.max(CINETPAY_MIN_AMOUNT, Math.round(rawAmount / 5) * 5);
 
     const successUrl = `${this.clientUrl}/payment/success?orderId=${orderId}`;
     const failedUrl  = `${this.clientUrl}/payment/echec?orderId=${orderId}`;
