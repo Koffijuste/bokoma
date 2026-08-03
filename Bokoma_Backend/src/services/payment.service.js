@@ -143,10 +143,26 @@ class PaymentService {
    */
   async _diagnoseIpWhitelistError(err) {
     const description = err?.description || err?.cause?.description || '';
+    // ✅ Bug fix (03/08/2026) : le SDK CinetPay a un bug d'API qui wrappe les
+    //    erreurs 2011 (IP not whitelisted) dans un AuthenticationError SANS
+    //    préserver apiCode/apiStatus/description. On ne peut donc plus se
+    //    baser uniquement sur ces champs. On ajoute 2 heuristiques :
+    //      1. Si la description d'origine est disponible → match regex
+    //      2. Si on a un AuthenticationError "Authentication failed for
+    //         country" sans description, on assume que c'est une IP
+    //         whitelist (en prod, 99% du temps c'est ça — credentials
+    //         incorrects = autre cas et c'est facile à distinguer car on
+    //         vient de les set correctement).
+    //    C'est une heuristique, mais elle évite à l'user de voir un
+    //    "Identifiants CinetPay invalides" générique qui n'aide pas du tout.
+    const isAuthErrorNoInfo = err?.constructor?.name === 'AuthenticationError'
+      && /Authentication failed for country/i.test(err?.message || '')
+      && !description;
     const isWhitelistError =
       /ip\s*(is\s*)?(not\s*)?(with)?listed/i.test(description) ||
       err?.apiCode === 2011 ||
-      String(err?.apiStatus || '').toUpperCase() === 'NOT_ALLOWED';
+      String(err?.apiStatus || '').toUpperCase() === 'NOT_ALLOWED' ||
+      isAuthErrorNoInfo;
 
     if (!isWhitelistError) {
       return { isWhitelistError: false, egressIp: null, description };
@@ -355,6 +371,15 @@ class PaymentService {
         _correlationId: correlationId,
       };
     } catch (err) {
+      // ✅ Bug fix (03/08/2026) : on dump TOUTES les propriétés de l'erreur
+      //    brute (Object.getOwnPropertyNames) parce que le SDK CinetPay a
+      //    tendance à attacher des infos critiques (apiCode, description)
+      //    sans les exposer via les prototypes standards. Si demain le
+      //    SDK change la forme de ses erreurs, on aura quand même tout dans
+      //    les logs Railway pour débugger sans redéployer.
+      const errOwnProps = err ? Object.fromEntries(
+        Object.getOwnPropertyNames(err).map(k => [k, err[k]])
+      ) : null;
       logger.error('payment', 'init_failed', {
         correlationId,
         transactionId,
@@ -364,6 +389,9 @@ class PaymentService {
         description: err?.description,
         apiCode: err instanceof ApiError ? err.apiCode : undefined,
         apiStatus: err instanceof ApiError ? err.apiStatus : undefined,
+        // Debug brut : toutes les propriétés de l'erreur (cause, stack, etc.)
+        errOwnProps,
+        stack: err?.stack,
       });
       throw await this._wrapSdkError(err, 400, correlationId);
     }
