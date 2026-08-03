@@ -526,13 +526,19 @@ const createOrder = async (req) => {
 
       // On relance une AppError qui chaîne la cause originale.
       // → Logs Railway : on verra les deux stacks (via errorHandler.js).
-      // → Réponse client : reste générique pour ne rien exposer.
-      // → Mais on stocke le correlationId dans la cause pour debug avancé.
-      const wrapped = new AppError(
-        'Erreur de paiement, veuillez réessayer',
-        500,
-        err,
-      );
+      // → Réponse client : on propage le message user-friendly construit par
+      //   payment.service.js → _wrapSdkError (au lieu du hardcodé
+      //   "Erreur de paiement, veuillez réessayer" qui masquait l'IP
+      //   whitelist / limite de montant / config CinetPay). Le user a
+      //   besoin d'un message ACTIONNABLE pour comprendre ce qu'il doit
+      //   faire (réduire le panier, contacter le support, etc.).
+      // → Status : on respecte le statusCode du payment service s'il en a un
+      //   (502/503/504 pour les erreurs de config/timing CinetPay), sinon
+      //   500 par défaut.
+      // → On stocke le correlationId dans la cause pour debug avancé.
+      const userMessage = err.message || 'Erreur de paiement, veuillez réessayer';
+      const httpStatus = err.statusCode || 500;
+      const wrapped = new AppError(userMessage, httpStatus, err);
       wrapped._correlationId = err._correlationId || paymentData?.correlationId;
       wrapped._orderNumber = order.orderNumber;
       throw wrapped;

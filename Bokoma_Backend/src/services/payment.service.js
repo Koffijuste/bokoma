@@ -235,6 +235,13 @@ class PaymentService {
       message = diag.egressIp
         ? `IP sortante Railway (${diag.egressIp}) non autorisée par CinetPay. Ajoute-la à la whitelist de ta clé API sur le dashboard CinetPay, puis redéploie.`
         : `IP sortante non whitelistée chez CinetPay. Ajoute l'IP publique Railway à la whitelist sur le dashboard CinetPay, puis redéploie.`;
+      // ✅ Bug fix (03/08/2026) : 503 (Service Unavailable) au lieu de 500.
+      // C'est une erreur de CONFIG CinetPay (notre IP n'est pas whitelistée
+      // chez eux), pas une erreur serveur interne. Le frontend et les
+      // outils de monitoring peuvent alors distinguer "le serveur est cassé"
+      // (500) de "le service externe est inaccessible" (503) et réagir
+      // différement (pas d'alerte pagerduty par exemple).
+      status = 503;
     }
 
     const wrapped = new AppError(message, status, err);
