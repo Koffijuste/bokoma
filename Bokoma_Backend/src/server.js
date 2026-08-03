@@ -45,7 +45,10 @@ app.use(helmet({
 }));
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-// ✅ CORS strict : domaines exacts uniquement (pas de regex previews Railway/Vercel)
+// ✅ CORS strict : domaines exacts + regex Vercel previews (cf. issue 03/08/2026
+//    "POST /api/v1/auth/refresh 500 Not allowed by CORS" — le user testait depuis
+//    `bokoma.vercel.app` qui n'était pas dans la liste hardcodée → la callback
+//    CORS throw une Error générique → 500 au lieu d'un 403 propre).
 const parseOriginList = (value = '') => value
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
@@ -56,24 +59,60 @@ const developmentOrigins = [
   'http://127.0.0.1:3000',
 ];
 
+// ✅ Bug fix (03/08/2026) : on ajoute explicitement les URLs Vercel (preview
+//    + production) car le frontend est hébergé sur Vercel et rewrité vers
+//    Railway (cf. bokoma_frontend/vercel.json). Sans ces entrées, TOUS les
+//    appels API depuis Vercel (auth/login, /cart, /orders, etc.) étaient
+//    rejetés en 500 "Not allowed by CORS" au lieu d'être simplement bloqués
+//    en 403.
+const vercelOrigins = [
+  'https://bokoma.vercel.app',
+  'https://bokoma-store.vercel.app',
+];
+
+// Regex Vercel preview : `bokoma-git-<branch>-<user>.vercel.app` ou
+// `bokoma-<hash>-<user>.vercel.app`. Accepte les déploiements de feature
+// branches sans avoir à les lister un par un.
+const VERCEL_PREVIEW_REGEX = /^https:\/\/bokoma[a-z0-9-]*\.vercel\.app$/i;
+
 const allowedOrigins = [
+  // Production (custom domain)
   'https://www.bokomastore.com',
   'https://bokomastore.com',
+  // Vercel hosting (production + branches preview)
+  ...vercelOrigins,
+  // Env vars (override par Railway si besoin d'ajouter d'autres domaines)
   ...parseOriginList(process.env.CLIENT_URL),
   ...parseOriginList(process.env.FRONTEND_URL),
   ...parseOriginList(process.env.CORS_ALLOWED_ORIGINS),
+  // Dev : localhost autorisé uniquement en NODE_ENV !== 'production'
   ...(process.env.NODE_ENV === 'production' ? [] : developmentOrigins),
 ].filter((origin, index, list) => list.indexOf(origin) === index);
 
 const isAllowedOrigin = (origin) => {
   if (!origin) return true; // Server-to-server / curl sans Origin
-  return allowedOrigins.includes(origin.replace(/\/$/, ''));
+  const cleanOrigin = origin.replace(/\/$/, '');
+  if (allowedOrigins.includes(cleanOrigin)) return true;
+  if (VERCEL_PREVIEW_REGEX.test(cleanOrigin)) return true;
+  return false;
 };
 
 app.use(cors({
-  origin:         (origin, cb) => (isAllowedOrigin(origin) ? cb(null, true) : cb(new Error('Not allowed by CORS'))),
-  credentials:    true,
-  methods:        ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+  origin: (origin, cb) => {
+    if (isAllowedOrigin(origin)) return cb(null, true);
+    // ✅ Bug fix (03/08/2026) : on log l'origin rejeté côté Railway pour que
+    //    l'ops puisse voir d'où viennent les requêtes bloquées. Auparavant
+    //    l'erreur throw "Not allowed by CORS" sans contexte → debug à l'aveugle.
+    logger.warn('cors', 'origin_rejected', { origin });
+    // ✅ Status 403 explicite (au lieu d'un 500 par défaut) — c'est un
+    //    Forbidden volontaire, pas une erreur serveur.
+    const err = new Error(`Origin ${origin || '(empty)'} not allowed by CORS`);
+    err.status = 403;
+    err.statusCode = 403;
+    cb(err);
+  },
+  credentials: true,
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
